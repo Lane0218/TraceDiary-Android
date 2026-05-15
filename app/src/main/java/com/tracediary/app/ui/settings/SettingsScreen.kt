@@ -17,15 +17,27 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.CloudDone
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Upload
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -52,7 +64,7 @@ fun SettingsScreen(
         item {
             Text(
                 text = "设置",
-                fontSize = 26.sp,
+                fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,
                 color = TitleColor
             )
@@ -67,7 +79,7 @@ fun SettingsScreen(
         item {
             SettingsSection(title = "数据导入") {
                 SingleSettingCard(
-                    item = SettingsRowData("导", "导入本地数据", onImportClick)
+                    item = SettingsRowData(Icons.Outlined.Download, "导入本地数据", onImportClick)
                 )
             }
         }
@@ -75,7 +87,7 @@ fun SettingsScreen(
         item {
             SettingsSection(title = "导出备份") {
                 SingleSettingCard(
-                    item = SettingsRowData("备", "导出备份文件", onExportClick)
+                    item = SettingsRowData(Icons.Outlined.Upload, "导出备份文件", onExportClick)
                 )
             }
         }
@@ -84,9 +96,9 @@ fun SettingsScreen(
             SettingsSection(title = "应用设置") {
                 GroupedSettingCard(
                     items = listOf(
-                        SettingsRowData("编", "编辑体验", onEditorSettingsClick),
-                        SettingsRowData("提", "提醒设置", onReminderSettingsClick),
-                        SettingsRowData("关", "关于 TraceDiary", onAboutClick)
+                        SettingsRowData(Icons.Outlined.EditNote, "编辑体验", onEditorSettingsClick),
+                        SettingsRowData(Icons.Outlined.NotificationsNone, "提醒设置", onReminderSettingsClick),
+                        SettingsRowData(Icons.Outlined.Info, "关于 TraceDiary", onAboutClick)
                     )
                 )
             }
@@ -129,7 +141,7 @@ private fun SyncCard(onSyncSettingsClick: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SettingBadge(symbol = "云")
+                    SettingBadge(icon = Icons.Outlined.CloudDone)
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             text = "云同步完成",
@@ -154,7 +166,7 @@ private fun SyncCard(onSyncSettingsClick: () -> Unit) {
             )
 
             SettingsRow(
-                item = SettingsRowData("同", "同步设置", onSyncSettingsClick),
+                item = SettingsRowData(Icons.Outlined.Settings, "同步设置", onSyncSettingsClick),
                 topPadding = 16.dp,
                 bottomPadding = 18.dp
             )
@@ -222,7 +234,7 @@ private fun SettingsRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SettingBadge(symbol = item.symbol)
+            SettingBadge(icon = item.icon)
             Text(
                 text = item.title,
                 fontSize = 19.sp,
@@ -234,7 +246,7 @@ private fun SettingsRow(
 }
 
 @Composable
-private fun SettingBadge(symbol: String) {
+private fun SettingBadge(icon: ImageVector) {
     Box(
         modifier = Modifier
             .size(48.dp)
@@ -242,11 +254,11 @@ private fun SettingBadge(symbol: String) {
             .background(BadgeBackground),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = symbol,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = AccentColor
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = AccentColor
         )
     }
 }
@@ -260,25 +272,26 @@ private fun SyncIndicator() {
             .background(AccentColor),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "✓",
-            fontSize = 18.sp,
-            color = Color.White
+        Icon(
+            imageVector = Icons.Outlined.Check,
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = Color.White
         )
     }
 }
 
 @Composable
 private fun RowChevron() {
-    Text(
-        text = ">",
-        fontSize = 22.sp,
-        color = SecondaryTextColor
+    Icon(
+        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+        contentDescription = null,
+        tint = SecondaryTextColor
     )
 }
 
 private data class SettingsRowData(
-    val symbol: String,
+    val icon: ImageVector,
     val title: String,
     val onClick: () -> Unit
 )

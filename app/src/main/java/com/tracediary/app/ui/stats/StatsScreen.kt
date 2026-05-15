@@ -21,9 +21,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,10 +36,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,7 +62,7 @@ fun StatsScreen(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     text = "统计",
-                    fontSize = 26.sp,
+                    fontSize = 34.sp,
                     fontWeight = FontWeight.Bold,
                     color = TitleColor
                 )
@@ -121,7 +126,7 @@ private fun StatsSummaryCard(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             BadgeMonogram(
-                text = summary.badge,
+                icon = summary.icon,
                 modifier = Modifier.size(56.dp)
             )
 
@@ -478,7 +483,7 @@ private fun LegendItem(
 
 @Composable
 private fun BadgeMonogram(
-    text: String,
+    icon: ImageVector,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -487,12 +492,11 @@ private fun BadgeMonogram(
             .background(BadgeBackground),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = text,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = AccentColor,
-            textAlign = TextAlign.Center
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(28.dp),
+            tint = AccentColor,
         )
     }
 }
@@ -521,7 +525,7 @@ private fun heatmapColor(level: Int): Color = when (level) {
 }
 
 private data class StatsSummary(
-    val badge: String,
+    val icon: ImageVector,
     val title: String,
     val value: String,
     val caption: String
@@ -529,19 +533,19 @@ private data class StatsSummary(
 
 private val summaryCards = listOf(
     StatsSummary(
-        badge = "月",
+        icon = Icons.Outlined.CalendarMonth,
         title = "本月记录",
         value = "12天",
         caption = "本月记录天数"
     ),
     StatsSummary(
-        badge = "连",
+        icon = Icons.Outlined.LocalFireDepartment,
         title = "连续记录",
         value = "5天",
         caption = "当前连续天数"
     ),
     StatsSummary(
-        badge = "年",
+        icon = Icons.Outlined.BarChart,
         title = "全年记录",
         value = "126天",
         caption = "年度记录天数"
