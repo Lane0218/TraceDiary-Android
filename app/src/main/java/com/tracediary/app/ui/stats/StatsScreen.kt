@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,59 +52,110 @@ fun StatsScreen(
     onTrendMonthClick: () -> Unit = {},
     onHeatmapYearClick: () -> Unit = {}
 ) {
-    LazyColumn(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(StatsBackground),
-        contentPadding = PaddingValues(start = 24.dp, top = 32.dp, end = 24.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .background(StatsBackground)
     ) {
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "统计",
-                    fontSize = 34.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TitleColor
+        val compact = maxWidth < 360.dp
+        val horizontalPadding = if (compact) 18.dp else 24.dp
+        val verticalSpacing = if (compact) 16.dp else 20.dp
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = horizontalPadding,
+                top = if (compact) 26.dp else 32.dp,
+                end = horizontalPadding,
+                bottom = if (compact) 26.dp else 32.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(verticalSpacing)
+        ) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp)) {
+                    Text(
+                        text = "统计",
+                        fontSize = if (compact) 30.sp else 34.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TitleColor
+                    )
+                    Text(
+                        text = "记录生活点滴，见证你的坚持与成长",
+                        fontSize = if (compact) 15.sp else 16.sp,
+                        lineHeight = if (compact) 22.sp else 24.sp,
+                        color = BodyColor
+                    )
+                }
+            }
+
+            item {
+                SummaryCardsSection(
+                    compact = compact,
+                    summaries = summaryCards
                 )
-                Text(
-                    text = "记录生活点滴，见证你的坚持与成长",
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp,
-                    color = BodyColor
+            }
+
+            item {
+                MonthlyTrendCard(
+                    compact = compact,
+                    currentMonthLabel = "2026年5月",
+                    monthlyTotal = 12,
+                    dailyRecords = trendValues,
+                    onMonthClick = onTrendMonthClick
+                )
+            }
+
+            item {
+                HeatmapCard(
+                    compact = compact,
+                    currentYearLabel = "2026年",
+                    levels = heatmapLevels,
+                    onYearClick = onHeatmapYearClick
                 )
             }
         }
+    }
+}
 
-        item {
+@Composable
+private fun SummaryCardsSection(
+    compact: Boolean,
+    summaries: List<StatsSummary>
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val spacing = if (compact) 10.dp else 12.dp
+        val twoRows = compact && maxWidth < 320.dp
+
+        if (twoRows && summaries.size >= 3) {
+            Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(spacing)
+                ) {
+                    summaries.take(2).forEach { card ->
+                        StatsSummaryCard(
+                            summary = card,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                StatsSummaryCard(
+                    summary = summaries[2],
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        } else {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(spacing)
             ) {
-                summaryCards.forEach { card ->
+                summaries.forEach { card ->
                     StatsSummaryCard(
                         summary = card,
                         modifier = Modifier.weight(1f)
                     )
                 }
             }
-        }
-
-        item {
-            MonthlyTrendCard(
-                currentMonthLabel = "2026年5月",
-                monthlyTotal = 12,
-                dailyRecords = trendValues,
-                onMonthClick = onTrendMonthClick
-            )
-        }
-
-        item {
-            HeatmapCard(
-                currentYearLabel = "2026年",
-                levels = heatmapLevels,
-                onYearClick = onHeatmapYearClick
-            )
         }
     }
 }
@@ -113,64 +165,87 @@ private fun StatsSummaryCard(
     summary: StatsSummary,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.heightIn(min = 198.dp),
-        shape = RoundedCornerShape(30.dp),
-        colors = CardDefaults.cardColors(containerColor = CardColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+    BoxWithConstraints(modifier = modifier) {
+        val compactCard = maxWidth < 118.dp
+        val badgeSize = if (compactCard) 46.dp else 52.dp
+        val valueFontSize = when {
+            maxWidth < 92.dp -> 20.sp
+            maxWidth < 112.dp -> 22.sp
+            else -> 26.sp
+        }
+
+        Card(
+            modifier = Modifier.heightIn(min = if (compactCard) 154.dp else 170.dp),
+            shape = RoundedCornerShape(if (compactCard) 24.dp else 28.dp),
+            colors = CardDefaults.cardColors(containerColor = CardColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            BadgeMonogram(
-                icon = summary.icon,
-                modifier = Modifier.size(56.dp)
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = if (compactCard) 14.dp else 16.dp,
+                        vertical = if (compactCard) 16.dp else 18.dp
+                    ),
+                verticalArrangement = Arrangement.spacedBy(if (compactCard) 10.dp else 12.dp)
+            ) {
+                BadgeMonogram(
+                    icon = summary.icon,
+                    modifier = Modifier.size(badgeSize)
+                )
 
-            Text(
-                text = summary.title,
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
-                color = BodyColor
-            )
+                Text(
+                    text = summary.title,
+                    fontSize = if (compactCard) 13.sp else 14.sp,
+                    lineHeight = if (compactCard) 18.sp else 20.sp,
+                    color = BodyColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
 
-            Text(
-                text = summary.value,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = AccentColor
-            )
+                Text(
+                    text = summary.value,
+                    fontSize = valueFontSize,
+                    fontWeight = FontWeight.Bold,
+                    color = AccentColor,
+                    maxLines = 1,
+                    softWrap = false
+                )
 
-            Text(
-                text = summary.caption,
-                fontSize = 13.sp,
-                lineHeight = 19.sp,
-                color = SecondaryTextColor
-            )
+                Text(
+                    text = summary.caption,
+                    fontSize = if (compactCard) 12.sp else 13.sp,
+                    lineHeight = if (compactCard) 17.sp else 18.sp,
+                    color = SecondaryTextColor,
+                    maxLines = if (compactCard) 2 else 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun MonthlyTrendCard(
+    compact: Boolean,
     currentMonthLabel: String,
     monthlyTotal: Int,
     dailyRecords: List<Int>,
     onMonthClick: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(30.dp),
+        shape = RoundedCornerShape(if (compact) 24.dp else 28.dp),
         colors = CardDefaults.cardColors(containerColor = CardColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 22.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+                .padding(
+                    horizontal = if (compact) 16.dp else 20.dp,
+                    vertical = if (compact) 18.dp else 22.dp
+                ),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 16.dp else 18.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -179,12 +254,13 @@ private fun MonthlyTrendCard(
             ) {
                 Text(
                     text = "月度趋势",
-                    fontSize = 22.sp,
+                    fontSize = if (compact) 20.sp else 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = TitleColor
                 )
                 PeriodChip(
                     label = currentMonthLabel,
+                    compact = compact,
                     onClick = onMonthClick
                 )
             }
@@ -197,27 +273,32 @@ private fun MonthlyTrendCard(
                     pop()
                     append(" 天")
                 },
-                fontSize = 16.sp,
+                fontSize = if (compact) 15.sp else 16.sp,
                 color = BodyColor
             )
 
-            TrendChart(records = dailyRecords)
+            TrendChart(
+                records = dailyRecords,
+                compact = compact
+            )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                LegendItem(label = "已记录", color = AccentColor)
-                Spacer(modifier = Modifier.width(28.dp))
-                LegendItem(label = "未记录", color = PlaceholderBarColor)
-            }
+            LegendRow(
+                compact = compact,
+                items = listOf(
+                    "已记录" to AccentColor,
+                    "未记录" to PlaceholderBarColor
+                )
+            )
         }
     }
 }
 
 @Composable
-private fun TrendChart(records: List<Int>) {
-    val chartHeight = 228.dp
+private fun TrendChart(
+    records: List<Int>,
+    compact: Boolean
+) {
+    val chartHeight = if (compact) 206.dp else 228.dp
     val tickLabels = listOf("5/1", "5/6", "5/11", "5/16", "5/21", "5/26", "5/31")
 
     Row(
@@ -234,17 +315,17 @@ private fun TrendChart(records: List<Int>) {
             listOf("8天", "6天", "4天", "2天", "0天").forEach { label ->
                 Text(
                     text = label,
-                    fontSize = 12.sp,
+                    fontSize = if (compact) 11.sp else 12.sp,
                     color = SecondaryTextColor
                 )
             }
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(if (compact) 8.dp else 12.dp))
 
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 12.dp)
         ) {
             Box(
                 modifier = Modifier
@@ -266,8 +347,8 @@ private fun TrendChart(records: List<Int>) {
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = 10.dp, bottom = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        .padding(top = if (compact) 8.dp else 10.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp),
                     verticalAlignment = Alignment.Bottom
                 ) {
                     records.forEach { value ->
@@ -279,17 +360,17 @@ private fun TrendChart(records: List<Int>) {
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(0.72f)
-                                    .height(14.dp)
-                                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                    .fillMaxWidth(if (compact) 0.78f else 0.72f)
+                                    .height(if (compact) 12.dp else 14.dp)
+                                    .clip(RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
                                     .background(PlaceholderBarColor)
                             )
                             if (value > 0) {
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth(0.72f)
-                                        .height((value * 26).dp)
-                                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                        .fillMaxWidth(if (compact) 0.78f else 0.72f)
+                                        .height((value * if (compact) 24 else 26).dp)
+                                        .clip(RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
                                         .background(AccentColor)
                                 )
                             }
@@ -305,7 +386,7 @@ private fun TrendChart(records: List<Int>) {
                 tickLabels.forEach { label ->
                     Text(
                         text = label,
-                        fontSize = 12.sp,
+                        fontSize = if (compact) 11.sp else 12.sp,
                         color = SecondaryTextColor
                     )
                 }
@@ -316,20 +397,24 @@ private fun TrendChart(records: List<Int>) {
 
 @Composable
 private fun HeatmapCard(
+    compact: Boolean,
     currentYearLabel: String,
     levels: List<List<Int>>,
     onYearClick: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(30.dp),
+        shape = RoundedCornerShape(if (compact) 24.dp else 28.dp),
         colors = CardDefaults.cardColors(containerColor = CardColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 22.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+                .padding(
+                    horizontal = if (compact) 16.dp else 20.dp,
+                    vertical = if (compact) 18.dp else 22.dp
+                ),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 16.dp else 18.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -338,62 +423,69 @@ private fun HeatmapCard(
             ) {
                 Text(
                     text = "年度热力图",
-                    fontSize = 22.sp,
+                    fontSize = if (compact) 20.sp else 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = TitleColor
                 )
                 PeriodChip(
                     label = currentYearLabel,
+                    compact = compact,
                     onClick = onYearClick
                 )
             }
 
-            HeatmapGrid(levels = levels)
+            HeatmapGrid(
+                levels = levels,
+                compact = compact
+            )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                LegendItem(label = "16天以上", color = HeatLevelStrong)
-                LegendItem(label = "8-15天", color = HeatLevelMedium)
-                LegendItem(label = "1-7天", color = HeatLevelLight)
-                LegendItem(label = "无记录", color = HeatLevelEmpty)
-            }
+            LegendRow(
+                compact = compact,
+                items = listOf(
+                    "记录 16 天及以上" to HeatLevelStrong,
+                    "记录 8-15 天" to HeatLevelMedium,
+                    "记录 1-7 天" to HeatLevelLight,
+                    "无记录" to HeatLevelEmpty
+                )
+            )
         }
     }
 }
 
 @Composable
-private fun HeatmapGrid(levels: List<List<Int>>) {
+private fun HeatmapGrid(
+    levels: List<List<Int>>,
+    compact: Boolean
+) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top
         ) {
             Column(
-                modifier = Modifier.width(34.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier.width(if (compact) 30.dp else 34.dp),
+                verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp)
             ) {
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(if (compact) 20.dp else 24.dp))
                 dayLabels.forEach { label ->
                     Box(
-                        modifier = Modifier.height(18.dp),
+                        modifier = Modifier.height(if (compact) 16.dp else 18.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Text(
                             text = label,
-                            fontSize = 12.sp,
+                            fontSize = if (compact) 11.sp else 12.sp,
                             color = SecondaryTextColor
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(if (compact) 8.dp else 10.dp))
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -402,17 +494,17 @@ private fun HeatmapGrid(levels: List<List<Int>>) {
                     monthLabels.forEach { label ->
                         Text(
                             text = label,
-                            fontSize = 12.sp,
+                            fontSize = if (compact) 11.sp else 12.sp,
                             color = SecondaryTextColor
                         )
                     }
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp)) {
                     levels.forEach { row ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp)
                         ) {
                             row.forEach { level ->
                                 Box(
@@ -434,24 +526,29 @@ private fun HeatmapGrid(levels: List<List<Int>>) {
 @Composable
 private fun PeriodChip(
     label: String,
+    compact: Boolean,
     onClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         color = Color.White,
         shadowElevation = 1.dp,
         tonalElevation = 0.dp
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(
+                horizontal = if (compact) 12.dp else 14.dp,
+                vertical = if (compact) 8.dp else 10.dp
+            ),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = label,
-                fontSize = 14.sp,
-                color = TitleColor
+                fontSize = if (compact) 13.sp else 14.sp,
+                color = TitleColor,
+                maxLines = 1
             )
             ChevronIcon()
         }
@@ -482,6 +579,38 @@ private fun LegendItem(
 }
 
 @Composable
+private fun LegendRow(
+    compact: Boolean,
+    items: List<Pair<String, Color>>
+) {
+    if (compact && items.size > 2) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            items.chunked(2).forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    rowItems.forEach { (label, color) ->
+                        Box(modifier = Modifier.weight(1f)) {
+                            LegendItem(label = label, color = color)
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 18.dp else 28.dp, Alignment.CenterHorizontally)
+        ) {
+            items.forEach { (label, color) ->
+                LegendItem(label = label, color = color)
+            }
+        }
+    }
+}
+
+@Composable
 private fun BadgeMonogram(
     icon: ImageVector,
     modifier: Modifier = Modifier
@@ -495,7 +624,7 @@ private fun BadgeMonogram(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(28.dp),
+            modifier = Modifier.size(24.dp),
             tint = AccentColor,
         )
     }
@@ -586,6 +715,14 @@ private val HeatLevelStrong = Color(0xFF17834F)
 @Preview(showBackground = true, backgroundColor = 0xFFF4F6F3, widthDp = 393, heightDp = 852)
 @Composable
 private fun StatsScreenPreview() {
+    TraceDiaryTheme {
+        StatsScreen()
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF4F6F3, widthDp = 320, heightDp = 780)
+@Composable
+private fun StatsScreenCompactPreview() {
     TraceDiaryTheme {
         StatsScreen()
     }

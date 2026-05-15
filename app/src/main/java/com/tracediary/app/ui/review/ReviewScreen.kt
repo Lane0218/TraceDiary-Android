@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -46,6 +47,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -121,43 +123,51 @@ private fun CalendarPane() {
     var selectedEpochDay by rememberSaveable { mutableLongStateOf(LocalDate.of(2026, 5, 15).toEpochDay()) }
     val selectedDate = remember(selectedEpochDay) { LocalDate.ofEpochDay(selectedEpochDay) }
 
-    ReviewCard(contentPadding = PaddingValues(22.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ArrowButton(direction = ArrowDirection.Left) { monthOffset -= 1 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = displayedMonth.format(monthFormatter),
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = ReviewPalette.PrimaryText
-                        )
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    DropDownChevron()
-                }
-                ArrowButton(direction = ArrowDirection.Right) { monthOffset += 1 }
-            }
+    ReviewCard(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp)) {
+        BoxWithConstraints {
+            val daySlotWidth = maxWidth / 7
+            val selectedCircleSize = (daySlotWidth - 4.dp).coerceAtLeast(34.dp).coerceAtMost(42.dp)
+            val dayNumberSize = if (daySlotWidth < 40.dp) 17.sp else 18.sp
+            val selectedNumberSize = if (selectedCircleSize < 38.dp) 16.sp else 18.sp
 
-            WeekHeader()
-            monthDates.chunked(7).forEach { week ->
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    week.forEach { cell ->
-                        CalendarDayCell(
-                            date = cell,
-                            inMonth = cell.month == displayedMonth.month,
-                            selected = cell == selectedDate,
-                            hasEntry = sampleRecordedDates.contains(cell),
-                            onClick = { selectedEpochDay = cell.toEpochDay() }
+                    ArrowButton(direction = ArrowDirection.Left) { monthOffset -= 1 }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = displayedMonth.format(monthFormatter),
+                            style = MaterialTheme.typography.headlineSmall.copy(
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ReviewPalette.PrimaryText
+                            )
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        DropDownChevron()
+                    }
+                    ArrowButton(direction = ArrowDirection.Right) { monthOffset += 1 }
+                }
+
+                WeekHeader()
+                monthDates.chunked(7).forEach { week ->
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        week.forEach { cell ->
+                            CalendarDayCell(
+                                modifier = Modifier.weight(1f),
+                                date = cell,
+                                inMonth = cell.month == displayedMonth.month,
+                                selected = cell == selectedDate,
+                                hasEntry = sampleRecordedDates.contains(cell),
+                                circleSize = selectedCircleSize,
+                                dayNumberSize = dayNumberSize,
+                                selectedNumberSize = selectedNumberSize,
+                                onClick = { selectedEpochDay = cell.toEpochDay() }
+                            )
+                        }
                     }
                 }
             }
@@ -236,20 +246,37 @@ private fun YearSummaryPane() {
             )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "${selectedYear}年年度总结",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = ReviewPalette.PrimaryText
-                )
-            )
-            SaveStatus(status = saveState)
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val compactHeader = maxWidth < 360.dp
+            if (compactHeader) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "${selectedYear}年年度总结",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ReviewPalette.PrimaryText
+                        )
+                    )
+                    SaveStatus(status = saveState)
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${selectedYear}年年度总结",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ReviewPalette.PrimaryText
+                        )
+                    )
+                    SaveStatus(status = saveState)
+                }
+            }
         }
 
         ReviewCard {
@@ -385,7 +412,7 @@ private fun SearchPane() {
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             results.forEach { entry ->
                 SearchResultCard(entry = entry)
             }
@@ -460,17 +487,17 @@ private fun SegmentedTabs(
 @Composable
 private fun WeekHeader() {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier.fillMaxWidth()
     ) {
         weekLabels.forEach { label ->
             Text(
                 text = label,
-                modifier = Modifier.width(40.dp),
+                modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 14.sp,
                     color = ReviewPalette.SecondaryText
-                )
+                ),
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -478,57 +505,67 @@ private fun WeekHeader() {
 
 @Composable
 private fun CalendarDayCell(
+    modifier: Modifier = Modifier,
     date: LocalDate,
     inMonth: Boolean,
     selected: Boolean,
     hasEntry: Boolean,
+    circleSize: androidx.compose.ui.unit.Dp,
+    dayNumberSize: androidx.compose.ui.unit.TextUnit,
+    selectedNumberSize: androidx.compose.ui.unit.TextUnit,
     onClick: () -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .width(40.dp)
+        modifier = modifier
             .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        if (selected) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(ReviewPalette.Accent),
-                contentAlignment = Alignment.Center
-            ) {
+        Box(
+            modifier = Modifier.height(circleSize),
+            contentAlignment = Alignment.Center
+        ) {
+            if (selected) {
+                Box(
+                    modifier = Modifier
+                        .size(circleSize)
+                        .clip(CircleShape)
+                        .background(ReviewPalette.Accent),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "${date.dayOfMonth}",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontSize = selectedNumberSize,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                    )
+                }
+            } else {
                 Text(
                     text = "${date.dayOfMonth}",
                     style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
+                        fontSize = dayNumberSize,
+                        color = if (inMonth) ReviewPalette.PrimaryText else ReviewPalette.OutOfMonthText
                     )
                 )
             }
-        } else {
-            Text(
-                text = "${date.dayOfMonth}",
-                modifier = Modifier.padding(top = 10.dp, bottom = 10.dp),
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 18.sp,
-                    color = if (inMonth) ReviewPalette.PrimaryText else ReviewPalette.OutOfMonthText
-                )
-            )
         }
-        Spacer(modifier = Modifier.height(4.dp))
         Box(
-            modifier = Modifier
-                .size(7.dp)
-                .clip(CircleShape)
-                .background(
-                    when {
-                        hasEntry && inMonth -> ReviewPalette.Accent
-                        else -> Color.Transparent
-                    }
-                )
+            modifier = Modifier.height(8.dp),
+            contentAlignment = Alignment.TopCenter
         )
+        {
+            if (hasEntry && inMonth) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(ReviewPalette.Accent)
+                )
+            }
+        }
     }
 }
 
@@ -668,7 +705,7 @@ private fun FilterChip(
 
 @Composable
 private fun SearchResultCard(entry: SearchEntry) {
-    ReviewCard {
+    ReviewCard(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -676,15 +713,15 @@ private fun SearchResultCard(entry: SearchEntry) {
         ) {
             Row(
                 modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                CalendarIcon(iconSize = 24.dp)
-                Spacer(modifier = Modifier.width(18.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                CalendarIcon(iconSize = 22.dp)
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         text = entry.dateText,
                         style = MaterialTheme.typography.headlineSmall.copy(
-                            fontSize = 22.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = ReviewPalette.PrimaryText
                         )
@@ -692,15 +729,15 @@ private fun SearchResultCard(entry: SearchEntry) {
                     Text(
                         text = entry.weekday,
                         style = MaterialTheme.typography.bodyLarge.copy(
-                            fontSize = 16.sp,
+                            fontSize = 14.sp,
                             color = ReviewPalette.SecondaryText
                         )
                     )
                     Text(
                         text = entry.preview,
                         style = MaterialTheme.typography.bodyLarge.copy(
-                            fontSize = 17.sp,
-                            lineHeight = 28.sp,
+                            fontSize = 16.sp,
+                            lineHeight = 24.sp,
                             color = ReviewPalette.SecondaryText
                         ),
                         maxLines = 2,

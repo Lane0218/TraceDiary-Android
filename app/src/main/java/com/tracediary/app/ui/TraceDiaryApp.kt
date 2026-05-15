@@ -3,9 +3,9 @@ package com.tracediary.app.ui
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Bookmarks
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -29,6 +30,7 @@ import com.tracediary.app.ui.settings.SettingsScreen
 import com.tracediary.app.ui.stats.StatsScreen
 import com.tracediary.app.ui.today.TodayScreen
 import com.tracediary.app.ui.theme.Ink500
+import com.tracediary.app.ui.theme.SurfaceBackground
 import com.tracediary.app.ui.theme.SurfaceCard
 import com.tracediary.app.ui.theme.TraceDiaryTheme
 
@@ -54,13 +56,18 @@ fun TraceDiaryApp() {
                                 contentDescription = item.label
                             )
                         },
-                        label = { Text(text = item.label) },
+                        label = {
+                            Text(
+                                text = item.label,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.primary,
                             selectedTextColor = MaterialTheme.colorScheme.primary,
                             unselectedIconColor = Ink500,
                             unselectedTextColor = Ink500,
-                            indicatorColor = MaterialTheme.colorScheme.surface
+                            indicatorColor = Color.Transparent
                         )
                     )
                 }
@@ -71,7 +78,7 @@ fun TraceDiaryApp() {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            color = MaterialTheme.colorScheme.background
+            color = SurfaceBackground
         ) {
             when (selectedTabIndex) {
                 0 -> TodayScreen()
@@ -85,9 +92,9 @@ fun TraceDiaryApp() {
 
 private fun appTabs(): List<AppTab> {
     return listOf(
-        AppTab(label = "今天", icon = Icons.Outlined.CalendarMonth),
-        AppTab(label = "回顾", icon = Icons.Outlined.MenuBook),
-        AppTab(label = "统计", icon = Icons.Outlined.BarChart),
+        AppTab(label = "今天", icon = Icons.Outlined.CalendarToday),
+        AppTab(label = "回顾", icon = Icons.Outlined.Bookmarks),
+        AppTab(label = "统计", icon = Icons.Outlined.PieChart),
         AppTab(label = "设置", icon = Icons.Outlined.Settings)
     )
 }

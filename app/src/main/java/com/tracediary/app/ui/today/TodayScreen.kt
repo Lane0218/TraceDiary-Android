@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -42,6 +43,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -157,60 +159,74 @@ private fun WeekCalendar(
     selectedDate: LocalDate,
     onDateSelected: (LocalDate) -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        dates.forEach { date ->
-            val isSelected = date == selectedDate
-            Column(
-                modifier = Modifier
-                    .width(42.dp)
-                    .clickable { onDateSelected(date) },
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = weekdayShortLabel(date),
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 14.sp,
-                        color = TodayPalette.SecondaryText
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val daySlotWidth = maxWidth / dates.size
+        val selectedCircleSize = (daySlotWidth - 6.dp).coerceAtLeast(36.dp).coerceAtMost(44.dp)
+        val dayNumberSize = if (daySlotWidth < 42.dp) 18.sp else 20.sp
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            dates.forEach { date ->
+                val isSelected = date == selectedDate
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onDateSelected(date) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = weekdayShortLabel(date),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 14.sp,
+                            color = TodayPalette.SecondaryText
+                        ),
+                        textAlign = TextAlign.Center
                     )
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                if (isSelected) {
                     Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(TodayPalette.Accent),
+                        modifier = Modifier.height(selectedCircleSize),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "${date.dayOfMonth}",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White
+                        if (isSelected) {
+                            Box(
+                                modifier = Modifier
+                                    .size(selectedCircleSize)
+                                    .clip(CircleShape)
+                                    .background(TodayPalette.Accent),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "${date.dayOfMonth}",
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontSize = dayNumberSize,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = "${date.dayOfMonth}",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontSize = dayNumberSize,
+                                    fontWeight = FontWeight.Medium,
+                                    color = TodayPalette.PrimaryText
+                                )
                             )
-                        )
+                        }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
                     Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(TodayPalette.Accent)
-                    )
-                } else {
-                    Text(
-                        text = "${date.dayOfMonth}",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = TodayPalette.PrimaryText
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+                        modifier = Modifier.height(8.dp),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        if (isSelected) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(TodayPalette.Accent)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -223,23 +239,28 @@ private fun TodayEditorCard(
     onContentChange: (String) -> Unit,
     status: TodaySaveState
 ) {
-    TodayCard {
+    TodayCard(
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            horizontal = 22.dp,
+            vertical = 20.dp
+        )
+    ) {
         Column {
             BasicTextField(
                 value = content,
                 onValueChange = onContentChange,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 360.dp),
+                    .heightIn(min = 300.dp),
                 textStyle = TextStyle(
-                    fontSize = 18.sp,
-                    lineHeight = 34.sp,
+                    fontSize = 17.sp,
+                    lineHeight = 30.sp,
                     fontWeight = FontWeight.Normal,
                     color = TodayPalette.PrimaryText
                 ),
                 cursorBrush = SolidColor(TodayPalette.Accent)
             )
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -250,7 +271,7 @@ private fun TodayEditorCard(
                 Text(
                     text = status.label,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 16.sp,
+                        fontSize = 15.sp,
                         color = TodayPalette.TertiaryText
                     )
                 )
