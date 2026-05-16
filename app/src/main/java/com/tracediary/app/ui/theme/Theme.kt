@@ -32,6 +32,7 @@ fun TraceDiaryTheme(
     MaterialTheme(
         colorScheme = LightColorScheme,
         typography = Typography,
+        shapes = Shapes,
         content = content
     )
 }
