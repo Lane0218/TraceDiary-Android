@@ -160,8 +160,7 @@ private fun CalendarReviewContent() {
                             headlineContent = { Text(date, style = MaterialTheme.typography.bodyMedium) },
                             leadingContent = { Icon(Icons.Outlined.CalendarToday, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp)) },
                             trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, modifier = Modifier.size(16.dp)) },
-                            modifier = Modifier.clickable { },
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+                            modifier = Modifier.clickable { }
                         )
                         if (index < 2) {
                             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
