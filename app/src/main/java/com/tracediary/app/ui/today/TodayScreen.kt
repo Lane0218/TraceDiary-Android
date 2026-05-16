@@ -2,11 +2,9 @@ package com.tracediary.app.ui.today
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
@@ -20,11 +18,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 @Composable
 fun TodayScreen(
     modifier: Modifier = Modifier
 ) {
+    val diaryContent = "今天是一个安静而充实的日子。早上按计划完成了工作，效率比昨天高一些，处理了几个积压已久的任务，心里轻松了不少。午后去附近的公园走了走，阳光透过树叶洒在地上，微风正好，整个人都放松下来。晚上读了几页书，收获了一些新的想法，准备明天实践一下。希望保持这样的节奏，一步一步靠近自己的目标。"
+    val wordCount = diaryContent.length
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -40,36 +42,36 @@ fun TodayScreen(
             ) {
                 Text(text = "今天", style = MaterialTheme.typography.displayLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // 搜索入口
                     IconButton(onClick = {}) { Icon(Icons.Outlined.Search, "搜索") }
                     IconButton(onClick = {}) { Icon(Icons.Outlined.MoreVert, null) }
                 }
             }
         }
 
-        // 交互式滑动周历
+        // 优化周历：缩减为7天，增加切换按钮
         item {
             Card(
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(text = "2026年5月", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        Icon(Icons.Outlined.CalendarMonth, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        IconButton(onClick = {}, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.ChevronLeft, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary) }
+                        Text(text = "2026年5月", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        IconButton(onClick = {}, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.ChevronRight, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary) }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                        val dates = (10..20).toList()
-                        dates.forEach { date ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        val weekDays = listOf("日", "一", "二", "三", "四", "五", "六")
+                        val dates = listOf(11, 12, 13, 14, 15, 16, 17)
+                        dates.forEachIndexed { index, date ->
                             Column(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .padding(horizontal = 4.dp)
                                     .clip(MaterialTheme.shapes.medium)
                                     .background(if (date == 15) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
                                     .clickable { }
@@ -77,9 +79,9 @@ fun TodayScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = listOf("日","一","二","三","四","五","六")[(date + 4) % 7],
+                                    text = weekDays[index],
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (date == 15) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (date == 15) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
@@ -103,17 +105,28 @@ fun TodayScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(text = "5月15日 星期五", style = MaterialTheme.typography.titleLarge)
                     Spacer(modifier = Modifier.height(12.dp))
+                    // 自适应内容
                     Text(
-                        text = "今天是一个安静而充实的日子。早上按计划完成了工作，效率比昨天高一些，处理了几个积压已久的任务，心里轻松了不少。午后去附近的公园走了走，阳光透过树叶洒在地上，微风正好，整个人都放松下来。晚上读了几页书，收获了一些新的想法，准备明天实践一下。希望保持这样的节奏，一步一步靠近自己的目标。",
+                        text = diaryContent,
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 新增字数统计
+                        Text(
+                            text = "${wordCount} 字",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "已保存 · 云同步完成", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                            Text(text = "已同步", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }

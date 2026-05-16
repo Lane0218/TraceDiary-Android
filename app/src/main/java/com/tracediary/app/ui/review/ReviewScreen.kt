@@ -32,7 +32,7 @@ fun ReviewScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "回顾", style = MaterialTheme.typography.displayLarge, modifier = Modifier.padding(bottom = 16.dp))
+            Text(text = "回顾", style = MaterialTheme.typography.displayLarge, modifier = Modifier.padding(bottom = 12.dp))
             
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 val labels = listOf("日历", "年度总结", "搜索")
@@ -41,7 +41,7 @@ fun ReviewScreen(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
                         shape = SegmentedButtonDefaults.itemShape(index = index, count = labels.size),
-                        label = { Text(label, style = MaterialTheme.typography.labelLarge) }
+                        label = { Text(label, style = MaterialTheme.typography.labelMedium) }
                     )
                 }
             }
@@ -61,26 +61,26 @@ fun ReviewScreen(
 private fun CalendarReviewContent() {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             Card(
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = {}) { Icon(Icons.Outlined.ChevronLeft, null) }
-                        Text("2026年5月", style = MaterialTheme.typography.titleLarge)
-                        IconButton(onClick = {}) { Icon(Icons.Outlined.ChevronRight, null) }
+                        IconButton(onClick = {}, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.ChevronLeft, null, modifier = Modifier.size(20.dp)) }
+                        Text("2026年5月", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        IconButton(onClick = {}, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.ChevronRight, null, modifier = Modifier.size(20.dp)) }
                     }
                     
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     
                     val days = listOf("日", "一", "二", "三", "四", "五", "六")
                     Row(modifier = Modifier.fillMaxWidth()) {
@@ -90,27 +90,25 @@ private fun CalendarReviewContent() {
                                 modifier = Modifier.weight(1f),
                                 textAlign = TextAlign.Center,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
                         }
                     }
                     
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     
-                    // 修复日历逻辑：2026年5月 1号是周五，31号是周日
-                    // 填充空白
                     val emptyDays = 5 
                     val totalDays = 31
                     val dateItems = (1..totalDays).map { it.toString() }
-                    
                     val allCells = List(emptyDays) { "" } + dateItems
+                    
                     allCells.chunked(7).forEach { week ->
-                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
                             week.forEach { date ->
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .aspectRatio(1f)
+                                        .aspectRatio(1.2f)
                                         .clip(CircleShape)
                                         .background(if (date == "15") MaterialTheme.colorScheme.primary else Color.Transparent),
                                     contentAlignment = Alignment.Center
@@ -123,14 +121,13 @@ private fun CalendarReviewContent() {
                                                 color = if (date == "15") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                                 fontWeight = if (date == "15") FontWeight.Bold else FontWeight.Normal
                                             )
-                                            if (date.toInt() < 20 && date.toInt() % 4 == 0) {
-                                                Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(if (date == "15") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary))
+                                            if (date.isNotEmpty() && date.toInt() < 16 && date.toInt() % 4 == 0) {
+                                                Box(modifier = Modifier.size(3.dp).clip(CircleShape).background(if (date == "15") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary))
                                             }
                                         }
                                     }
                                 }
                             }
-                            // 补足最后一周的空格
                             if (week.size < 7) {
                                 repeat(7 - week.size) {
                                     Spacer(modifier = Modifier.weight(1f))
@@ -143,7 +140,7 @@ private fun CalendarReviewContent() {
         }
 
         item {
-            Text(text = "5月15日 星期五", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 4.dp))
+            Text(text = "5月15日 星期五", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
         }
 
         item {
@@ -154,32 +151,34 @@ private fun CalendarReviewContent() {
                 Column {
                     Text(
                         text = "往年今日",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                        modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)
                     )
                     listOf("2025年5月15日", "2024年5月15日", "2023年5月15日").forEachIndexed { index, date ->
                         ListItem(
-                            headlineContent = { Text(date) },
-                            leadingContent = { Icon(Icons.Outlined.CalendarToday, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) },
-                            trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
-                            modifier = Modifier.clickable { }
+                            headlineContent = { Text(date, style = MaterialTheme.typography.bodyMedium) },
+                            leadingContent = { Icon(Icons.Outlined.CalendarToday, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp)) },
+                            trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, modifier = Modifier.size(16.dp)) },
+                            modifier = Modifier.clickable { },
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
                         )
                         if (index < 2) {
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         }
                     }
                 }
             }
         }
+        item { Spacer(modifier = Modifier.height(16.dp)) }
     }
 }
 
 @Composable
 private fun AnnualSummaryContent() {
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text(text = "年度总结", style = MaterialTheme.typography.titleLarge)
+            Text(text = "年度总结", style = MaterialTheme.typography.titleMedium)
         }
         items((2023..2026).reversed().toList()) { year ->
             Card(
@@ -189,7 +188,7 @@ private fun AnnualSummaryContent() {
             ) {
                 Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(text = "${year}年度总结", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                    Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null)
+                    Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, modifier = Modifier.size(20.dp))
                 }
             }
         }
@@ -203,15 +202,17 @@ private fun SearchContent() {
             value = "",
             onValueChange = {},
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("搜索日记内容...") },
-            leadingIcon = { Icon(Icons.Outlined.Search, null) },
-            shape = MaterialTheme.shapes.medium
+            placeholder = { Text("搜索日记内容...", style = MaterialTheme.typography.bodyMedium) },
+            leadingIcon = { Icon(Icons.Outlined.Search, null, modifier = Modifier.size(20.dp)) },
+            shape = MaterialTheme.shapes.medium,
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedBorderColor = Color.Transparent,
+                focusedBorderColor = MaterialTheme.colorScheme.primary
+            )
         )
-        Text(text = "搜索建议", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SuggestionChip(onClick = {}, label = { Text("去年今日") })
-            SuggestionChip(onClick = {}, label = { Text("快乐") })
-            SuggestionChip(onClick = {}, label = { Text("旅行") })
-        }
+        Text(text = "最近搜索", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text = "暂无搜索记录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
     }
 }
