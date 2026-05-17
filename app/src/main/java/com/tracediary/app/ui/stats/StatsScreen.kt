@@ -37,6 +37,7 @@ fun StatsScreen(
             Text(text = "统计", style = MaterialTheme.typography.displayLarge)
         }
 
+        // 统一的 Bento Box 概览网格
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val row1 = listOf(
@@ -66,7 +67,6 @@ fun StatsScreen(
         item {
             HeatmapCard(
                 currentYearLabel = "2026年",
-                levels = heatmapLevels,
                 onYearClick = onHeatmapYearClick
             )
         }
@@ -134,40 +134,61 @@ private fun MonthlyTrendCard(title: String, currentLabel: String, data: List<Pai
 }
 
 @Composable
-private fun HeatmapCard(currentYearLabel: String, levels: List<List<Int>>, onYearClick: () -> Unit) {
+private fun HeatmapCard(currentYearLabel: String, onYearClick: () -> Unit) {
     Card(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(text = "年度热力图", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 PeriodChip(label = currentYearLabel, onClick = onYearClick)
             }
-            // 重新设计：改为 4 行，每行 13 周，这样每个格子都能变大很多
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val chunks = heatmapLevels.map { it.chunked(13) } 
-                for (rowIdx in 0 until 4) {
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        for (dayIdx in 0 until 7) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                chunks[dayIdx][rowIdx].forEach { level ->
-                                    Box(modifier = Modifier.size(14.dp).clip(RoundedCornerShape(2.dp)).background(if (level > 0) MaterialTheme.colorScheme.primary else Color(0xFFF0F2EF)))
-                                }
-                            }
+
+            // 重构：采用月份微缩方阵 (4排 x 3列)
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                for (row in 0 until 4) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        for (col in 0 until 3) {
+                            val month = row * 3 + col + 1
+                            MiniMonthGrid(monthName = "${month}月", modifier = Modifier.weight(1f))
                         }
                     }
-                    if (rowIdx < 3) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 4.dp))
                 }
             }
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 Text(text = "未记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.width(4.dp))
-                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFF0F2EF)))
+                Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(1.dp)).background(Color(0xFFF0F2EF)))
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(text = "已记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.width(4.dp))
-                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.primary))
+                Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(1.dp)).background(MaterialTheme.colorScheme.primary))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MiniMonthGrid(monthName: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(text = monthName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), modifier = Modifier.padding(bottom = 4.dp))
+        // 模拟月历格子 (5行 x 7列)
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            for (w in 0 until 5) {
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    for (d in 0 until 7) {
+                        val isRecorded = (0..10).random() > 6
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(1.dp))
+                                .background(if (isRecorded) MaterialTheme.colorScheme.primary else Color(0xFFF4F6F3))
+                        )
+                    }
+                }
             }
         }
     }
@@ -184,4 +205,3 @@ private fun PeriodChip(label: String, onClick: () -> Unit) {
 
 private data class StatsData(val label: String, val value: String, val unit: String, val icon: ImageVector)
 private val yearlyWordCountData = listOf("25/6" to 1200, "25/7" to 1500, "25/8" to 900, "25/9" to 2100, "25/10" to 1800, "25/11" to 2400, "25/12" to 3000, "26/1" to 1400, "26/2" to 1100, "26/3" to 1900, "26/4" to 2200, "26/5" to 2500)
-private val heatmapLevels = List(7) { List(52) { if ((0..10).random() > 3) 1 else 0 } }
