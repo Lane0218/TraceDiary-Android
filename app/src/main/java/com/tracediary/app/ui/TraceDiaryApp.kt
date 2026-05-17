@@ -1,5 +1,6 @@
 package com.tracediary.app.ui
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -49,6 +50,8 @@ fun TraceDiaryApp() {
                                 style = MaterialTheme.typography.labelSmall
                             )
                         },
+                        // 移除点击涟漪效果 (Hover)
+                        interactionSource = remember { MutableInteractionSource() },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.primary,
                             selectedTextColor = MaterialTheme.colorScheme.primary,

@@ -2,10 +2,8 @@ package com.tracediary.app.ui.stats
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,7 +37,6 @@ fun StatsScreen(
             Text(text = "统计", style = MaterialTheme.typography.displayLarge)
         }
 
-        // 统一的 Bento Box 概览网格 (全部居中并带有图标)
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val row1 = listOf(
@@ -96,7 +93,7 @@ private fun BentoDataCard(data: StatsData, modifier: Modifier = Modifier) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 14.dp, horizontal = 8.dp),
+                .padding(vertical = 14.dp, horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -199,33 +196,34 @@ private fun HeatmapCard(currentYearLabel: String, levels: List<List<Int>>, onYea
                 Text(text = "年度热力图", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 PeriodChip(label = currentYearLabel, onClick = onYearClick)
             }
-            Box(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                HeatmapGrid(levels = levels)
+            // 修复：移除横向滚动，减小尺寸以适配宽度
+            Box(modifier = Modifier.fillMaxWidth()) {
+                HeatmapGridCompact(levels = levels)
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 Text(text = "未记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.width(4.dp))
-                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFF0F2EF)))
+                Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(1.dp)).background(Color(0xFFF0F2EF)))
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(text = "已记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.width(4.dp))
-                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.primary))
+                Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(1.dp)).background(MaterialTheme.colorScheme.primary))
             }
         }
     }
 }
 
 @Composable
-private fun HeatmapGrid(levels: List<List<Int>>) {
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+private fun HeatmapGridCompact(levels: List<List<Int>>) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         levels.forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 row.forEach { level ->
-                    // 逻辑修改为是否有记录：只要 level > 0 就显示深色
                     Box(
                         modifier = Modifier
-                            .size(10.dp)
-                            .clip(RoundedCornerShape(2.dp))
+                            .weight(1f)
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(1.dp))
                             .background(if (level > 0) MaterialTheme.colorScheme.primary else Color(0xFFF0F2EF))
                     )
                 }
@@ -237,7 +235,6 @@ private fun HeatmapGrid(levels: List<List<Int>>) {
 @Composable
 private fun PeriodChip(label: String, onClick: () -> Unit) {
     Surface(
-        // 修复 Hover：先 clip 再 clickable
         modifier = Modifier
             .clip(CircleShape)
             .clickable(onClick = onClick),

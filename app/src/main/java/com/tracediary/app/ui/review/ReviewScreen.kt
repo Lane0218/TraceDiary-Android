@@ -38,7 +38,7 @@ fun ReviewScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
             ) {
                 val labels = listOf("日历", "年度总结", "搜索")
                 labels.forEachIndexed { index, label ->
@@ -151,7 +151,6 @@ private fun CalendarReviewContent() {
             }
         }
 
-        // 修改：将日期标题改为“往年今日”
         item {
             Text(text = "往年今日", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
         }
@@ -162,13 +161,11 @@ private fun CalendarReviewContent() {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column {
-                    // 修改：删掉卡片内部冗余的“往年今日”文本
                     listOf("2025年5月15日", "2024年5月15日", "2023年5月15日").forEachIndexed { index, date ->
                         ListItem(
                             headlineContent = { Text(date, style = MaterialTheme.typography.bodyMedium) },
                             leadingContent = { Icon(Icons.Outlined.CalendarToday, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp)) },
                             trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, modifier = Modifier.size(16.dp)) },
-                            // 修复 Hover：先 clip(CardShape) 再 clickable
                             modifier = Modifier
                                 .clip(MaterialTheme.shapes.large)
                                 .clickable { }
@@ -211,19 +208,19 @@ private fun AnnualSummaryContent() {
 @Composable
 private fun SearchContent() {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // 修改：优化搜索框 UI（全圆角 + 融合背景）
+        // 优化：提高搜索框可见度，采用 ColorOS 风格
         OutlinedTextField(
             value = "",
             onValueChange = {},
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("搜索日记内容...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)) },
-            leadingIcon = { Icon(Icons.Outlined.Search, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)) },
-            shape = CircleShape, // Capsule 形状
+            placeholder = { Text("搜索日记内容...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
+            leadingIcon = { Icon(Icons.Outlined.Search, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
+            shape = CircleShape,
             colors = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), // 融合背景色
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                unfocusedBorderColor = Color.Transparent,
-                focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f), // 增加背景深度
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), // 增加轻微边框
+                focusedBorderColor = MaterialTheme.colorScheme.primary
             )
         )
         Text(text = "最近搜索", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
