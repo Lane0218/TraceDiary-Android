@@ -1,0 +1,136 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "0150e41548ed50b8051fb270e24760b7",
+    "entities": [
+      {
+        "tableName": "diary_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`epochDay` INTEGER NOT NULL, `content` TEXT NOT NULL, `createdAtEpochMilli` INTEGER NOT NULL, `updatedAtEpochMilli` INTEGER NOT NULL, `syncState` TEXT NOT NULL, PRIMARY KEY(`epochDay`))",
+        "fields": [
+          {
+            "fieldPath": "epochDay",
+            "columnName": "epochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtEpochMilli",
+            "columnName": "createdAtEpochMilli",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMilli",
+            "columnName": "updatedAtEpochMilli",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "syncState",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "epochDay"
+          ]
+        }
+      },
+      {
+        "tableName": "annual_summaries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`year` INTEGER NOT NULL, `content` TEXT NOT NULL, `createdAtEpochMilli` INTEGER NOT NULL, `updatedAtEpochMilli` INTEGER NOT NULL, `syncState` TEXT NOT NULL, PRIMARY KEY(`year`))",
+        "fields": [
+          {
+            "fieldPath": "year",
+            "columnName": "year",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtEpochMilli",
+            "columnName": "createdAtEpochMilli",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMilli",
+            "columnName": "updatedAtEpochMilli",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "syncState",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "year"
+          ]
+        }
+      },
+      {
+        "tableName": "sync_metadata",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`objectKey` TEXT NOT NULL, `localUpdatedAtEpochMilli` INTEGER NOT NULL, `remoteUpdatedAtEpochMilli` INTEGER, `lastSyncedAtEpochMilli` INTEGER, `checksum` TEXT, PRIMARY KEY(`objectKey`))",
+        "fields": [
+          {
+            "fieldPath": "objectKey",
+            "columnName": "objectKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localUpdatedAtEpochMilli",
+            "columnName": "localUpdatedAtEpochMilli",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remoteUpdatedAtEpochMilli",
+            "columnName": "remoteUpdatedAtEpochMilli",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastSyncedAtEpochMilli",
+            "columnName": "lastSyncedAtEpochMilli",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "checksum",
+            "columnName": "checksum",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "objectKey"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0150e41548ed50b8051fb270e24760b7')"
+    ]
+  }
+}
