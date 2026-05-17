@@ -1,5 +1,6 @@
 package com.tracediary.app.ui
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -19,7 +20,6 @@ import com.tracediary.app.ui.review.ReviewScreen
 import com.tracediary.app.ui.settings.SettingsScreen
 import com.tracediary.app.ui.stats.StatsScreen
 import com.tracediary.app.ui.today.TodayScreen
-import com.tracediary.app.ui.theme.TraceDiaryTheme
 
 @Composable
 fun TraceDiaryApp() {
@@ -29,37 +29,39 @@ fun TraceDiaryApp() {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp
-            ) {
-                tabs.forEachIndexed { index, item ->
-                    NavigationBarItem(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        icon = {
-                            Icon(
-                                imageVector = item.icon,
-                                contentDescription = item.label,
-                                modifier = Modifier.padding(top = 4.dp)
+            // 使用 CompositionLocalProvider 彻底禁用涟漪效果
+            CompositionLocalProvider(LocalIndication provides null) {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 0.dp
+                ) {
+                    tabs.forEachIndexed { index, item ->
+                        NavigationBarItem(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            icon = {
+                                Icon(
+                                    imageVector = item.icon,
+                                    contentDescription = item.label,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = item.label,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
+                            interactionSource = remember { MutableInteractionSource() },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                indicatorColor = Color.Transparent
                             )
-                        },
-                        label = {
-                            Text(
-                                text = item.label,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        },
-                        // 移除点击涟漪效果 (Hover)
-                        interactionSource = remember { MutableInteractionSource() },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            indicatorColor = Color.Transparent
                         )
-                    )
+                    }
                 }
             }
         }
