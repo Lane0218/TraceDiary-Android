@@ -1,6 +1,5 @@
 package com.tracediary.app.ui
 
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -21,6 +20,7 @@ import com.tracediary.app.ui.settings.SettingsScreen
 import com.tracediary.app.ui.stats.StatsScreen
 import com.tracediary.app.ui.today.TodayScreen
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TraceDiaryApp() {
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -29,8 +29,8 @@ fun TraceDiaryApp() {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            // 使用 CompositionLocalProvider 彻底禁用涟漪效果
-            CompositionLocalProvider(LocalIndication provides null) {
+            // 在 Material 3 中，使用 LocalRippleConfiguration 禁用涟漪
+            CompositionLocalProvider(LocalRippleConfiguration provides null) {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface,
                     tonalElevation = 0.dp
