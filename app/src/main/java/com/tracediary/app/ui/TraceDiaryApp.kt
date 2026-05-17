@@ -19,11 +19,17 @@ import com.tracediary.app.ui.review.ReviewScreen
 import com.tracediary.app.ui.settings.SettingsScreen
 import com.tracediary.app.ui.stats.StatsScreen
 import com.tracediary.app.ui.today.TodayScreen
+import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TraceDiaryApp() {
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    // LocalDate 不能直接 Saveable，这里以 epochDay 形式持久化；-1 视为无值。
+    var pendingTodayEpochDay by rememberSaveable { mutableStateOf(Long.MIN_VALUE) }
+    val pendingTodayDate: LocalDate? = remember(pendingTodayEpochDay) {
+        if (pendingTodayEpochDay == Long.MIN_VALUE) null else LocalDate.ofEpochDay(pendingTodayEpochDay)
+    }
     val tabs = appTabs()
 
     Scaffold(
@@ -73,8 +79,16 @@ fun TraceDiaryApp() {
             color = MaterialTheme.colorScheme.background
         ) {
             when (selectedTabIndex) {
-                0 -> TodayScreen()
-                1 -> ReviewScreen()
+                0 -> TodayScreen(
+                    pendingDate = pendingTodayDate,
+                    onPendingDateConsumed = { pendingTodayEpochDay = Long.MIN_VALUE },
+                )
+                1 -> ReviewScreen(
+                    onJumpToToday = { date ->
+                        pendingTodayEpochDay = date.toEpochDay()
+                        selectedTabIndex = 0
+                    },
+                )
                 2 -> StatsScreen()
                 else -> SettingsScreen()
             }

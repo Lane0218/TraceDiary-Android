@@ -1,17 +1,26 @@
 package com.tracediary.app.ui.settings
 
+import android.content.ContentResolver
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.tracediary.app.TraceDiaryApplication
+import com.tracediary.app.data.notifications.DailyReminderScheduler
 import com.tracediary.app.data.settings.UserPreferences
 import com.tracediary.app.data.settings.UserPreferencesRepository
+import com.tracediary.app.domain.usecase.ExportDiaryDataUseCase
+import com.tracediary.app.domain.usecase.ImportDiaryDataUseCase
+import com.tracediary.app.domain.usecase.ImportOptions
+import com.tracediary.app.domain.usecase.ImportResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * 保存按钮的状态机：用于"保存并验证连接"的反馈。
@@ -21,6 +30,16 @@ enum class SaveStatus {
     Saving,
     Saved,
     Failed
+}
+
+/**
+ * 数据备份/恢复的状态机：用于导入导出按钮和弹窗反馈。
+ */
+sealed interface BackupStatus {
+    data object Idle : BackupStatus
+    data object Working : BackupStatus
+    data class Success(val message: String) : BackupStatus
+    data class Failed(val message: String) : BackupStatus
 }
 
 /**
@@ -39,11 +58,16 @@ data class SettingsUiState(
     // 敏感字段：仅停留在内存。TODO: 接入 EncryptedSharedPreferences / Keystore 后再持久化。
     val syncAccessKeyId: String = "",
     val syncAccessKeySecret: String = "",
-    val saveStatus: SaveStatus = SaveStatus.Idle
+    val saveStatus: SaveStatus = SaveStatus.Idle,
+    val backupStatus: BackupStatus = BackupStatus.Idle,
+    val lastImportResult: ImportResult? = null,
 )
 
 class SettingsViewModel(
     private val repository: UserPreferencesRepository,
+    private val reminderScheduler: DailyReminderScheduler? = null,
+    private val exportUseCase: ExportDiaryDataUseCase? = null,
+    private val importUseCase: ImportDiaryDataUseCase? = null,
     private val saveDelayMillis: Long = DEFAULT_SAVE_DELAY_MILLIS
 ) : ViewModel() {
 
@@ -72,11 +96,44 @@ class SettingsViewModel(
     }
 
     fun onToggleReminder(value: Boolean) {
-        viewModelScope.launch { repository.setReminderEnabled(value) }
+        viewModelScope.launch {
+            repository.setReminderEnabled(value)
+            // 写完 DataStore 之后再调度，确保 UI 与后台任务一致。
+            if (value) {
+                runCatching {
+                    val time = DailyReminderScheduler.parseTime(_uiState.value.dailyReminderTime)
+                    reminderScheduler?.schedule(time)
+                }
+            } else {
+                reminderScheduler?.cancel()
+            }
+        }
     }
 
     fun onReminderTimeChanged(time: String) {
-        viewModelScope.launch { repository.setReminderTime(time) }
+        viewModelScope.launch {
+            repository.setReminderTime(time)
+            // 用户改时间后，如果当前是开启状态需要立即重新调度。
+            if (_uiState.value.dailyReminderEnabled) {
+                runCatching {
+                    reminderScheduler?.schedule(DailyReminderScheduler.parseTime(time))
+                }
+            }
+        }
+    }
+
+    /**
+     * 通知权限对话框的回调：
+     * - granted=false 且当前提醒已开启时，把开关回滚成 false 并取消已调度的任务，
+     *   避免用户拒绝权限后仍误以为提醒生效。
+     */
+    fun onNotificationPermissionGranted(granted: Boolean) {
+        if (granted) return
+        if (!_uiState.value.dailyReminderEnabled) return
+        viewModelScope.launch {
+            repository.setReminderEnabled(false)
+            reminderScheduler?.cancel()
+        }
     }
 
     fun onToggleSavePasswordLocally(value: Boolean) {
@@ -139,6 +196,119 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * 导出当前数据库内容到 SAF 选定的 Uri。
+     *
+     * - JSON 序列化与文件 I/O 均放在 [Dispatchers.IO]，避免阻塞 UI 线程。
+     * - 失败时使用中文兜底消息，避免把底层异常字符串直接抛给用户。
+     */
+    fun onExport(uri: Uri, contentResolver: ContentResolver) {
+        val useCase = exportUseCase ?: run {
+            _uiState.update { it.copy(backupStatus = BackupStatus.Failed("导出功能尚未初始化")) }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(backupStatus = BackupStatus.Working) }
+            try {
+                val payload = withContext(Dispatchers.IO) { useCase() }
+                val entryCount = payload.estimatedEntries()
+                val summaryCount = payload.estimatedSummaries()
+                withContext(Dispatchers.IO) {
+                    contentResolver.openOutputStream(uri, "wt")
+                        ?.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                        ?: error("无法写入所选位置")
+                }
+                val message = buildString {
+                    append("已导出 ")
+                    append(entryCount)
+                    append(" 条日记")
+                    if (summaryCount > 0) {
+                        append("、")
+                        append(summaryCount)
+                        append(" 篇年度总结")
+                    }
+                }
+                _uiState.update { it.copy(backupStatus = BackupStatus.Success(message)) }
+            } catch (t: Throwable) {
+                _uiState.update {
+                    it.copy(backupStatus = BackupStatus.Failed("导出失败：${t.message ?: "未知错误"}"))
+                }
+            }
+        }
+    }
+
+    /**
+     * 从 SAF 选定的 Uri 读取备份 JSON 并按 [options] 合并入库。
+     */
+    fun onImport(uri: Uri, contentResolver: ContentResolver, options: ImportOptions) {
+        val useCase = importUseCase ?: run {
+            _uiState.update { it.copy(backupStatus = BackupStatus.Failed("导入功能尚未初始化")) }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(backupStatus = BackupStatus.Working) }
+            try {
+                val payload = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use { stream ->
+                        stream.bufferedReader(Charsets.UTF_8).readText()
+                    } ?: error("无法读取所选文件")
+                }
+                val result = useCase(payload, options)
+                val message = buildString {
+                    append("导入 ")
+                    append(result.importedEntries)
+                    append(" 条日记")
+                    if (result.skippedEntries > 0) {
+                        append("（跳过 ")
+                        append(result.skippedEntries)
+                        append(" 条）")
+                    }
+                    if (result.importedSummaries > 0 || result.skippedSummaries > 0) {
+                        append("、")
+                        append(result.importedSummaries)
+                        append(" 篇年度总结")
+                        if (result.skippedSummaries > 0) {
+                            append("（跳过 ")
+                            append(result.skippedSummaries)
+                            append(" 篇）")
+                        }
+                    }
+                }
+                _uiState.update {
+                    it.copy(
+                        backupStatus = BackupStatus.Success(message),
+                        lastImportResult = result,
+                    )
+                }
+            } catch (t: Throwable) {
+                val message = t.message?.takeIf { it.isNotBlank() } ?: "未知错误"
+                _uiState.update {
+                    it.copy(backupStatus = BackupStatus.Failed("导入失败：$message"))
+                }
+            }
+        }
+    }
+
+    /** 用于关闭导入导出反馈弹窗后清理状态。 */
+    fun resetBackupStatus() {
+        _uiState.update { it.copy(backupStatus = BackupStatus.Idle) }
+    }
+
+    // 通过对 JSON 文本中字段名的简单计数估算条目数量，避免在 onExport 中重复反序列化。
+    private fun String.estimatedEntries(): Int = countOccurrences("\"date\"")
+    private fun String.estimatedSummaries(): Int = countOccurrences("\"year\"")
+
+    private fun String.countOccurrences(token: String): Int {
+        if (token.isEmpty()) return 0
+        var count = 0
+        var index = indexOf(token)
+        while (index >= 0) {
+            count++
+            index = indexOf(token, index + token.length)
+        }
+        return count
+    }
+
     companion object {
         private const val DEFAULT_SAVE_DELAY_MILLIS: Long = 400L
 
@@ -149,7 +319,12 @@ class SettingsViewModel(
                     require(modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
                         "Unknown ViewModel class: ${modelClass.name}"
                     }
-                    return SettingsViewModel(application.userPreferencesRepository) as T
+                    return SettingsViewModel(
+                        repository = application.userPreferencesRepository,
+                        reminderScheduler = application.dailyReminderScheduler,
+                        exportUseCase = application.exportDiaryDataUseCase,
+                        importUseCase = application.importDiaryDataUseCase,
+                    ) as T
                 }
             }
     }

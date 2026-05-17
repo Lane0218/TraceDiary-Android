@@ -1,0 +1,80 @@
+package com.tracediary.app.data.notifications
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.time.Duration
+import java.time.LocalDate
+import java.time.LocalTime
+
+/**
+ * 纯逻辑层单元测试：覆盖 [DailyReminderScheduler.parseTime] 与
+ * [DailyReminderScheduler.computeInitialDelayMillis]。
+ *
+ * Worker 的真实调度依赖 WorkManager + Android 运行时，放在 instrumented 测试覆盖。
+ */
+class DailyReminderSchedulerTest {
+
+    @Test
+    fun `parseTime 解析常见时间字符串`() {
+        assertEquals(LocalTime.of(21, 0), DailyReminderScheduler.parseTime("21:00"))
+        assertEquals(LocalTime.of(8, 30), DailyReminderScheduler.parseTime("08:30"))
+        assertEquals(LocalTime.of(0, 0), DailyReminderScheduler.parseTime("00:00"))
+        assertEquals(LocalTime.of(23, 59), DailyReminderScheduler.parseTime("23:59"))
+    }
+
+    @Test(expected = java.time.format.DateTimeParseException::class)
+    fun `parseTime 对非法字符串抛出异常`() {
+        DailyReminderScheduler.parseTime("9:5")
+    }
+
+    @Test
+    fun `target 在今天未来时返回当天差值`() {
+        val today = LocalDate.of(2026, 5, 17)
+        val now = LocalTime.of(8, 0)
+        val target = LocalTime.of(21, 0)
+
+        val actual = DailyReminderScheduler.computeInitialDelayMillis(today, now, target)
+
+        val expected = Duration.ofHours(13).toMillis()
+        assertEquals(expected, actual)
+    }
+
+    @Test
+    fun `target 已过今天时跳到第二天`() {
+        val today = LocalDate.of(2026, 5, 17)
+        val now = LocalTime.of(22, 0)
+        val target = LocalTime.of(21, 0)
+
+        val actual = DailyReminderScheduler.computeInitialDelayMillis(today, now, target)
+
+        val expected = Duration.ofHours(23).toMillis()
+        assertEquals(expected, actual)
+    }
+
+    @Test
+    fun `target 等于当前时间时跳到第二天`() {
+        val today = LocalDate.of(2026, 5, 17)
+        val now = LocalTime.of(21, 0)
+        val target = LocalTime.of(21, 0)
+
+        val actual = DailyReminderScheduler.computeInitialDelayMillis(today, now, target)
+
+        // 严格等于时按"过去"处理，等到下一天的同一时刻。
+        val expected = Duration.ofHours(24).toMillis()
+        assertEquals(expected, actual)
+    }
+
+    @Test
+    fun `delay 永不为负`() {
+        val today = LocalDate.of(2026, 5, 17)
+        val now = LocalTime.of(23, 59)
+        val target = LocalTime.of(0, 0)
+
+        val actual = DailyReminderScheduler.computeInitialDelayMillis(today, now, target)
+
+        assertTrue("delay should be non-negative", actual >= 0L)
+        // 0:00 已过当天，跳到第二天 0:00：差 1 分钟。
+        assertEquals(Duration.ofMinutes(1).toMillis(), actual)
+    }
+}

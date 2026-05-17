@@ -1,5 +1,6 @@
 package com.tracediary.app.ui.review
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,10 +14,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -44,9 +48,12 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +64,7 @@ import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.AnnualSummary
 import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.usecase.CalendarDay
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -68,6 +76,7 @@ private const val ContentPreviewLimit: Int = 60
 @Composable
 fun ReviewScreen(
     modifier: Modifier = Modifier,
+    onJumpToToday: (LocalDate) -> Unit = {},
     viewModel: ReviewViewModel = viewModel(
         factory = ReviewViewModel.factory(
             LocalContext.current.applicationContext as TraceDiaryApplication,
@@ -124,6 +133,7 @@ fun ReviewScreen(
                     onPreviousMonth = viewModel::onPreviousMonth,
                     onNextMonth = viewModel::onNextMonth,
                     onSelectDate = viewModel::onSelectDate,
+                    onJumpToToday = onJumpToToday,
                 )
 
                 ReviewTab.AnnualSummary -> AnnualSummaryContent(
@@ -137,6 +147,7 @@ fun ReviewScreen(
                     state = state.search,
                     onKeywordChanged = viewModel::onKeywordChanged,
                     onYearFilterChanged = viewModel::onYearFilterChanged,
+                    onJumpToToday = onJumpToToday,
                 )
             }
         }
@@ -149,6 +160,7 @@ private fun CalendarReviewContent(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onSelectDate: (LocalDate) -> Unit,
+    onJumpToToday: (LocalDate) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -278,10 +290,9 @@ private fun CalendarReviewContent(
                                         modifier = Modifier.size(16.dp),
                                     )
                                 },
-                                // TODO: 接入“跳转到该往年记录详情”的导航
                                 modifier = Modifier
                                     .clip(MaterialTheme.shapes.large)
-                                    .clickable { },
+                                    .clickable { onJumpToToday(entry.date) },
                             )
                             if (index < state.previousYearsOnThisDay.lastIndex) {
                                 HorizontalDivider(
@@ -516,6 +527,7 @@ private fun AnnualSummaryList(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AnnualSummaryEditor(
     year: Int,
@@ -524,7 +536,14 @@ private fun AnnualSummaryEditor(
     onContentChanged: (String) -> Unit,
     onClose: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val coroutineScope = rememberCoroutineScope()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding()
+            .padding(16.dp)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
                 Icon(
@@ -548,7 +567,15 @@ private fun AnnualSummaryEditor(
             onValueChange = onContentChanged,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 240.dp),
+                .heightIn(min = 240.dp)
+                .bringIntoViewRequester(bringIntoViewRequester)
+                .onFocusEvent { focusState ->
+                    if (focusState.isFocused) {
+                        coroutineScope.launch {
+                            bringIntoViewRequester.bringIntoView()
+                        }
+                    }
+                },
             placeholder = {
                 Text(
                     text = "记下这一年的关键瞬间……",
@@ -579,6 +606,7 @@ private fun SearchContent(
     state: SearchUiState,
     onKeywordChanged: (String) -> Unit,
     onYearFilterChanged: (Int?) -> Unit,
+    onJumpToToday: (LocalDate) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         OutlinedTextField(
@@ -650,7 +678,7 @@ private fun SearchContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(MaterialTheme.shapes.large)
-                            .clickable { /* TODO: 跳转到对应日期详情 */ },
+                            .clickable { onJumpToToday(entry.date) },
                         shape = MaterialTheme.shapes.large,
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     ) {

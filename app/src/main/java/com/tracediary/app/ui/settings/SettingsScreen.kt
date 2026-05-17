@@ -1,6 +1,11 @@
 package com.tracediary.app.ui.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,8 +24,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.TraceDiaryApplication
+import com.tracediary.app.domain.usecase.ImportOptions
+import com.tracediary.app.domain.usecase.MergeStrategy
 
 @Composable
 fun SettingsScreen(
@@ -41,7 +49,11 @@ fun SettingsScreen(
                 when (page) {
                     "同步设置" -> SyncSettingsPage(state = state, viewModel = viewModel)
                     "数据加密" -> EncryptionSettingsPage(state = state, viewModel = viewModel)
-                    "导入数据", "导出备份" -> DataManagementPage(page)
+                    "导入数据", "导出备份" -> DataManagementPage(
+                        mode = page,
+                        state = state,
+                        viewModel = viewModel,
+                    )
                     "通知提醒" -> NotificationPage(state = state, viewModel = viewModel)
                     "关于我们" -> AboutPage()
                     else -> Text("开发中...")
@@ -369,9 +381,20 @@ private fun SyncChoiceItem(title: String, desc: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewModel) {
+    val context = LocalContext.current
     var showTimePicker by remember { mutableStateOf(false) }
     val (initialHour, initialMinute) = remember(state.dailyReminderTime) {
         parseHourMinute(state.dailyReminderTime)
+    }
+
+    // 通知权限申请回调：把结果回传给 ViewModel；若获得授权再真正打开提醒。
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        viewModel.onNotificationPermissionGranted(granted)
+        if (granted) {
+            viewModel.onToggleReminder(true)
+        }
     }
 
     Column(
@@ -384,7 +407,27 @@ private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewMode
             title = "每日提醒",
             subtitle = "每天 ${state.dailyReminderTime} 提醒我写日记",
             checked = state.dailyReminderEnabled,
-            onCheckedChange = viewModel::onToggleReminder
+            onCheckedChange = { value ->
+                if (!value) {
+                    // 关闭提醒不需要权限。
+                    viewModel.onToggleReminder(false)
+                    return@ToggleItem
+                }
+                // Android 13+ 需要运行时申请 POST_NOTIFICATIONS。
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    val granted = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.POST_NOTIFICATIONS
+                    ) == PackageManager.PERMISSION_GRANTED
+                    if (granted) {
+                        viewModel.onToggleReminder(true)
+                    } else {
+                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                } else {
+                    viewModel.onToggleReminder(true)
+                }
+            }
         )
 
         ListItem(
@@ -433,7 +476,37 @@ private fun parseHourMinute(time: String): Pair<Int, Int> {
 }
 
 @Composable
-private fun DataManagementPage(mode: String) {
+private fun DataManagementPage(
+    mode: String,
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+) {
+    val context = LocalContext.current
+    val isImport = mode == "导入数据"
+    val isWorking = state.backupStatus is BackupStatus.Working
+
+    // 导入合并策略仅作用于本次操作，不需要落库；默认"保留较新"。
+    var mergeStrategy by remember { mutableStateOf(MergeStrategy.KeepNewer) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.onExport(uri, context.contentResolver)
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.onImport(
+                uri = uri,
+                contentResolver = context.contentResolver,
+                options = ImportOptions(mergeStrategy = mergeStrategy),
+            )
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -441,14 +514,84 @@ private fun DataManagementPage(mode: String) {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = if (mode == "导入数据") "支持从 JSON 或 TXT 文件导入历史记录。"
-            else "导出您的日记为通用格式，永久保存。",
+            text = if (isImport) "从 JSON 备份文件恢复历史记录，可选择遇到重复时如何处理。"
+            else "导出全部日记与年度总结为通用 JSON 文件，可放在云盘或本机长期保存。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        // TODO: 真实的导入/导出由后续阶段接入。
-        OutlinedButton(onClick = {}, modifier = Modifier.fillMaxWidth()) {
-            Text(if (mode == "导入数据") "选择文件" else "开始导出")
+
+        if (isImport) {
+            Text(
+                "遇到重复日期时",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = mergeStrategy == MergeStrategy.KeepNewer,
+                    onClick = { mergeStrategy = MergeStrategy.KeepNewer },
+                    label = { Text("保留较新") },
+                    enabled = !isWorking,
+                )
+                FilterChip(
+                    selected = mergeStrategy == MergeStrategy.OverwriteAll,
+                    onClick = { mergeStrategy = MergeStrategy.OverwriteAll },
+                    label = { Text("全部覆盖") },
+                    enabled = !isWorking,
+                )
+                FilterChip(
+                    selected = mergeStrategy == MergeStrategy.SkipExisting,
+                    onClick = { mergeStrategy = MergeStrategy.SkipExisting },
+                    label = { Text("跳过已存在") },
+                    enabled = !isWorking,
+                )
+            }
+        }
+
+        Button(
+            onClick = {
+                if (isImport) {
+                    importLauncher.launch(arrayOf("application/json"))
+                } else {
+                    val fileName = "tracediary_backup_" +
+                        java.time.LocalDate.now()
+                            .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) +
+                        ".json"
+                    exportLauncher.launch(fileName)
+                }
+            },
+            enabled = !isWorking,
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            Text(
+                when {
+                    isWorking && isImport -> "正在导入…"
+                    isWorking -> "正在导出…"
+                    isImport -> "选择备份文件"
+                    else -> "开始导出"
+                }
+            )
+        }
+
+        when (val status = state.backupStatus) {
+            BackupStatus.Idle, BackupStatus.Working -> Unit
+            is BackupStatus.Success -> AlertDialog(
+                onDismissRequest = viewModel::resetBackupStatus,
+                title = { Text(if (isImport) "导入完成" else "导出完成") },
+                text = { Text(status.message) },
+                confirmButton = {
+                    TextButton(onClick = viewModel::resetBackupStatus) { Text("好的") }
+                },
+            )
+            is BackupStatus.Failed -> AlertDialog(
+                onDismissRequest = viewModel::resetBackupStatus,
+                title = { Text(if (isImport) "导入失败" else "导出失败") },
+                text = { Text(status.message) },
+                confirmButton = {
+                    TextButton(onClick = viewModel::resetBackupStatus) { Text("我知道了") }
+                },
+            )
         }
     }
 }
