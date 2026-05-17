@@ -34,7 +34,6 @@ fun ReviewScreen(
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = "回顾", style = MaterialTheme.typography.displayLarge, modifier = Modifier.padding(bottom = 12.dp))
             
-            // 修复：将背景色移至 Modifier 并增加 clip 确保胶囊形状
             SingleChoiceSegmentedButtonRow(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -54,8 +53,8 @@ fun ReviewScreen(
                             activeContentColor = MaterialTheme.colorScheme.primary,
                             inactiveContainerColor = Color.Transparent,
                             inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        border = SegmentedButtonDefaults.border(color = Color.Transparent)
+                        )
+                        // 移除编译报错的 border 参数
                     )
                 }
             }
