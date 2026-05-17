@@ -32,6 +32,12 @@ class DefaultDiaryRepository(
         }
     }
 
+    override fun observeAllEntries(): Flow<List<DiaryEntry>> {
+        return diaryEntryDao.observeAll().map { entries ->
+            entries.map(DiaryEntryEntity::toDomain)
+        }
+    }
+
     override suspend fun getEntry(date: LocalDate): DiaryEntry? {
         return diaryEntryDao.getByDate(date.toEpochDay())?.toDomain()
     }

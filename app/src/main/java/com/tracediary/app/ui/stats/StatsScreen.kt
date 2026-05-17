@@ -10,66 +10,129 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tracediary.app.TraceDiaryApplication
+import com.tracediary.app.domain.usecase.DiaryStatistics
+import com.tracediary.app.domain.usecase.HeatmapDay
+import com.tracediary.app.domain.usecase.MonthlyWordCount
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.WeekFields
+import java.util.Locale
 
 @Composable
 fun StatsScreen(
     modifier: Modifier = Modifier,
-    onTrendMonthClick: () -> Unit = {},
-    onHeatmapYearClick: () -> Unit = {}
+    viewModel: StatsViewModel = viewModel(
+        factory = StatsViewModel.factory(
+            LocalContext.current.applicationContext as TraceDiaryApplication,
+        ),
+    ),
 ) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    StatsContent(
+        modifier = modifier,
+        state = state,
+        onSelectYear = viewModel::onSelectYear,
+        onSelectTrendYear = viewModel::onSelectTrendYear,
+    )
+}
+
+@Composable
+internal fun StatsContent(
+    modifier: Modifier = Modifier,
+    state: StatsUiState,
+    onSelectYear: (Int) -> Unit,
+    onSelectTrendYear: (Int) -> Unit,
+) {
+    val statistics = state.statistics
+    if (state.isLoading || statistics == null) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator()
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "加载中…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        return
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
             Text(text = "统计", style = MaterialTheme.typography.displayLarge)
         }
 
-        // 统一的 Bento Box 概览网格
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                val row1 = listOf(
-                    StatsData("总日记", "412", "篇", Icons.Outlined.Description),
-                    StatsData("累计字数", "12.8", "k", Icons.Outlined.TextFormat),
-                    StatsData("本年字数", "4.2", "k", Icons.Outlined.EditCalendar)
-                )
-                val row2 = listOf(
-                    StatsData("本月记录", "12", "天", Icons.Outlined.CalendarMonth),
-                    StatsData("连续记录", "5", "天", Icons.Outlined.LocalFireDepartment),
-                    StatsData("全年记录", "126", "天", Icons.Outlined.BarChart)
-                )
-                DataGridRow(row1)
-                DataGridRow(row2)
-            }
+            OverviewGrid(statistics)
         }
 
         item {
             MonthlyTrendCard(
                 title = "字数趋势",
-                currentLabel = "2026年",
-                data = yearlyWordCountData,
-                onYearClick = onTrendMonthClick
+                year = state.selectedTrendYear,
+                availableYears = state.availableYears,
+                data = statistics.monthlyWordTrend,
+                onSelectYear = onSelectTrendYear,
             )
         }
 
         item {
             HeatmapCard(
-                currentYearLabel = "2026年",
-                onYearClick = onHeatmapYearClick
+                year = state.selectedYear,
+                availableYears = state.availableYears,
+                heatmap = statistics.yearlyHeatmap,
+                onSelectYear = onSelectYear,
             )
         }
+    }
+}
+
+@Composable
+private fun OverviewGrid(statistics: DiaryStatistics) {
+    val totalWord = formatWordCount(statistics.totalWordCount)
+    val yearWord = formatWordCount(statistics.yearWordCount)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val row1 = listOf(
+            StatsData("总日记", statistics.totalEntries.toString(), "篇", Icons.Outlined.Description),
+            StatsData("累计字数", totalWord.first, totalWord.second, Icons.Outlined.TextFormat),
+            StatsData("本年字数", yearWord.first, yearWord.second, Icons.Outlined.EditCalendar),
+        )
+        val row2 = listOf(
+            StatsData("本月记录", statistics.monthRecordCount.toString(), "天", Icons.Outlined.CalendarMonth),
+            StatsData("连续记录", statistics.currentStreakDays.toString(), "天", Icons.Outlined.LocalFireDepartment),
+            StatsData("全年记录", statistics.annualRecordCount.toString(), "天", Icons.Outlined.BarChart),
+        )
+        DataGridRow(row1)
+        DataGridRow(row2)
     }
 }
 
@@ -85,16 +148,16 @@ private fun BentoDataCard(data: StatsData, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp, horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
         ) {
             Box(
                 modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(imageVector = data.icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
             }
@@ -110,48 +173,95 @@ private fun BentoDataCard(data: StatsData, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun MonthlyTrendCard(title: String, currentLabel: String, data: List<Pair<String, Int>>, onYearClick: () -> Unit) {
+private fun MonthlyTrendCard(
+    title: String,
+    year: Int,
+    availableYears: List<Int>,
+    data: List<MonthlyWordCount>,
+    onSelectYear: (Int) -> Unit,
+) {
     Card(
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                PeriodChip(label = currentLabel, onClick = onYearClick)
+                YearPickerChip(
+                    label = "${year}年",
+                    availableYears = availableYears,
+                    onSelectYear = onSelectYear,
+                )
             }
-            val maxVal = data.maxOf { it.second }.coerceAtLeast(1)
-            Row(modifier = Modifier.fillMaxWidth().height(100.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                data.forEach { (_, count) ->
-                    Box(modifier = Modifier.weight(1f).height((100 * (count.toFloat() / maxVal)).dp.coerceAtLeast(4.dp)).clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)).background(MaterialTheme.colorScheme.primary))
+            val maxVal = data.maxOfOrNull(MonthlyWordCount::wordCount)?.coerceAtLeast(1) ?: 1
+            Row(
+                modifier = Modifier.fillMaxWidth().height(100.dp),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                data.forEach { entry ->
+                    val ratio = entry.wordCount.toFloat() / maxVal
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height((100 * ratio).dp.coerceAtLeast(4.dp))
+                            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                            .background(MaterialTheme.colorScheme.primary),
+                    )
                 }
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                data.forEachIndexed { index, (month, _) -> if (index % 2 == 0) Text(text = month, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                data.forEachIndexed { index, monthly ->
+                    if (index % 2 == 0) {
+                        Text(
+                            text = "${monthly.yearMonth.monthValue}月",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun HeatmapCard(currentYearLabel: String, onYearClick: () -> Unit) {
+private fun HeatmapCard(
+    year: Int,
+    availableYears: List<Int>,
+    heatmap: List<HeatmapDay>,
+    onSelectYear: (Int) -> Unit,
+) {
     Card(
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(text = "年度热力图", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                PeriodChip(label = currentYearLabel, onClick = onYearClick)
+                YearPickerChip(
+                    label = "${year}年",
+                    availableYears = availableYears,
+                    onSelectYear = onSelectYear,
+                )
             }
 
-            // 重构：采用月份微缩方阵 (4排 x 3列)
+            val daysByMonth = remember(heatmap) {
+                heatmap.groupBy { YearMonth.from(it.date) }
+            }
+
+            // 4 行 x 3 列的月份微缩方阵
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 for (row in 0 until 4) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         for (col in 0 until 3) {
                             val month = row * 3 + col + 1
-                            MiniMonthGrid(monthName = "${month}月", modifier = Modifier.weight(1f))
+                            val yearMonth = YearMonth.of(year, month)
+                            MiniMonthGrid(
+                                yearMonth = yearMonth,
+                                days = daysByMonth[yearMonth].orEmpty(),
+                                modifier = Modifier.weight(1f),
+                            )
                         }
                     }
                 }
@@ -160,7 +270,7 @@ private fun HeatmapCard(currentYearLabel: String, onYearClick: () -> Unit) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 Text(text = "未记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.width(4.dp))
-                Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(1.dp)).background(Color(0xFFF0F2EF)))
+                Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(1.dp)).background(MaterialTheme.colorScheme.surfaceVariant))
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(text = "已记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.width(4.dp))
@@ -171,21 +281,43 @@ private fun HeatmapCard(currentYearLabel: String, onYearClick: () -> Unit) {
 }
 
 @Composable
-private fun MiniMonthGrid(monthName: String, modifier: Modifier = Modifier) {
+private fun MiniMonthGrid(
+    yearMonth: YearMonth,
+    days: List<HeatmapDay>,
+    modifier: Modifier = Modifier,
+) {
+    val daysByDate = remember(days) { days.associateBy { it.date } }
+    val firstDay = yearMonth.atDay(1)
+    val weekFields = remember { WeekFields.of(Locale.getDefault()) }
+    val firstDayOfWeek = weekFields.firstDayOfWeek
+    // 计算 1 号在网格中相对左上角的偏移
+    val offsetFromFirst = ((firstDay.dayOfWeek.value - firstDayOfWeek.value) + 7) % 7
+
     Column(modifier = modifier) {
-        Text(text = monthName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), modifier = Modifier.padding(bottom = 4.dp))
-        // 模拟月历格子 (5行 x 7列)
+        Text(
+            text = "${yearMonth.monthValue}月",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            for (w in 0 until 5) {
+            for (w in 0 until 6) {
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     for (d in 0 until 7) {
-                        val isRecorded = (0..10).random() > 6
+                        val cellIndex = w * 7 + d
+                        val dayOfMonth = cellIndex - offsetFromFirst + 1
+                        val color = if (dayOfMonth in 1..yearMonth.lengthOfMonth()) {
+                            val date = LocalDate.of(yearMonth.year, yearMonth.monthValue, dayOfMonth)
+                            daysByDate[date].toCellColor()
+                        } else {
+                            Color.Transparent
+                        }
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .aspectRatio(1f)
                                 .clip(RoundedCornerShape(1.dp))
-                                .background(if (isRecorded) MaterialTheme.colorScheme.primary else Color(0xFFF4F6F3))
+                                .background(color),
                         )
                     }
                 }
@@ -195,13 +327,70 @@ private fun MiniMonthGrid(monthName: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun PeriodChip(label: String, onClick: () -> Unit) {
-    Surface(modifier = Modifier.clip(CircleShape).clickable(onClick = onClick), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)) {
-        Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(text = label, style = MaterialTheme.typography.labelSmall); Icon(Icons.Outlined.ArrowDropDown, null, modifier = Modifier.size(14.dp))
+private fun HeatmapDay?.toCellColor(): Color {
+    val intensity = this?.intensity ?: 0
+    val primary = MaterialTheme.colorScheme.primary
+    val empty = MaterialTheme.colorScheme.surfaceVariant
+    return when (intensity) {
+        0 -> empty
+        1 -> primary.copy(alpha = 0.25f)
+        2 -> primary.copy(alpha = 0.5f)
+        3 -> primary.copy(alpha = 0.75f)
+        else -> primary
+    }
+}
+
+@Composable
+private fun YearPickerChip(
+    label: String,
+    availableYears: List<Int>,
+    onSelectYear: (Int) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Surface(
+            modifier = Modifier.clip(CircleShape).clickable { expanded = true },
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(text = label, style = MaterialTheme.typography.labelSmall)
+                Icon(Icons.Outlined.ArrowDropDown, null, modifier = Modifier.size(14.dp))
+            }
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            availableYears.forEach { year ->
+                DropdownMenuItem(
+                    text = { Text("${year}年") },
+                    onClick = {
+                        expanded = false
+                        onSelectYear(year)
+                    },
+                )
+            }
         }
     }
 }
 
 private data class StatsData(val label: String, val value: String, val unit: String, val icon: ImageVector)
-private val yearlyWordCountData = listOf("25/6" to 1200, "25/7" to 1500, "25/8" to 900, "25/9" to 2100, "25/10" to 1800, "25/11" to 2400, "25/12" to 3000, "26/1" to 1400, "26/2" to 1100, "26/3" to 1900, "26/4" to 2200, "26/5" to 2500)
+
+/**
+ * 字数格式化：>=1000 时按 "12.8" / "k" 表示（保留 1 位小数，整数则去掉小数位），
+ * 否则原数字 + "字"。
+ *
+ * 返回 (数值文本, 单位文本)。
+ */
+internal fun formatWordCount(value: Int): Pair<String, String> {
+    if (value < 1000) return value.toString() to "字"
+    // 截断到 1 位小数，避免四舍五入造成数据被夸大
+    val tenths = value / 100
+    val intPart = tenths / 10
+    val decimalPart = tenths % 10
+    val text = if (decimalPart == 0) intPart.toString() else "$intPart.$decimalPart"
+    return text to "k"
+}

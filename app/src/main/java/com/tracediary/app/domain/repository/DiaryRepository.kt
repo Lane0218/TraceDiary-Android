@@ -12,6 +12,8 @@ interface DiaryRepository {
 
     fun observeRecordedDates(): Flow<List<LocalDate>>
 
+    fun observeAllEntries(): Flow<List<DiaryEntry>>
+
     suspend fun getEntry(date: LocalDate): DiaryEntry?
 
     suspend fun getEntriesBetween(start: LocalDate, endInclusive: LocalDate): List<DiaryEntry>

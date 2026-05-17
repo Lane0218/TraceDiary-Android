@@ -2,32 +2,64 @@ package com.tracediary.app.ui.today
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tracediary.app.TraceDiaryApplication
+import com.tracediary.app.domain.model.DiaryEntry
+import java.time.LocalDate
+import java.time.format.TextStyle
+import java.util.Locale
 
 @Composable
 fun TodayScreen(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: TodayViewModel = viewModel(
+        factory = TodayViewModel.factory(
+            LocalContext.current.applicationContext as TraceDiaryApplication
+        )
+    ),
 ) {
-    val diaryContent = "今天是一个安静而充实的日子。早上按计划完成了工作，效率比昨天高一些，处理了几个积压已久的任务，心里轻松了不少。午后去附近的公园走了走，阳光透过树叶洒在地上，微风正好，整个人都放松下来。晚上读了几页书，收获了一些新的想法，准备明天实践一下。希望保持这样的节奏，一步一步靠近自己的目标。"
-    val wordCount = diaryContent.length
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = modifier
@@ -48,111 +80,265 @@ fun TodayScreen(
         }
 
         item {
-            Card(
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = {}, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.ChevronLeft, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary) }
-                        Text(text = "2026年5月", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                        IconButton(onClick = {}, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.ChevronRight, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary) }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        val weekDays = listOf("日", "一", "二", "三", "四", "五", "六")
-                        val dates = listOf(11, 12, 13, 14, 15, 16, 17)
-                        dates.forEachIndexed { index, date ->
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    // 修复 Hover：先 clip 再 clickable
-                                    .clip(MaterialTheme.shapes.medium)
-                                    .background(if (date == 15) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                                    .clickable { }
-                                    .padding(vertical = 8.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = weekDays[index],
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (date == 15) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = date.toString(),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = if (date == 15) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = if (date == 15) FontWeight.Bold else FontWeight.Normal
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            WeekCalendarCard(
+                weekDates = state.weekDates,
+                selectedDate = state.selectedDate,
+                monthLabel = state.displayMonthLabel,
+                onPrevious = viewModel::onPreviousWeek,
+                onNext = viewModel::onNextWeek,
+                onSelectDate = viewModel::onSelectDate,
+            )
         }
 
         item {
-            Card(
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(text = "5月15日 星期五", style = MaterialTheme.typography.titleLarge)
-                    Spacer(modifier = Modifier.height(12.dp))
+            EntryEditorCard(
+                title = state.entryTitle,
+                content = state.content,
+                wordCount = state.wordCount,
+                saveStatus = state.saveStatus,
+                onContentChanged = viewModel::onContentChanged,
+            )
+        }
+
+        item {
+            Text(
+                text = "往年今日",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = 4.dp, top = 8.dp)
+            )
+        }
+
+        if (state.previousYearsOnThisDay.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
                     Text(
-                        text = diaryContent,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth()
+                        text = "暂无往年记录",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(16.dp)
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                }
+            }
+        } else {
+            items(
+                items = state.previousYearsOnThisDay,
+                key = { entry -> entry.date.toEpochDay() }
+            ) { entry ->
+                PreviousYearEntryCard(
+                    entry = entry,
+                    onClick = { viewModel.onSelectDate(entry.date) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeekCalendarCard(
+    weekDates: List<LocalDate>,
+    selectedDate: LocalDate,
+    monthLabel: String,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onSelectDate: (LocalDate) -> Unit,
+) {
+    Card(
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onPrevious, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Outlined.ChevronLeft,
+                        contentDescription = "上一周",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Text(
+                    text = monthLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                IconButton(onClick = onNext, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Outlined.ChevronRight,
+                        contentDescription = "下一周",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                weekDates.forEach { date ->
+                    val isSelected = date == selectedDate
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            // 修复 Hover：先 clip 再 clickable
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(
+                                if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                else Color.Transparent
+                            )
+                            .clickable { onSelectDate(date) }
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "${wordCount} 字",
+                            text = date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.CHINESE),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "已同步", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = date.dayOfMonth.toString(),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        )
                     }
                 }
             }
         }
+    }
+}
 
-        item {
-            Text(text = "往年今日", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 4.dp, top = 8.dp))
-        }
-
-        items(listOf("2025年5月15日", "2024年5月15日")) { date ->
-            Card(
+@Composable
+private fun EntryEditorCard(
+    title: String,
+    content: String,
+    wordCount: Int,
+    saveStatus: SaveStatus,
+    onContentChanged: (String) -> Unit,
+) {
+    Card(
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(text = title, style = MaterialTheme.typography.titleLarge)
+            Spacer(modifier = Modifier.height(12.dp))
+            TextField(
+                value = content,
+                onValueChange = onContentChanged,
                 modifier = Modifier
                     .fillMaxWidth()
-                    // 修复 Hover
-                    .clip(MaterialTheme.shapes.medium)
-                    .clickable { },
-                shape = MaterialTheme.shapes.medium,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    .heightIn(min = 160.dp),
+                placeholder = {
+                    Text(
+                        text = "记录今天发生了什么…",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    )
+                },
+                textStyle = MaterialTheme.typography.bodyLarge,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                ),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = date, style = MaterialTheme.typography.bodyLarge)
-                    Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                }
+                Text(
+                    text = "$wordCount 字",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+                SaveStatusIndicator(saveStatus)
             }
+        }
+    }
+}
+
+@Composable
+private fun SaveStatusIndicator(saveStatus: SaveStatus) {
+    val (label, icon, tint) = when (saveStatus) {
+        SaveStatus.Idle -> Triple(
+            "未编辑",
+            Icons.Outlined.CloudOff,
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
+        SaveStatus.Saving -> Triple(
+            "保存中…",
+            Icons.Outlined.Sync,
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
+        SaveStatus.Saved -> Triple(
+            "已保存",
+            Icons.Outlined.CheckCircle,
+            MaterialTheme.colorScheme.primary
+        )
+        SaveStatus.Failed -> Triple(
+            "保存失败",
+            Icons.Outlined.ErrorOutline,
+            MaterialTheme.colorScheme.error
+        )
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = tint,
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = tint,
+        )
+    }
+}
+
+@Composable
+private fun PreviousYearEntryCard(
+    entry: DiaryEntry,
+    onClick: () -> Unit,
+) {
+    val title = "${entry.date.year}年${entry.date.monthValue}月${entry.date.dayOfMonth}日"
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            // 修复 Hover
+            .clip(MaterialTheme.shapes.medium)
+            .clickable { onClick() },
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge)
+            Icon(
+                Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
         }
     }
 }

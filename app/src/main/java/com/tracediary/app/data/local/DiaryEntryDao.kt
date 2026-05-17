@@ -23,6 +23,9 @@ interface DiaryEntryDao {
     @Query("SELECT epochDay FROM diary_entries ORDER BY epochDay ASC")
     fun observeRecordedEpochDays(): Flow<List<Long>>
 
+    @Query("SELECT * FROM diary_entries ORDER BY epochDay ASC")
+    fun observeAll(): Flow<List<DiaryEntryEntity>>
+
     @Query(
         """
         SELECT * FROM diary_entries
