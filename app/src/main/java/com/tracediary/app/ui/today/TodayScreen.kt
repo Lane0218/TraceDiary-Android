@@ -70,6 +70,7 @@ fun TodayScreen(
                             Column(
                                 modifier = Modifier
                                     .weight(1f)
+                                    // 修复 Hover：先 clip 再 clickable
                                     .clip(MaterialTheme.shapes.medium)
                                     .background(if (date == 15) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
                                     .clickable { }
@@ -135,7 +136,11 @@ fun TodayScreen(
 
         items(listOf("2025年5月15日", "2024年5月15日")) { date ->
             Card(
-                modifier = Modifier.fillMaxWidth().clickable { },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 修复 Hover
+                    .clip(MaterialTheme.shapes.medium)
+                    .clickable { },
                 shape = MaterialTheme.shapes.medium,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {

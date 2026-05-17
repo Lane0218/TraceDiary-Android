@@ -54,7 +54,6 @@ fun ReviewScreen(
                             inactiveContainerColor = Color.Transparent,
                             inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        // 移除编译报错的 border 参数
                     )
                 }
             }
@@ -152,8 +151,9 @@ private fun CalendarReviewContent() {
             }
         }
 
+        // 修改：将日期标题改为“往年今日”
         item {
-            Text(text = "5月15日 星期五", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
+            Text(text = "往年今日", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
         }
 
         item {
@@ -162,18 +162,16 @@ private fun CalendarReviewContent() {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column {
-                    Text(
-                        text = "往年今日",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)
-                    )
+                    // 修改：删掉卡片内部冗余的“往年今日”文本
                     listOf("2025年5月15日", "2024年5月15日", "2023年5月15日").forEachIndexed { index, date ->
                         ListItem(
                             headlineContent = { Text(date, style = MaterialTheme.typography.bodyMedium) },
                             leadingContent = { Icon(Icons.Outlined.CalendarToday, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp)) },
                             trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, modifier = Modifier.size(16.dp)) },
-                            modifier = Modifier.clickable { }
+                            // 修复 Hover：先 clip(CardShape) 再 clickable
+                            modifier = Modifier
+                                .clip(MaterialTheme.shapes.large)
+                                .clickable { }
                         )
                         if (index < 2) {
                             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -194,7 +192,10 @@ private fun AnnualSummaryContent() {
         }
         items((2023..2026).reversed().toList()) { year ->
             Card(
-                modifier = Modifier.fillMaxWidth().clickable { },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.large)
+                    .clickable { },
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
@@ -210,18 +211,19 @@ private fun AnnualSummaryContent() {
 @Composable
 private fun SearchContent() {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // 修改：优化搜索框 UI（全圆角 + 融合背景）
         OutlinedTextField(
             value = "",
             onValueChange = {},
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("搜索日记内容...", style = MaterialTheme.typography.bodyMedium) },
-            leadingIcon = { Icon(Icons.Outlined.Search, null, modifier = Modifier.size(20.dp)) },
-            shape = MaterialTheme.shapes.medium,
+            placeholder = { Text("搜索日记内容...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)) },
+            leadingIcon = { Icon(Icons.Outlined.Search, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)) },
+            shape = CircleShape, // Capsule 形状
             colors = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), // 融合背景色
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 unfocusedBorderColor = Color.Transparent,
-                focusedBorderColor = MaterialTheme.colorScheme.primary
+                focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
             )
         )
         Text(text = "最近搜索", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
