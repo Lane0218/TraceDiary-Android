@@ -38,7 +38,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -138,7 +137,6 @@ fun ReviewScreen(
                     state = state.search,
                     onKeywordChanged = viewModel::onKeywordChanged,
                     onYearFilterChanged = viewModel::onYearFilterChanged,
-                    onToggleRecordedOnly = viewModel::onToggleRecordedOnly,
                 )
             }
         }
@@ -220,10 +218,6 @@ private fun CalendarReviewContent(
         }
 
         item {
-            SelectedDayPreviewCard(state = state)
-        }
-
-        item {
             Text(
                 text = "往年今日",
                 style = MaterialTheme.typography.titleMedium,
@@ -234,6 +228,7 @@ private fun CalendarReviewContent(
         if (state.previousYearsOnThisDay.isEmpty()) {
             item {
                 Card(
+                    modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 ) {
@@ -248,6 +243,7 @@ private fun CalendarReviewContent(
         } else {
             item {
                 Card(
+                    modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 ) {
@@ -408,17 +404,73 @@ private fun AnnualSummaryList(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (state.writableYears.isNotEmpty()) {
+            item {
+                Text(
+                    text = "撰写新年度总结",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                ) {
+                    Column {
+                        state.writableYears.forEachIndexed { index, year ->
+                            ListItem(
+                                headlineContent = {
+                                    Text(
+                                        text = "${year}年度总结",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                    )
+                                },
+                                supportingContent = {
+                                    Text(
+                                        text = "点击撰写",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                },
+                                trailingContent = {
+                                    Icon(
+                                        Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                },
+                                modifier = Modifier
+                                    .clip(MaterialTheme.shapes.large)
+                                    .clickable { onOpenSummary(year) },
+                            )
+                            if (index < state.writableYears.lastIndex) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         item {
-            Text(text = "年度总结", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "历年年度总结",
+                style = MaterialTheme.typography.titleMedium,
+            )
         }
         if (state.summaries.isEmpty()) {
             item {
                 Card(
+                    modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 ) {
                     Text(
-                        text = "还没有年度总结，到了岁末再来这里写一篇吧",
+                        text = "还没有写过年度总结，从上方任意一年开始吧",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.padding(16.dp),
@@ -461,7 +513,6 @@ private fun AnnualSummaryList(
                 }
             }
         }
-        // TODO: 后续支持“撰写新年度总结”的入口（取最近无记录的年份列表）
     }
 }
 
@@ -528,7 +579,6 @@ private fun SearchContent(
     state: SearchUiState,
     onKeywordChanged: (String) -> Unit,
     onYearFilterChanged: (Int?) -> Unit,
-    onToggleRecordedOnly: (Boolean) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         OutlinedTextField(
@@ -584,22 +634,6 @@ private fun SearchContent(
                             label = { Text("${year}年") },
                         )
                     }
-                }
-            }
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "仅显示有记录的日期",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(
-                        checked = state.recordedOnly,
-                        onCheckedChange = onToggleRecordedOnly,
-                    )
                 }
             }
             if (state.results.isEmpty()) {

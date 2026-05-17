@@ -166,7 +166,8 @@ class TodayViewModel(
                 wordCount = content.plainTextWordCount(),
                 previousYearsOnThisDay = previous,
                 currentEntrySyncState = entry?.syncState,
-                saveStatus = SaveStatus.Idle,
+                // 已经落库过的条目展示“已保存”，让用户离开后回来仍能确认状态；空白条目保持“未编辑”。
+                saveStatus = if (entry != null && entry.content.isNotEmpty()) SaveStatus.Saved else SaveStatus.Idle,
             )
         }
     }

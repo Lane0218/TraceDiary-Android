@@ -122,6 +122,11 @@ class ReviewViewModel(
         workScope.launch {
             annualSummaryRepository.observeSummaries().collectLatest { summaries ->
                 val ordered = summaries.sortedByDescending(AnnualSummary::year)
+                val existingYears = ordered.map(AnnualSummary::year).toSet()
+                val currentYear = LocalDate.now(clock).year
+                val writableYears = (0 until WRITABLE_YEAR_WINDOW)
+                    .map { offset -> currentYear - offset }
+                    .filter { year -> year !in existingYears }
                 _state.update { current ->
                     val selectedYear = current.annual.selectedYear
                     val refreshedContent = if (selectedYear != null) {
@@ -133,6 +138,7 @@ class ReviewViewModel(
                     current.copy(
                         annual = current.annual.copy(
                             summaries = ordered,
+                            writableYears = writableYears,
                             editingContent = refreshedContent,
                         ),
                     )
@@ -313,6 +319,8 @@ class ReviewViewModel(
     companion object {
         const val KEYWORD_DEBOUNCE_MS: Long = 300L
         const val SUMMARY_SAVE_DEBOUNCE_MS: Long = 600L
+        /** 年度总结新建入口默认覆盖：今年起向前 5 年。 */
+        const val WRITABLE_YEAR_WINDOW: Int = 5
 
         fun factory(application: TraceDiaryApplication): ViewModelProvider.Factory =
             viewModelFactory {
@@ -359,6 +367,7 @@ data class CalendarUiState(
 
 data class AnnualUiState(
     val summaries: List<AnnualSummary> = emptyList(),
+    val writableYears: List<Int> = emptyList(),
     val selectedYear: Int? = null,
     val editingContent: String = "",
     val editingSaveStatus: SaveStatus = SaveStatus.Idle,
@@ -367,7 +376,7 @@ data class AnnualUiState(
 data class SearchUiState(
     val keyword: String = "",
     val yearFilter: Int? = null,
-    val recordedOnly: Boolean = true,
+    val recordedOnly: Boolean = false,
     val results: List<DiaryEntry> = emptyList(),
     val availableYears: List<Int> = emptyList(),
 )

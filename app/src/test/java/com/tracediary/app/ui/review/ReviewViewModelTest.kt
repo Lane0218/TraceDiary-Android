@@ -199,14 +199,15 @@ class ReviewViewModelTest {
         advanceTimeBy(ReviewViewModel.KEYWORD_DEBOUNCE_MS + 50)
         runCurrent()
         advanceUntilIdle()
-        // recordedOnly = true 时空白记录应被过滤掉
-        val recordedDates = viewModel.state.value.search.results.map(DiaryEntry::date)
-        assertFalse(LocalDate.parse("2026-05-18") in recordedDates)
-
-        viewModel.onToggleRecordedOnly(false)
-        advanceUntilIdle()
+        // recordedOnly 默认 false（搜索是纯搜索），空白记录应被包含。
         val withBlanks = viewModel.state.value.search.results.map(DiaryEntry::date)
         assertTrue(LocalDate.parse("2026-05-18") in withBlanks)
+
+        viewModel.onToggleRecordedOnly(true)
+        advanceUntilIdle()
+        // 切到 recordedOnly = true 后空白记录应被过滤。
+        val recordedOnly = viewModel.state.value.search.results.map(DiaryEntry::date)
+        assertFalse(LocalDate.parse("2026-05-18") in recordedOnly)
 
         viewModelJob.cancel()
     }

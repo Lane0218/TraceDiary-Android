@@ -64,7 +64,8 @@ class TodayViewModelTest {
         assertEquals(fixedToday, state.selectedDate)
         assertEquals(existing.content, state.content)
         assertEquals(existing.content.length, state.wordCount)
-        assertEquals(SaveStatus.Idle, state.saveStatus)
+        // 已落库的条目，加载后应展示“已保存”，让用户离开后回来仍能确认保存状态。
+        assertEquals(SaveStatus.Saved, state.saveStatus)
         assertEquals(7, state.weekDates.size)
         assertTrue(state.weekDates.contains(fixedToday))
         assertEquals("2026年5月", state.displayMonthLabel)
