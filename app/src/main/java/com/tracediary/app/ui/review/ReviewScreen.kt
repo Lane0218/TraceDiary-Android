@@ -34,9 +34,12 @@ fun ReviewScreen(
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = "回顾", style = MaterialTheme.typography.displayLarge, modifier = Modifier.padding(bottom = 12.dp))
             
+            // 修复：将背景色移至 Modifier 并增加 clip 确保胶囊形状
             SingleChoiceSegmentedButtonRow(
-                modifier = Modifier.fillMaxWidth(),
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             ) {
                 val labels = listOf("日历", "年度总结", "搜索")
                 labels.forEachIndexed { index, label ->
@@ -44,7 +47,7 @@ fun ReviewScreen(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
                         shape = SegmentedButtonDefaults.itemShape(index = index, count = labels.size),
-                        icon = {}, // 移除默认的勾选图标
+                        icon = {}, 
                         label = { Text(label, style = MaterialTheme.typography.labelMedium) },
                         colors = SegmentedButtonDefaults.colors(
                             activeContainerColor = MaterialTheme.colorScheme.surface,
