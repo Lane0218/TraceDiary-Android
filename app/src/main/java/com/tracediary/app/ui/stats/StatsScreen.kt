@@ -11,7 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -20,7 +20,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,50 +41,31 @@ fun StatsScreen(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(text = "统计", style = MaterialTheme.typography.displayLarge)
-                Text(
-                    text = "见证你的坚持与成长",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
 
-        // 新增：核心数据概览
+        // 统一的 Bento Box 概览网格 (2x3)
         item {
-            Card(
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceAround
-                ) {
-                    InfoItem(label = "总日记", value = "412", unit = "篇")
-                    VerticalDivider(modifier = Modifier.height(32.dp).align(Alignment.CenterVertically), color = MaterialTheme.colorScheme.outlineVariant)
-                    InfoItem(label = "累计字数", value = "12.8", unit = "k")
-                    VerticalDivider(modifier = Modifier.height(32.dp).align(Alignment.CenterVertically), color = MaterialTheme.colorScheme.outlineVariant)
-                    InfoItem(label = "本年字数", value = "4.2", unit = "k")
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BentoCard(label = "总日记", value = "412", unit = "篇", modifier = Modifier.weight(1f))
+                    BentoCard(label = "累计字数", value = "12.8", unit = "k", modifier = Modifier.weight(1f))
+                    BentoCard(label = "本年字数", value = "4.2", unit = "k", modifier = Modifier.weight(1f))
                 }
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                summaryCards.forEach { card ->
-                    StatsSummaryCard(summary = card, modifier = Modifier.weight(1f))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BentoIconCard(icon = Icons.Outlined.CalendarMonth, label = "本月记录", value = "12天", modifier = Modifier.weight(1f))
+                    BentoIconCard(icon = Icons.Outlined.LocalFireDepartment, label = "连续记录", value = "5天", modifier = Modifier.weight(1f))
+                    BentoIconCard(icon = Icons.Outlined.BarChart, label = "全年记录", value = "126天", modifier = Modifier.weight(1f))
                 }
             }
         }
 
         item {
             MonthlyTrendCard(
-                currentMonthLabel = "2026年5月",
-                monthlyTotal = 12,
-                dailyRecords = trendValues,
-                onMonthClick = onTrendMonthClick
+                title = "字数趋势 (近12个月)",
+                currentLabel = "2026年",
+                data = yearlyWordCountData,
+                onYearClick = onTrendMonthClick
             )
         }
 
@@ -99,73 +80,88 @@ fun StatsScreen(
 }
 
 @Composable
-private fun InfoItem(label: String, value: String, unit: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(text = value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(text = unit, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(bottom = 2.dp, start = 2.dp))
-        }
-    }
-}
-
-@Composable
-private fun StatsSummaryCard(summary: StatsSummary, modifier: Modifier = Modifier) {
+private fun BentoCard(label: String, value: String, unit: String, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(imageVector = summary.icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(text = value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(text = unit, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(bottom = 2.dp, start = 2.dp), color = MaterialTheme.colorScheme.primary)
             }
-            Text(text = summary.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(text = summary.value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-private fun MonthlyTrendCard(currentMonthLabel: String, monthlyTotal: Int, dailyRecords: List<Int>, onMonthClick: () -> Unit) {
+private fun BentoIconCard(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(
+                modifier = Modifier.size(24.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+            }
+            Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(text = value, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun MonthlyTrendCard(title: String, currentLabel: String, data: List<Pair<String, Int>>, onYearClick: () -> Unit) {
     Card(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "月度趋势", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                PeriodChip(label = currentMonthLabel, onClick = onMonthClick)
+                Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                PeriodChip(label = currentLabel, onClick = onYearClick)
             }
-            TrendChart(records = dailyRecords)
-        }
-    }
-}
-
-@Composable
-private fun TrendChart(records: List<Int>) {
-    val chartHeight = 100.dp
-    Column {
-        Row(modifier = Modifier.fillMaxWidth().height(chartHeight), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            records.forEach { value ->
-                val barHeight = (value * 10).coerceAtMost(100).dp
-                Box(
-                    modifier = Modifier.weight(1f).height(if (barHeight > 4.dp) barHeight else 4.dp).clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
-                        .background(if (value > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                )
+            
+            val maxVal = data.maxOf { it.second }.coerceAtLeast(1)
+            val chartHeight = 100.dp
+            
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(chartHeight),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    data.forEach { (month, count) ->
+                        val barHeight = (chartHeight.value * (count.toFloat() / maxVal)).dp
+                        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(if (barHeight > 4.dp) barHeight else 4.dp)
+                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    data.forEachIndexed { index, (month, _) ->
+                        if (index % 2 == 0) {
+                            Text(text = month, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
             }
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("1日", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("15日", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("31日", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -236,13 +232,11 @@ private fun heatmapColor(level: Int): Color {
     }
 }
 
-private data class StatsSummary(val icon: ImageVector, val title: String, val value: String)
-private val summaryCards = listOf(
-    StatsSummary(Icons.Outlined.CalendarMonth, "本月记录", "12天"),
-    StatsSummary(Icons.Outlined.LocalFireDepartment, "连续记录", "5天"),
-    StatsSummary(Icons.Outlined.BarChart, "全年记录", "126天")
+private val yearlyWordCountData = listOf(
+    "25/6" to 1200, "25/7" to 1500, "25/8" to 900, "25/9" to 2100, "25/10" to 1800, "25/11" to 2400,
+    "25/12" to 3000, "26/1" to 1400, "26/2" to 1100, "26/3" to 1900, "26/4" to 2200, "26/5" to 2500
 )
-private val trendValues = listOf(0,0,0,0,5,7,0,3,4,0,2,7,4,0,2,4,0,3,6,0,4,0,3,0,7,0,3,0,5,0,4)
+
 private val heatmapLevels = List(7) { List(52) { (0..3).random() } }
 private val HeatLevelEmpty = Color(0xFFF0F2EF)
 private val HeatLevelLight = Color(0xFFCDEFC5)

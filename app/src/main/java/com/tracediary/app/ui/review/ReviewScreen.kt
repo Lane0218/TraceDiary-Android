@@ -34,14 +34,25 @@ fun ReviewScreen(
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = "回顾", style = MaterialTheme.typography.displayLarge, modifier = Modifier.padding(bottom = 12.dp))
             
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            ) {
                 val labels = listOf("日历", "年度总结", "搜索")
                 labels.forEachIndexed { index, label ->
                     SegmentedButton(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
                         shape = SegmentedButtonDefaults.itemShape(index = index, count = labels.size),
-                        label = { Text(label, style = MaterialTheme.typography.labelMedium) }
+                        icon = {}, // 移除默认的勾选图标
+                        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                        colors = SegmentedButtonDefaults.colors(
+                            activeContainerColor = MaterialTheme.colorScheme.surface,
+                            activeContentColor = MaterialTheme.colorScheme.primary,
+                            inactiveContainerColor = Color.Transparent,
+                            inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        border = SegmentedButtonDefaults.border(color = Color.Transparent)
                     )
                 }
             }

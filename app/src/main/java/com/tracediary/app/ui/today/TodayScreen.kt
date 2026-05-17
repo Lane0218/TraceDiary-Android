@@ -2,9 +2,11 @@ package com.tracediary.app.ui.today
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
@@ -41,14 +43,10 @@ fun TodayScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(text = "今天", style = MaterialTheme.typography.displayLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IconButton(onClick = {}) { Icon(Icons.Outlined.Search, "搜索") }
-                    IconButton(onClick = {}) { Icon(Icons.Outlined.MoreVert, null) }
-                }
+                IconButton(onClick = {}) { Icon(Icons.Outlined.MoreVert, null) }
             }
         }
 
-        // 优化周历：缩减为7天，增加切换按钮
         item {
             Card(
                 shape = MaterialTheme.shapes.large,
@@ -105,7 +103,6 @@ fun TodayScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(text = "5月15日 星期五", style = MaterialTheme.typography.titleLarge)
                     Spacer(modifier = Modifier.height(12.dp))
-                    // 自适应内容
                     Text(
                         text = diaryContent,
                         style = MaterialTheme.typography.bodyLarge,
@@ -117,7 +114,6 @@ fun TodayScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 新增字数统计
                         Text(
                             text = "${wordCount} 字",
                             style = MaterialTheme.typography.labelSmall,
