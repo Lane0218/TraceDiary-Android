@@ -4,11 +4,7 @@ import android.content.Context
 import android.util.Base64
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import javax.crypto.Cipher
 import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
-import java.security.SecureRandom
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -52,6 +48,13 @@ class AppPasswordManager(
 
     @Volatile private var unlockedFlag: Boolean = false
 
+    /**
+     * 当前已解锁的应用密码。仅在内存中存活：
+     * - "记住密码"开启时与 [SecureCredentialStore] 同步；
+     * - "记住密码"关闭时不写入磁盘，但只要本次解锁未失效，SyncEngine / 自动同步仍能读到。
+     */
+    @Volatile private var activePasswordRef: String? = null
+
     private val _state = MutableStateFlow(computeState())
     val state: StateFlow<AppLockState> = _state.asStateFlow()
 
@@ -60,7 +63,12 @@ class AppPasswordManager(
         if (isPasswordConfigured() && isRememberPasswordEnabled()) {
             credentialStore.loadLocalPassword()?.let { stored ->
                 runCatching { verifyPassword(stored) }
-                    .onSuccess { ok -> if (ok) unlockedFlag = true }
+                    .onSuccess { ok ->
+                        if (ok) {
+                            unlockedFlag = true
+                            activePasswordRef = stored
+                        }
+                    }
             }
         }
         publishState()
@@ -69,6 +77,15 @@ class AppPasswordManager(
     fun isUnlocked(): Boolean = unlockedFlag
 
     fun needsSetup(): Boolean = !isPasswordConfigured()
+
+    /**
+     * 获取当前激活的应用密码。仅当已解锁时返回非空；
+     * 优先返回内存中的 [activePasswordRef]，回退到 [SecureCredentialStore]。
+     */
+    fun loadActivePassword(): String? {
+        if (!unlockedFlag) return null
+        return activePasswordRef ?: credentialStore.loadLocalPassword()
+    }
 
     fun isRememberPasswordEnabled(): Boolean =
         prefs.getBoolean(KEY_REMEMBER_PASSWORD, true)
@@ -89,6 +106,7 @@ class AppPasswordManager(
                 .apply()
             credentialStore.saveLocalPassword(if (remember) password else null)
             unlockedFlag = true
+            activePasswordRef = password
             publishState()
         }
     }
@@ -101,6 +119,7 @@ class AppPasswordManager(
             val ok = verifyPassword(password)
             if (!ok) throw IllegalArgumentException("密码错误")
             unlockedFlag = true
+            activePasswordRef = password
             // 解锁成功且当前是"记住密码"配置，把内存中的密码同步到 SecureCredentialStore，
             // 让 SyncEngine 等同步组件能用同一个密码加密云端对象。
             if (isRememberPasswordEnabled()) {
@@ -110,9 +129,10 @@ class AppPasswordManager(
         }
     }
 
-    /** 立即上锁。内存态 [unlockedFlag] 置 false；持久化的验证器与 salt 不变。 */
+    /** 立即上锁。内存态 [unlockedFlag] 与 [activePasswordRef] 一并清空；持久化的验证器与 salt 不变。 */
     fun lockNow() {
         unlockedFlag = false
+        activePasswordRef = null
         publishState()
     }
 
@@ -143,6 +163,7 @@ class AppPasswordManager(
             if (isRememberPasswordEnabled()) {
                 credentialStore.saveLocalPassword(newPassword)
             }
+            activePasswordRef = newPassword
             publishState()
         }
     }
@@ -169,41 +190,18 @@ class AppPasswordManager(
     }
 
     /**
-     * 验证器格式：`[1B 版本=1][12B IV][密文+16B GCM tag]`。
-     * 使用直接调用 Cipher 而非 [CryptoBox.encryptToBase64]，避免引入 Base64 双层封装。
+     * 验证器格式：`[1B 版本=1][12B IV][密文+16B GCM tag]`。委托给 [PasswordVerifierCodec] 完成。
      */
-    private fun wrapDek(kek: SecretKey, dek: ByteArray): ByteArray {
-        val iv = ByteArray(IV_BYTES).also { SecureRandom().nextBytes(it) }
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, kek, GCMParameterSpec(TAG_BITS, iv))
-        val ct = cipher.doFinal(dek)
-        return ByteArray(1 + iv.size + ct.size).also { out ->
-            out[0] = VERSION
-            System.arraycopy(iv, 0, out, 1, iv.size)
-            System.arraycopy(ct, 0, out, 1 + iv.size, ct.size)
-        }
-    }
+    private fun wrapDek(kek: SecretKey, dek: ByteArray): ByteArray =
+        PasswordVerifierCodec.wrap(kek, dek)
 
-    private fun unwrapDek(kek: SecretKey, raw: ByteArray): ByteArray {
-        require(raw.isNotEmpty() && raw[0] == VERSION) { "未知的验证器版本" }
-        require(raw.size > 1 + IV_BYTES) { "验证器长度不足" }
-        val iv = raw.copyOfRange(1, 1 + IV_BYTES)
-        val ct = raw.copyOfRange(1 + IV_BYTES, raw.size)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, kek, GCMParameterSpec(TAG_BITS, iv))
-        return cipher.doFinal(ct)
-    }
+    private fun unwrapDek(kek: SecretKey, raw: ByteArray): ByteArray =
+        PasswordVerifierCodec.unwrap(kek, raw)
 
     private companion object {
         const val PREF_FILE_NAME = "tracediary_app_password_prefs"
         const val KEY_VERIFIER = "password_verifier"
         const val KEY_REMEMBER_PASSWORD = "remember_password"
-        const val IV_BYTES = 12
-        const val TAG_BITS = 128
-        const val VERSION: Byte = 1
-        // SecretKeySpec 不需要在这里手动构造，预留以备将来 PBKDF2 参数微调。
-        @Suppress("UNUSED")
-        fun keyOf(raw: ByteArray): SecretKey = SecretKeySpec(raw, "AES")
     }
 }
 
