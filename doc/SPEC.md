@@ -68,6 +68,7 @@ com.tracediary.app
     review/
     stats/
     settings/
+    security/
     components/
     theme/
   domain/
@@ -78,6 +79,7 @@ com.tracediary.app
     local/
     sync/
     backup/
+    security/
     settings/
 ```
 
