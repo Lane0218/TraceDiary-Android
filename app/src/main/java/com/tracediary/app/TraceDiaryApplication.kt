@@ -100,14 +100,7 @@ class TraceDiaryApplication : Application() {
         // sqlcipher-android 4.6+ 通过 System.loadLibrary 加载原生库，且 .so 已 16 KB 对齐。
         System.loadLibrary("sqlcipher")
         val passphrase = PassphraseStore(this).getOrCreate()
-        database = Room.databaseBuilder(
-            this,
-            TraceDiaryDatabase::class.java,
-            "tracediary.db"
-        )
-            .openHelperFactory(SupportOpenHelperFactory(passphrase))
-            .fallbackToDestructiveMigration(true)
-            .build()
+        database = buildDatabase(passphrase)
 
         diaryRepository = DefaultDiaryRepository(database.diaryEntryDao())
         annualSummaryRepository = DefaultAnnualSummaryRepository(database.annualSummaryDao())
@@ -138,6 +131,28 @@ class TraceDiaryApplication : Application() {
     }
 
     /**
+     * 构建 Room 数据库。带版本标记自愈：当 SQLCipher 加密参数发生不兼容变更
+     * （例如 4.5→4.6 默认 HMAC 算法切换）时，旧库无法被新版 SQLCipher 解密，
+     * 进程会在首次访问 DAO 时崩溃。按"首版测试数据可丢弃"约定，发现版本不
+     * 匹配时直接删库重建，避免线上闪退。
+     */
+    private fun buildDatabase(passphrase: ByteArray): TraceDiaryDatabase {
+        val markerPrefs = getSharedPreferences(DB_META_PREFS, MODE_PRIVATE)
+        if (markerPrefs.getInt(KEY_DB_FORMAT_VERSION, 0) != CURRENT_DB_FORMAT_VERSION) {
+            deleteDatabase("tracediary.db")
+            markerPrefs.edit().putInt(KEY_DB_FORMAT_VERSION, CURRENT_DB_FORMAT_VERSION).apply()
+        }
+        return Room.databaseBuilder(
+            this,
+            TraceDiaryDatabase::class.java,
+            "tracediary.db"
+        )
+            .openHelperFactory(SupportOpenHelperFactory(passphrase))
+            .fallbackToDestructiveMigration(true)
+            .build()
+    }
+
+    /**
      * 根据当前偏好与凭证拼装 RemoteStorage。任一环节缺配置就返回 null，
      * 由 SyncEngine 转为 [com.tracediary.app.data.sync.ErrorCode.AUTH] 错误。
      */
@@ -163,5 +178,12 @@ class TraceDiaryApplication : Application() {
             SyncProvider.ALIYUN_OSS -> AliyunOssRemoteStorage(credential)
             SyncProvider.TENCENT_COS -> TencentCosRemoteStorage(credential)
         }
+    }
+
+    private companion object {
+        const val DB_META_PREFS = "tracediary_db_meta"
+        const val KEY_DB_FORMAT_VERSION = "db_format_version"
+        // 升级 SQLCipher 大版本或修改加密参数时 +1，触发启动时清库重建。
+        const val CURRENT_DB_FORMAT_VERSION = 1
     }
 }
