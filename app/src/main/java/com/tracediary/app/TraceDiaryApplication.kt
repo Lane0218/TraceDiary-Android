@@ -7,8 +7,10 @@ import com.tracediary.app.data.notifications.DailyReminderScheduler
 import com.tracediary.app.data.notifications.DailyReminderWorker
 import com.tracediary.app.data.repository.DefaultAnnualSummaryRepository
 import com.tracediary.app.data.repository.DefaultDiaryRepository
+import com.tracediary.app.data.security.PassphraseStore
 import com.tracediary.app.data.settings.DataStoreUserPreferencesRepository
 import com.tracediary.app.data.settings.UserPreferencesRepository
+import net.sqlcipher.database.SupportFactory
 import com.tracediary.app.domain.repository.AnnualSummaryRepository
 import com.tracediary.app.domain.repository.DiaryRepository
 import com.tracediary.app.domain.usecase.DiaryCalendarUseCase
@@ -55,11 +57,17 @@ class TraceDiaryApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // SQLCipher 加密本地数据库。passphrase 通过 EncryptedSharedPreferences 安全存放，
+        // 首版采用破坏式迁移（既有数据为测试数据，可丢弃）。
+        val passphrase = PassphraseStore(this).getOrCreate()
         database = Room.databaseBuilder(
             this,
             TraceDiaryDatabase::class.java,
             "tracediary.db"
-        ).build()
+        )
+            .openHelperFactory(SupportFactory(passphrase))
+            .fallbackToDestructiveMigration(true)
+            .build()
 
         diaryRepository = DefaultDiaryRepository(database.diaryEntryDao())
         annualSummaryRepository = DefaultAnnualSummaryRepository(database.annualSummaryDao())
