@@ -52,7 +52,7 @@ class TodayScreenTest {
     )
 
     @Test
-    fun `输入文字后经过 debounce 状态文案变为已保存`() {
+    fun debouncedAutoSaveTogglesStatusToSaved() {
         val repository = InMemoryDiaryRepository()
         val viewModel = TodayViewModel(
             diaryRepository = repository,
@@ -90,7 +90,7 @@ class TodayScreenTest {
     }
 
     @Test
-    fun `点击周日历前后箭头不会改变 selectedDate 标题保持当前日期`() {
+    fun weekArrowsKeepSelectedDate() {
         val repository = InMemoryDiaryRepository()
         val viewModel = TodayViewModel(
             diaryRepository = repository,
@@ -123,7 +123,7 @@ class TodayScreenTest {
     }
 
     @Test
-    fun `字数随输入实时增长`() {
+    fun wordCountUpdatesAsTyping() {
         val repository = InMemoryDiaryRepository()
         val viewModel = TodayViewModel(
             diaryRepository = repository,

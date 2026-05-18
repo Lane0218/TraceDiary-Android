@@ -40,7 +40,7 @@ class AnnualSummaryDaoTest {
     }
 
     @Test
-    fun `同一年份重复 upsert 仅保留最新一条`() = runBlocking {
+    fun upsertSameYearKeepsLatestOnly() = runBlocking {
         dao.upsert(summary(2025, "初稿", updatedAt = 1000L))
         dao.upsert(summary(2025, "终稿", updatedAt = 2000L))
 
@@ -51,7 +51,7 @@ class AnnualSummaryDaoTest {
     }
 
     @Test
-    fun `observeByYear 在 upsert 与 delete 时收到流式更新`() = runBlocking {
+    fun observeByYearReceivesUpsertAndDelete() = runBlocking {
         assertNull(dao.observeByYear(2026).first())
 
         dao.upsert(summary(2026, "进行中"))
@@ -64,14 +64,14 @@ class AnnualSummaryDaoTest {
     }
 
     @Test
-    fun `getByYear 在不存在时返回 null 存在时返回对应记录`() = runBlocking {
+    fun getByYearReturnsNullWhenAbsentValueWhenPresent() = runBlocking {
         assertNull(dao.getByYear(2024))
         dao.upsert(summary(2024, "去年总结"))
         assertEquals("去年总结", dao.getByYear(2024)?.content)
     }
 
     @Test
-    fun `deleteByYear 仅删除目标年份 不影响其他年份`() = runBlocking {
+    fun deleteByYearOnlyRemovesTargetYear() = runBlocking {
         dao.upsert(summary(2024, "2024"))
         dao.upsert(summary(2025, "2025"))
         dao.upsert(summary(2026, "2026"))

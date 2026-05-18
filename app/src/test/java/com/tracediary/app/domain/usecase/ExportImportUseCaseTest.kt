@@ -44,11 +44,10 @@ class ExportImportUseCaseTest {
         val import = ImportDiaryDataUseCase(diaryRepo, annualRepo)
 
         val payload = export()
-        val json = payload.bytes.toString(Charsets.UTF_8)
         diaryRepo.clear()
         annualRepo.clear()
 
-        val result = import(json, ImportOptions(MergeStrategy.OverwriteAll))
+        val result = import(payload.bytes, ImportOptions(MergeStrategy.OverwriteAll))
 
         assertEquals(2, result.importedEntries)
         assertEquals(0, result.skippedEntries)
@@ -213,7 +212,131 @@ class ExportImportUseCaseTest {
         assertNotNull(diaryRepo.peek(LocalDate.parse("2026-05-15")))
     }
 
+    @Test
+    fun `JSON 导出为 ZIP 包并能被 import 还原`() = runTest {
+        val diaryRepo = FakeDiaryRepository(
+            initialEntries = listOf(
+                entry("2026-05-17", "今天", updated = "2026-05-17T08:00:00Z"),
+                entry("2026-05-16", "昨天", updated = "2026-05-16T08:00:00Z"),
+            ),
+        )
+        val annualRepo = FakeAnnualSummaryRepository(
+            initialSummaries = listOf(summary(2025, "2025 总结", updated = "2025-12-31T10:00:00Z")),
+        )
+
+        val export = ExportDiaryDataUseCase(diaryRepo, annualRepo, fixedClock)
+        val payload = export(ExportFormat.Json)
+
+        // 输出必须为 ZIP（前两个字节 PK）。
+        assertEquals("application/zip", payload.mimeType)
+        assertTrue(payload.suggestedFileName.endsWith(".zip"))
+        assertTrue(payload.bytes.size >= 2 && payload.bytes[0] == 0x50.toByte() && payload.bytes[1] == 0x4B.toByte())
+        // ZIP 内必含顶层 tracediary_backup.json 与 manifest.json。
+        val names = readZipEntryNames(payload.bytes)
+        assertTrue(names.contains("tracediary_backup.json"))
+        assertTrue(names.contains("manifest.json"))
+
+        diaryRepo.clear()
+        annualRepo.clear()
+
+        val import = ImportDiaryDataUseCase(diaryRepo, annualRepo)
+        val result = import(payload.bytes, ImportOptions(MergeStrategy.OverwriteAll))
+
+        assertEquals(2, result.importedEntries)
+        assertEquals(1, result.importedSummaries)
+        assertEquals("今天", diaryRepo.peek(LocalDate.parse("2026-05-17"))?.content)
+        assertEquals("2025 总结", annualRepo.peek(2025)?.content)
+    }
+
+    @Test
+    fun `TXT ZIP 导出文件名 目录结构 与正文均符合预期`() = runTest {
+        val diaryRepo = FakeDiaryRepository(
+            initialEntries = listOf(entry("2026-05-17", "Hello", updated = "2026-05-17T08:00:00Z")),
+        )
+        val annualRepo = FakeAnnualSummaryRepository(
+            initialSummaries = listOf(summary(2025, "Year-2025", updated = "2025-12-31T10:00:00Z")),
+        )
+
+        val export = ExportDiaryDataUseCase(diaryRepo, annualRepo, fixedClock)
+        val payload = export(ExportFormat.TextZip)
+
+        val items = readZipEntries(payload.bytes)
+        assertTrue(items.containsKey("entries/2026-05-17.txt"))
+        assertEquals("Hello", items["entries/2026-05-17.txt"])
+        assertTrue(items.containsKey("annual/2025.txt"))
+        assertEquals("Year-2025", items["annual/2025.txt"])
+        assertTrue(items.containsKey("manifest.json"))
+    }
+
+    @Test
+    fun `Markdown ZIP 导入恢复时间戳为 23 59`() = runTest {
+        // 先用 export 构造 Markdown ZIP，避免手写字节流。
+        val sourceDiaryRepo = FakeDiaryRepository(
+            initialEntries = listOf(entry("2026-05-17", "# 标题", updated = "2026-05-17T08:00:00Z")),
+        )
+        val sourceAnnualRepo = FakeAnnualSummaryRepository(
+            initialSummaries = listOf(summary(2025, "## 2025", updated = "2025-12-31T10:00:00Z")),
+        )
+        val export = ExportDiaryDataUseCase(sourceDiaryRepo, sourceAnnualRepo, fixedClock)
+        val payload = export(ExportFormat.MarkdownZip)
+
+        val targetDiaryRepo = FakeDiaryRepository()
+        val targetAnnualRepo = FakeAnnualSummaryRepository()
+        val import = ImportDiaryDataUseCase(
+            targetDiaryRepo,
+            targetAnnualRepo,
+            zoneId = ZoneOffset.UTC,
+        )
+        val result = import(payload.bytes, ImportOptions(MergeStrategy.OverwriteAll))
+
+        assertEquals(1, result.importedEntries)
+        assertEquals(1, result.importedSummaries)
+        // 时间戳应为系统默认时区当日 23:59；测试中固定为 UTC。
+        assertEquals(
+            Instant.parse("2026-05-17T23:59:00Z"),
+            targetDiaryRepo.peek(LocalDate.parse("2026-05-17"))?.updatedAt,
+        )
+    }
+
+    @Test
+    fun `非 ZIP 字节按 JSON 路径解析向后兼容`() = runTest {
+        val diaryRepo = FakeDiaryRepository()
+        val annualRepo = FakeAnnualSummaryRepository()
+        val plainJson = """
+            {
+              "version": 1,
+              "exportedAt": "2026-05-17T00:00:00Z",
+              "entries": [
+                {"date":"2026-05-17","content":"P","createdAt":"2026-05-17T08:00:00Z","updatedAt":"2026-05-17T08:00:00Z"}
+              ],
+              "annualSummaries": []
+            }
+        """.trimIndent()
+
+        val import = ImportDiaryDataUseCase(diaryRepo, annualRepo)
+        val result = import(plainJson.toByteArray(Charsets.UTF_8), ImportOptions(MergeStrategy.OverwriteAll))
+
+        assertEquals(1, result.importedEntries)
+        assertEquals("P", diaryRepo.peek(LocalDate.parse("2026-05-17"))?.content)
+    }
+
     // ---- 测试辅助 ----
+
+    private fun readZipEntryNames(bytes: ByteArray): Set<String> = readZipEntries(bytes).keys
+
+    private fun readZipEntries(bytes: ByteArray): Map<String, String> {
+        val out = LinkedHashMap<String, String>()
+        java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(bytes)).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                if (!entry.isDirectory) {
+                    out[entry.name] = zip.readBytes().toString(Charsets.UTF_8)
+                }
+                zip.closeEntry()
+            }
+        }
+        return out
+    }
 
     private fun entry(date: String, content: String, updated: String): DiaryEntry = DiaryEntry(
         date = LocalDate.parse(date),
@@ -274,6 +397,11 @@ class ExportImportUseCaseTest {
             return saved
         }
 
+        override suspend fun upsertImportedEntry(entry: DiaryEntry): DiaryEntry {
+            entries.value = entries.value.filterNot { it.date == entry.date } + entry
+            return entry
+        }
+
         override suspend fun deleteEntry(date: LocalDate) {
             entries.value = entries.value.filterNot { it.date == date }
         }
@@ -316,6 +444,11 @@ class ExportImportUseCaseTest {
             )
             summaries.value = summaries.value.filterNot { it.year == year } + saved
             return saved
+        }
+
+        override suspend fun upsertImportedSummary(summary: AnnualSummary): AnnualSummary {
+            summaries.value = summaries.value.filterNot { it.year == summary.year } + summary
+            return summary
         }
 
         override suspend fun deleteSummary(year: Int) {

@@ -50,7 +50,7 @@ class DefaultDiaryRepositoryTest {
     }
 
     @Test
-    fun `saveEntry 首次创建时 syncState 为 Pending 且 createdAt 等于 updatedAt`() = runBlocking {
+    fun saveEntryFirstCreatePendingAndEqualTimestamps() = runBlocking {
         val date = LocalDate.of(2026, 5, 17)
         val saved = repository.saveEntry(date, "首次写入")
 
@@ -63,7 +63,7 @@ class DefaultDiaryRepositoryTest {
     }
 
     @Test
-    fun `saveEntry 内容不变时 updatedAt 保持原值 idempotent`() = runBlocking {
+    fun saveEntryIdempotentWhenContentUnchanged() = runBlocking {
         val date = LocalDate.of(2026, 5, 17)
         val first = repository.saveEntry(date, "原始内容")
 
@@ -77,7 +77,7 @@ class DefaultDiaryRepositoryTest {
     }
 
     @Test
-    fun `saveEntry 内容变化时 updatedAt 推进且 syncState 重新置为 Pending`() = runBlocking {
+    fun saveEntryAdvancesUpdatedAtAndResetsSyncState() = runBlocking {
         val date = LocalDate.of(2026, 5, 17)
         val first = repository.saveEntry(date, "v1")
 
@@ -92,7 +92,7 @@ class DefaultDiaryRepositoryTest {
     }
 
     @Test
-    fun `searchEntries 关键词为空且 recordedOnly=true 时返回空`() = runBlocking {
+    fun searchEntriesEmptyKeywordRecordedOnlyReturnsEmpty() = runBlocking {
         val date = LocalDate.of(2026, 5, 17)
         repository.saveEntry(date, "今天有内容")
 
@@ -101,7 +101,7 @@ class DefaultDiaryRepositoryTest {
     }
 
     @Test
-    fun `getSameMonthDayEntries 仅返回早于指定日期且月日匹配的条目`() = runBlocking {
+    fun getSameMonthDayEntriesOnlyEarlierMatches() = runBlocking {
         val target = LocalDate.of(2026, 5, 17)
         // 应被命中：往年同一月日
         repository.saveEntry(LocalDate.of(2025, 5, 17), "去年五一七")
@@ -121,7 +121,7 @@ class DefaultDiaryRepositoryTest {
     }
 
     @Test
-    fun `observeAllEntries 在 saveEntry 后能收到新值`() = runBlocking {
+    fun observeAllEntriesEmitsAfterSave() = runBlocking {
         // 初始为空
         assertTrue(repository.observeAllEntries().first().isEmpty())
 
@@ -141,7 +141,7 @@ class DefaultDiaryRepositoryTest {
     }
 
     @Test
-    fun `searchEntries 关键词命中且按 epochDay 倒序返回`() = runBlocking {
+    fun searchEntriesMatchesKeywordOrderedByEpochDayDesc() = runBlocking {
         repository.saveEntry(LocalDate.of(2026, 5, 17), "上午散步")
         repository.saveEntry(LocalDate.of(2026, 5, 18), "工作复盘")
         repository.saveEntry(LocalDate.of(2026, 5, 19), "傍晚散步")
@@ -157,7 +157,7 @@ class DefaultDiaryRepositoryTest {
     }
 
     @Test
-    fun `getEntry 在没有记录时返回 null`() = runBlocking {
+    fun getEntryReturnsNullWhenAbsent() = runBlocking {
         assertNull(repository.getEntry(LocalDate.of(2026, 1, 1)))
     }
 

@@ -43,7 +43,7 @@ class DiaryEntryDaoTest {
     }
 
     @Test
-    fun `同一 epochDay 重复 upsert 只保留一条且内容被覆盖`() = runBlocking {
+    fun upsertSameEpochDayKeepsLatestOnly() = runBlocking {
         val date = LocalDate.of(2026, 5, 17)
         val first = entity(date = date, content = "初版", createdAt = 1000L, updatedAt = 1000L)
         val second = entity(date = date, content = "覆盖版", createdAt = 1000L, updatedAt = 2000L)
@@ -59,7 +59,7 @@ class DiaryEntryDaoTest {
     }
 
     @Test
-    fun `observeByDate 在 upsert 与 delete 时收到流式更新`() = runBlocking {
+    fun observeByDateReceivesUpsertAndDelete() = runBlocking {
         val date = LocalDate.of(2026, 5, 17)
         // 初始无记录
         assertNull(dao.observeByDate(date.toEpochDay()).first())
@@ -79,7 +79,7 @@ class DiaryEntryDaoTest {
     }
 
     @Test
-    fun `getBetween 边界值闭区间 范围外条目被排除`() = runBlocking {
+    fun getBetweenInclusiveBoundsExcludesOutOfRange() = runBlocking {
         val d1 = LocalDate.of(2026, 5, 1)
         val d2 = LocalDate.of(2026, 5, 15)
         val d3 = LocalDate.of(2026, 5, 31)
@@ -95,7 +95,7 @@ class DiaryEntryDaoTest {
     }
 
     @Test
-    fun `search 模糊匹配 关键词命中内容片段 不命中则返回空`() = runBlocking {
+    fun searchFuzzyMatchesContent() = runBlocking {
         val d1 = LocalDate.of(2026, 5, 17)
         val d2 = LocalDate.of(2026, 5, 18)
         val d3 = LocalDate.of(2026, 5, 19)
@@ -120,7 +120,7 @@ class DiaryEntryDaoTest {
     }
 
     @Test
-    fun `deleteByDate 删除后 getByDate 返回 null`() = runBlocking {
+    fun deleteByDateRemovesEntry() = runBlocking {
         val date = LocalDate.of(2026, 5, 17)
         dao.upsert(entity(date = date, content = "待删除"))
         assertNotNull(dao.getByDate(date.toEpochDay()))

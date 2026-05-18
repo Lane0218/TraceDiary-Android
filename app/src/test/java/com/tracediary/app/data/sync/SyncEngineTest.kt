@@ -8,6 +8,8 @@ import com.tracediary.app.data.security.CloudCipherCredentialStore
 import com.tracediary.app.data.security.CryptoBox
 import com.tracediary.app.domain.repository.AnnualSummaryRepository
 import com.tracediary.app.domain.repository.DiaryRepository
+import com.tracediary.app.domain.repository.PendingSyncDeletion
+import com.tracediary.app.domain.repository.PendingSyncDeletionRepository
 import com.tracediary.app.domain.repository.SyncMetadataRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +20,7 @@ import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Clock
@@ -56,12 +59,14 @@ class SyncEngineTest {
         annualRepo: FakeAnnualSummaryRepository,
         metaRepo: FakeSyncMetadataRepository,
         credentialStore: FakeCredentialStore = FakeCredentialStore(testPassword, testSalt),
+        pendingRepo: FakePendingSyncDeletionRepository = FakePendingSyncDeletionRepository(),
     ): SyncEngine = SyncEngine(
         storageProvider = { storage },
         secureCredentialStore = credentialStore,
         diaryRepository = diaryRepo,
         annualSummaryRepository = annualRepo,
         syncMetadataRepository = metaRepo,
+        pendingSyncDeletionRepository = pendingRepo,
         clock = clock,
     )
 
@@ -433,12 +438,115 @@ class SyncEngineTest {
         assertEquals(testPassword, credentialStore.loadLocalPassword())
         assertTrue(testSalt.contentEquals(credentialStore.loadOrCreateCloudCipherSalt()))
     }
+
+    @Test
+    fun deleteDiary_success_removesRemoteAndMetadata() = runTest {
+        val date = LocalDate.of(2025, 5, 18)
+        val entry = newEntry(date)
+        val diaryRepo = FakeDiaryRepository(listOf(entry))
+        val annualRepo = FakeAnnualSummaryRepository()
+        val metaRepo = FakeSyncMetadataRepository().also {
+            it.store[SyncObjectKeys.diaryObjectKey(date)] = SyncMetadata(
+                objectKey = SyncObjectKeys.diaryObjectKey(date),
+                localUpdatedAt = baseInstant,
+                remoteUpdatedAt = baseInstant,
+                lastSyncedAt = baseInstant,
+                checksum = null,
+            )
+        }
+        val storage = FakeRemoteStorage()
+        storage.seed(SyncObjectKeys.diaryObjectKey(date), encodeDiary(entry, testKey), baseInstant)
+        val pendingRepo = FakePendingSyncDeletionRepository()
+        val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo, pendingRepo = pendingRepo)
+
+        val result = engine.deleteDiary(date)
+
+        assertTrue(result is RemoteResult.Ok)
+        assertEquals(1, (result as RemoteResult.Ok).value.deleted)
+        // 远端对象 + 元数据均已清理
+        assertNull(storage.objects[SyncObjectKeys.diaryObjectKey(date)])
+        assertNull(metaRepo.store[SyncObjectKeys.diaryObjectKey(date)])
+        // 待重试集合空
+        assertTrue(pendingRepo.store.isEmpty())
+    }
+
+    @Test
+    fun deleteDiary_failure_recordsPendingForRetry() = runTest {
+        val date = LocalDate.of(2025, 5, 18)
+        val diaryRepo = FakeDiaryRepository()
+        val annualRepo = FakeAnnualSummaryRepository()
+        val metaRepo = FakeSyncMetadataRepository()
+        val storage = FakeRemoteStorage(forceDeleteError = true)
+        val pendingRepo = FakePendingSyncDeletionRepository()
+        val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo, pendingRepo = pendingRepo)
+
+        val result = engine.deleteDiary(date)
+
+        assertTrue(result is RemoteResult.Err)
+        assertEquals(1, pendingRepo.store.size)
+        val pending = pendingRepo.store.values.first()
+        assertTrue(pending is PendingSyncDeletion.Diary)
+        assertEquals(SyncObjectKeys.diaryObjectKey(date), pending.objectKey)
+    }
+
+    @Test
+    fun mergeAll_retriesPendingDeletionsAndClearsThemOnSuccess() = runTest {
+        val date = LocalDate.of(2025, 5, 18)
+        val diaryRepo = FakeDiaryRepository()
+        val annualRepo = FakeAnnualSummaryRepository()
+        val metaRepo = FakeSyncMetadataRepository()
+        val storage = FakeRemoteStorage()
+        // 远端仍残留对象，本地已无对应条目 → 此前删除失败的状态。
+        storage.seed(
+            key = SyncObjectKeys.diaryObjectKey(date),
+            body = encodeDiary(newEntry(date), testKey),
+            lastModified = baseInstant,
+        )
+        val pendingRepo = FakePendingSyncDeletionRepository().also {
+            it.markDiaryPending(date)
+        }
+        val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo, pendingRepo = pendingRepo)
+
+        val result = engine.mergeAll()
+
+        assertTrue(result is RemoteResult.Ok)
+        val summary = (result as RemoteResult.Ok).value
+        assertEquals(1, summary.deleted)
+        assertNull(storage.objects[SyncObjectKeys.diaryObjectKey(date)])
+        assertTrue(pendingRepo.store.isEmpty())
+    }
+
+    @Test
+    fun uploadAll_skipsLocalEntriesPendingDeletion() = runTest {
+        val date = LocalDate.of(2025, 5, 18)
+        // 本地仍能查到该条目（边界场景：业务层先入队 pending 再删除本地条目，反序情况）。
+        val diaryRepo = FakeDiaryRepository(listOf(newEntry(date)))
+        val annualRepo = FakeAnnualSummaryRepository()
+        val metaRepo = FakeSyncMetadataRepository()
+        val storage = FakeRemoteStorage()
+        val pendingRepo = FakePendingSyncDeletionRepository().also {
+            it.markDiaryPending(date)
+        }
+        val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo, pendingRepo = pendingRepo)
+
+        val result = engine.uploadAll()
+
+        assertTrue(result is RemoteResult.Ok)
+        val summary = (result as RemoteResult.Ok).value
+        // 没有重新上传该日期；retryPendingDeletions 也会尝试删除（远端本来就没有对象，delete 返回成功）
+        assertEquals(0, summary.uploaded)
+        assertEquals(1, summary.deleted)
+        // 远端不存在该对象
+        assertNull(storage.objects[SyncObjectKeys.diaryObjectKey(date)])
+        assertTrue(pendingRepo.store.isEmpty())
+    }
 }
 
 // ---------- Fakes ----------
 
 private class FakeRemoteStorage(
     private val forceConflictOnPut: Boolean = false,
+    var forceDeleteError: Boolean = false,
 ) : RemoteStorage {
 
     data class StoredObject(
@@ -497,6 +605,9 @@ private class FakeRemoteStorage(
     }
 
     override suspend fun delete(key: String): RemoteResult<Unit> {
+        if (forceDeleteError) {
+            return RemoteResult.Err(ErrorCode.NETWORK, "forced delete error")
+        }
         objects.remove(key)
         return RemoteResult.Ok(Unit)
     }
@@ -661,5 +772,40 @@ private class FakeCredentialStore(
 
     override fun saveCloudCipherSalt(bytes: ByteArray) {
         currentSalt = bytes.copyOf()
+    }
+}
+
+private class FakePendingSyncDeletionRepository : PendingSyncDeletionRepository {
+    val store: MutableMap<String, PendingSyncDeletion> = LinkedHashMap()
+    private val flow = MutableStateFlow<List<PendingSyncDeletion>>(emptyList())
+
+    private fun publish() {
+        flow.value = store.values.toList()
+    }
+
+    override fun observeAll(): Flow<List<PendingSyncDeletion>> = flow.asStateFlow()
+
+    override suspend fun getAll(): List<PendingSyncDeletion> = store.values.toList()
+
+    override suspend fun markDiaryPending(date: java.time.LocalDate) {
+        val key = SyncObjectKeys.diaryObjectKey(date)
+        store[key] = PendingSyncDeletion.Diary(objectKey = key, date = date)
+        publish()
+    }
+
+    override suspend fun markAnnualPending(year: Int) {
+        val key = SyncObjectKeys.annualObjectKey(year)
+        store[key] = PendingSyncDeletion.Annual(objectKey = key, year = year)
+        publish()
+    }
+
+    override suspend fun clearDiary(date: java.time.LocalDate) {
+        store.remove(SyncObjectKeys.diaryObjectKey(date))
+        publish()
+    }
+
+    override suspend fun clearAnnual(year: Int) {
+        store.remove(SyncObjectKeys.annualObjectKey(year))
+        publish()
     }
 }

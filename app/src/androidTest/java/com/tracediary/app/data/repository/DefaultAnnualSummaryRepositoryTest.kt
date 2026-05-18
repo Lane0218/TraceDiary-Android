@@ -48,7 +48,7 @@ class DefaultAnnualSummaryRepositoryTest {
     }
 
     @Test
-    fun `saveSummary 首次创建时 syncState 为 Pending 且 createdAt 等于 updatedAt`() = runBlocking {
+    fun saveSummaryFirstCreatePendingAndEqualTimestamps() = runBlocking {
         val saved = repository.saveSummary(2025, "去年总结")
 
         assertEquals(2025, saved.year)
@@ -59,7 +59,7 @@ class DefaultAnnualSummaryRepositoryTest {
     }
 
     @Test
-    fun `saveSummary 内容不变时 idempotent 保持 createdAt 与 updatedAt`() = runBlocking {
+    fun saveSummaryIdempotentWhenContentUnchanged() = runBlocking {
         val first = repository.saveSummary(2025, "稳定内容")
 
         clock.advanceTo(Instant.parse("2026-05-18T08:00:00Z"))
@@ -71,7 +71,7 @@ class DefaultAnnualSummaryRepositoryTest {
     }
 
     @Test
-    fun `saveSummary 内容变化时 updatedAt 推进 syncState 重新置为 Pending`() = runBlocking {
+    fun saveSummaryAdvancesUpdatedAtAndResetsSyncState() = runBlocking {
         val first = repository.saveSummary(2025, "v1")
 
         val later = Instant.parse("2026-05-17T10:00:00Z")
@@ -85,7 +85,7 @@ class DefaultAnnualSummaryRepositoryTest {
     }
 
     @Test
-    fun `deleteSummary 删除后查询返回 null observeSummary 收到 null`() = runBlocking {
+    fun deleteSummaryReturnsNullAfterRemoval() = runBlocking {
         repository.saveSummary(2025, "待删除")
         assertNotNull(repository.getSummary(2025))
 
@@ -95,7 +95,7 @@ class DefaultAnnualSummaryRepositoryTest {
     }
 
     @Test
-    fun `observeSummary 在 saveSummary 后收到新值`() = runBlocking {
+    fun observeSummaryEmitsNewValueAfterSave() = runBlocking {
         assertNull(repository.observeSummary(2026).first())
 
         repository.saveSummary(2026, "今年总结草稿")
@@ -111,7 +111,7 @@ class DefaultAnnualSummaryRepositoryTest {
     }
 
     @Test
-    fun `observeSummaries 多年份按 year DESC 排序`() = runBlocking {
+    fun observeSummariesOrderedByYearDesc() = runBlocking {
         repository.saveSummary(2024, "2024")
         repository.saveSummary(2026, "2026")
         repository.saveSummary(2025, "2025")
