@@ -129,6 +129,7 @@ class ImportDiaryDataUseCase(
         var skippedEntries = 0
         var importedSummaries = 0
         var skippedSummaries = 0
+        var jsonPayload: String? = null
         ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
             while (true) {
                 val entry = zip.nextEntry ?: break
@@ -146,6 +147,10 @@ class ImportDiaryDataUseCase(
                 val content = zip.readBytes().toString(Charsets.UTF_8)
                 zip.closeEntry()
                 when {
+                    // ZIP 顶层 *.json 视为 JSON 备份（含 tracediary_backup.json）
+                    !name.contains('/') && fileName.endsWith(".json") -> {
+                        jsonPayload = content
+                    }
                     name.startsWith("entries/") -> {
                         val date = parseDate(baseName)
                         if (date == null) {
@@ -197,6 +202,11 @@ class ImportDiaryDataUseCase(
                     }
                 }
             }
+        }
+        // ZIP 内若同时含 JSON 备份：优先以 JSON 为权威源回放（避免与 entries/* 重复计入，
+        // 因为正确的 JSON 导出 ZIP 不会同时包含 entries 目录）。
+        jsonPayload?.let { payload ->
+            return importJson(payload.toByteArray(Charsets.UTF_8), options)
         }
         return ImportResult(importedEntries, skippedEntries, importedSummaries, skippedSummaries)
     }

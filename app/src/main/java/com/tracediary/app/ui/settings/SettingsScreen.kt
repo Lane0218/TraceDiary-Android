@@ -655,7 +655,7 @@ private fun DataManagementPage(
     var exportFormat by remember { mutableStateOf(ExportFormat.Json) }
 
     val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument(exportMimeType(exportFormat))
+        ActivityResultContracts.CreateDocument("application/zip")
     ) { uri ->
         if (uri != null) {
             viewModel.onExport(uri, context.contentResolver, exportFormat)
@@ -680,8 +680,8 @@ private fun DataManagementPage(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = if (isImport) "支持导入 JSON 备份或 TXT/Markdown ZIP 压缩包，可选择遇到重复时如何处理。"
-            else "导出全部日记与年度总结，支持 JSON、TXT ZIP、Markdown ZIP 三种格式，便于跨平台备份。",
+            text = if (isImport) "支持导入 JSON / TXT / Markdown ZIP 备份包，可选择遇到重复时如何处理。"
+            else "导出全部日记与年度总结为 ZIP 备份包，可选 JSON、TXT、Markdown 三种正文格式。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -745,12 +745,12 @@ private fun DataManagementPage(
         Button(
             onClick = {
                 if (isImport) {
-                    importLauncher.launch(arrayOf("application/json", "application/zip", "*/*"))
+                    importLauncher.launch(arrayOf("application/zip", "application/json", "*/*"))
                 } else {
                     val today = java.time.LocalDate.now()
                         .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"))
                     val fileName = when (exportFormat) {
-                        ExportFormat.Json -> "tracediary_backup_$today.json"
+                        ExportFormat.Json -> "tracediary_backup_${today}_json.zip"
                         ExportFormat.TextZip -> "tracediary_backup_${today}_txt.zip"
                         ExportFormat.MarkdownZip -> "tracediary_backup_${today}_md.zip"
                     }
@@ -791,11 +791,6 @@ private fun DataManagementPage(
             )
         }
     }
-}
-
-private fun exportMimeType(format: ExportFormat): String = when (format) {
-    ExportFormat.Json -> "application/json"
-    ExportFormat.TextZip, ExportFormat.MarkdownZip -> "application/zip"
 }
 
 @Composable

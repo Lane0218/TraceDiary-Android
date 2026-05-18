@@ -31,6 +31,15 @@ data class AnnualSummaryBackup(
     val updatedAt: String,
 )
 
+/** 备份 ZIP 包顶层 manifest，记录元数据与负载类型。 */
+@kotlinx.serialization.Serializable
+data class BackupManifest(
+    val version: Int = 1,
+    val exportedAt: String,
+    /** json / txt / md，仅作为提示，导入不依赖此字段。 */
+    val payloadKind: String,
+)
+
 /** 导出格式。 */
 enum class ExportFormat {
     Json,

@@ -36,13 +36,13 @@ class ExportDiaryDataUseCase(
         val summaries = annualSummaryRepository.observeSummaries().first()
         val today = LocalDate.now(clock).format(FILE_NAME_DATE)
         return when (format) {
-            ExportFormat.Json -> exportJson(entries, summaries, today)
+            ExportFormat.Json -> exportJsonZip(entries, summaries, today)
             ExportFormat.TextZip -> exportZip(entries, summaries, "txt", today)
             ExportFormat.MarkdownZip -> exportZip(entries, summaries, "md", today)
         }
     }
 
-    private fun exportJson(
+    private fun exportJsonZip(
         entries: List<DiaryEntry>,
         summaries: List<AnnualSummary>,
         today: String,
@@ -53,11 +53,20 @@ class ExportDiaryDataUseCase(
             entries = entries.map(::toBackup),
             annualSummaries = summaries.map(::toBackup),
         )
-        val bytes = JSON.encodeToString(backup).toByteArray(Charsets.UTF_8)
+        val json = JSON.encodeToString(backup)
+        val buffer = ByteArrayOutputStream()
+        ZipOutputStream(buffer).use { zip ->
+            zip.putNextEntry(ZipEntry("tracediary_backup.json"))
+            zip.write(json.toByteArray(Charsets.UTF_8))
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry("manifest.json"))
+            zip.write(buildManifest("json").toByteArray(Charsets.UTF_8))
+            zip.closeEntry()
+        }
         return ExportPayload(
-            bytes = bytes,
-            mimeType = "application/json",
-            suggestedFileName = "tracediary_backup_$today.json",
+            bytes = buffer.toByteArray(),
+            mimeType = "application/zip",
+            suggestedFileName = "tracediary_backup_${today}_json.zip",
             entryCount = entries.size,
             summaryCount = summaries.size,
         )
@@ -88,15 +97,7 @@ class ExportDiaryDataUseCase(
                 }
             }
             zip.putNextEntry(ZipEntry("manifest.json"))
-            val manifest = JSON.encodeToString(
-                DiaryBackup(
-                    version = CURRENT_BACKUP_VERSION,
-                    exportedAt = Instant.now(clock).toString(),
-                    entries = emptyList(),
-                    annualSummaries = emptyList(),
-                )
-            )
-            zip.write(manifest.toByteArray(Charsets.UTF_8))
+            zip.write(buildManifest(ext).toByteArray(Charsets.UTF_8))
             zip.closeEntry()
         }
         val name = "tracediary_backup_${today}_${ext}.zip"
@@ -108,6 +109,14 @@ class ExportDiaryDataUseCase(
             summaryCount = summaries.size,
         )
     }
+
+    private fun buildManifest(payloadKind: String): String = JSON.encodeToString(
+        BackupManifest(
+            version = CURRENT_BACKUP_VERSION,
+            exportedAt = Instant.now(clock).toString(),
+            payloadKind = payloadKind,
+        )
+    )
 
     private fun toBackup(entry: DiaryEntry): DiaryEntryBackup = DiaryEntryBackup(
         date = entry.date.format(DateTimeFormatter.ISO_LOCAL_DATE),
