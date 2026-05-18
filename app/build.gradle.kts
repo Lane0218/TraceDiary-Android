@@ -63,7 +63,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.net.zetetic.android.database.sqlcipher)
+    implementation(libs.net.zetetic.sqlcipher.android)
     implementation(libs.androidx.security.crypto)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
