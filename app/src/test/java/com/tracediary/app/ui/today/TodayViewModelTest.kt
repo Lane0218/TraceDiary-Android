@@ -1,13 +1,26 @@
 package com.tracediary.app.ui.today
 
+import com.tracediary.app.data.security.CloudCipherCredentialStore
+import com.tracediary.app.data.settings.UserPreferences
+import com.tracediary.app.data.settings.UserPreferencesRepository
+import com.tracediary.app.data.sync.ErrorCode
+import com.tracediary.app.data.sync.RemoteObject
+import com.tracediary.app.data.sync.RemoteResult
+import com.tracediary.app.data.sync.RemoteStorage
+import com.tracediary.app.data.sync.SyncEngine
+import com.tracediary.app.domain.model.AnnualSummary
 import com.tracediary.app.domain.model.DiaryEntry
+import com.tracediary.app.domain.model.SyncMetadata
 import com.tracediary.app.domain.model.SyncState
+import com.tracediary.app.domain.repository.AnnualSummaryRepository
 import com.tracediary.app.domain.repository.DiaryRepository
+import com.tracediary.app.domain.repository.SyncMetadataRepository
 import com.tracediary.app.domain.usecase.DiaryCalendarUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -15,6 +28,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -110,6 +124,68 @@ class TodayViewModelTest {
     }
 
     @Test
+    fun `saved content triggers single diary upload after sync debounce`() = runTest(dispatcher) {
+        val remoteStorage = FakeRemoteStorage()
+        val viewModel = createViewModel(syncEnabled = true, localPassword = "pw", remoteStorage = remoteStorage)
+        advanceUntilIdle()
+
+        viewModel.onContentChanged("需要同步的内容")
+        advanceTimeBy(TodayViewModel.DEFAULT_AUTO_SAVE_DEBOUNCE_MILLIS)
+        runCurrent()
+
+        assertEquals("需要同步的内容", repository.snapshot(fixedToday)?.content)
+        assertEquals(0, remoteStorage.putCount)
+
+        advanceTimeBy(TodayViewModel.DEFAULT_AUTO_SYNC_DEBOUNCE_MILLIS - 1)
+        runCurrent()
+        assertEquals(0, remoteStorage.putCount)
+
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(1, remoteStorage.putCount)
+        assertEquals(SyncState.Synced, repository.snapshot(fixedToday)?.syncState)
+    }
+
+    @Test
+    fun `continuous edits only upload latest saved diary once`() = runTest(dispatcher) {
+        val remoteStorage = FakeRemoteStorage()
+        val viewModel = createViewModel(syncEnabled = true, localPassword = "pw", remoteStorage = remoteStorage)
+        advanceUntilIdle()
+
+        viewModel.onContentChanged("第一版")
+        advanceTimeBy(TodayViewModel.DEFAULT_AUTO_SAVE_DEBOUNCE_MILLIS)
+        runCurrent()
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        viewModel.onContentChanged("第二版")
+        advanceTimeBy(TodayViewModel.DEFAULT_AUTO_SAVE_DEBOUNCE_MILLIS)
+        runCurrent()
+        advanceTimeBy(TodayViewModel.DEFAULT_AUTO_SYNC_DEBOUNCE_MILLIS)
+        runCurrent()
+
+        assertEquals(1, remoteStorage.putCount)
+        assertEquals("第二版", repository.snapshot(fixedToday)?.content)
+        assertEquals(SyncState.Synced, repository.snapshot(fixedToday)?.syncState)
+    }
+
+    @Test
+    fun `sync disabled does not trigger auto upload`() = runTest(dispatcher) {
+        val remoteStorage = FakeRemoteStorage()
+        val viewModel = createViewModel(syncEnabled = false, localPassword = "pw", remoteStorage = remoteStorage)
+        advanceUntilIdle()
+
+        viewModel.onContentChanged("只保存不同步")
+        advanceTimeBy(TodayViewModel.DEFAULT_AUTO_SAVE_DEBOUNCE_MILLIS)
+        runCurrent()
+        advanceTimeBy(TodayViewModel.DEFAULT_AUTO_SYNC_DEBOUNCE_MILLIS)
+        runCurrent()
+
+        assertEquals(0, remoteStorage.putCount)
+        assertEquals(SyncState.Pending, repository.snapshot(fixedToday)?.syncState)
+    }
+
+    @Test
     fun `onSelectDate flushes pending content before loading new date`() = runTest(dispatcher) {
         val viewModel = createViewModel()
         advanceUntilIdle()
@@ -189,10 +265,26 @@ class TodayViewModelTest {
         assertEquals(originalFirst.minusDays(7), state.weekDates.first())
     }
 
-    private fun TestScope.createViewModel(): TodayViewModel {
+    private fun TestScope.createViewModel(
+        syncEnabled: Boolean = false,
+        localPassword: String? = null,
+        remoteStorage: FakeRemoteStorage = FakeRemoteStorage(),
+    ): TodayViewModel {
+        val credentialStore = FakeCredentialStore(localPassword)
+        val syncEngine = SyncEngine(
+            storageProvider = { remoteStorage },
+            secureCredentialStore = credentialStore,
+            diaryRepository = repository,
+            annualSummaryRepository = FakeAnnualSummaryRepository(),
+            syncMetadataRepository = FakeSyncMetadataRepository(),
+            clock = fixedClock,
+        )
         return TodayViewModel(
             diaryRepository = repository,
             calendarUseCase = DiaryCalendarUseCase(),
+            userPreferencesRepository = FakeUserPreferencesRepository(syncEnabled),
+            secureCredentialStore = credentialStore,
+            syncEngine = syncEngine,
             clock = fixedClock,
             ioDispatcher = dispatcher,
         )
@@ -285,4 +377,148 @@ private class FakeDiaryRepository(private val clock: Clock) : DiaryRepository {
             .filter { it.date.isBefore(date) }
             .filter { it.date.month == date.month && it.date.dayOfMonth == date.dayOfMonth }
             .sortedByDescending(DiaryEntry::date)
+}
+
+private class FakeUserPreferencesRepository(syncEnabled: Boolean) : UserPreferencesRepository {
+    private val prefs = MutableStateFlow(UserPreferences(syncEnabled = syncEnabled))
+    override val preferences: Flow<UserPreferences> = prefs
+
+    override suspend fun setReminderEnabled(value: Boolean) {
+        prefs.update { it.copy(dailyReminderEnabled = value) }
+    }
+
+    override suspend fun setReminderTime(time: String) {
+        prefs.update { it.copy(dailyReminderTime = time) }
+    }
+
+    override suspend fun setSavePasswordLocally(value: Boolean) {
+        prefs.update { it.copy(savePasswordLocally = value) }
+    }
+
+    override suspend fun setSyncEnabled(value: Boolean) {
+        prefs.update { it.copy(syncEnabled = value) }
+    }
+
+    override suspend fun setSyncProvider(value: String) {
+        prefs.update { it.copy(syncProvider = value) }
+    }
+
+    override suspend fun setSyncBucket(value: String) {
+        prefs.update { it.copy(syncBucket = value) }
+    }
+
+    override suspend fun setSyncRegion(value: String) {
+        prefs.update { it.copy(syncRegion = value) }
+    }
+
+    override suspend fun setSyncDirectory(value: String) {
+        prefs.update { it.copy(syncDirectory = value) }
+    }
+
+    override suspend fun setSyncDisplayName(value: String) {
+        prefs.update { it.copy(syncDisplayName = value) }
+    }
+
+    override suspend fun saveSyncConfiguration(
+        provider: String,
+        bucket: String,
+        region: String,
+        directory: String,
+        displayName: String,
+    ) {
+        prefs.update {
+            it.copy(
+                syncProvider = provider,
+                syncBucket = bucket,
+                syncRegion = region,
+                syncDirectory = directory,
+                syncDisplayName = displayName,
+            )
+        }
+    }
+}
+
+private class FakeCredentialStore(private var password: String?) : CloudCipherCredentialStore {
+    private var salt = "today-sync-salt1".toByteArray()
+
+    override fun saveLocalPassword(value: String?) {
+        password = value
+    }
+
+    override fun loadLocalPassword(): String? = password
+
+    override fun loadOrCreateCloudCipherSalt(): ByteArray = salt.copyOf()
+
+    override fun rotateCloudCipherSalt(): ByteArray {
+        salt = "today-rotated-1".toByteArray()
+        return salt.copyOf()
+    }
+
+    override fun saveCloudCipherSalt(bytes: ByteArray) {
+        salt = bytes.copyOf()
+    }
+}
+
+private class FakeRemoteStorage : RemoteStorage {
+    var putCount = 0
+        private set
+    private val objects = LinkedHashMap<String, StoredObject>()
+
+    data class StoredObject(
+        val key: String,
+        val body: ByteArray,
+        val etag: String,
+        val lastModified: Instant,
+    )
+
+    override suspend fun put(
+        key: String,
+        body: ByteArray,
+        contentType: String,
+        ifMatchEtag: String?,
+    ): RemoteResult<RemoteObject> {
+        putCount += 1
+        val now = Instant.parse("2026-05-15T00:00:00Z")
+        val stored = StoredObject(key, body, "etag-$putCount", now)
+        objects[key] = stored
+        return RemoteResult.Ok(RemoteObject(key, stored.etag, now, body.size.toLong()))
+    }
+
+    override suspend fun get(key: String): RemoteResult<ByteArray> =
+        objects[key]?.let { RemoteResult.Ok(it.body) }
+            ?: RemoteResult.Err(ErrorCode.NOT_FOUND, "missing")
+
+    override suspend fun head(key: String): RemoteResult<RemoteObject> =
+        objects[key]?.let { RemoteResult.Ok(RemoteObject(it.key, it.etag, it.lastModified, it.body.size.toLong())) }
+            ?: RemoteResult.Err(ErrorCode.NOT_FOUND, "missing")
+
+    override suspend fun list(prefix: String): RemoteResult<List<RemoteObject>> =
+        RemoteResult.Ok(
+            objects.values
+                .filter { it.key.startsWith(prefix) }
+                .map { RemoteObject(it.key, it.etag, it.lastModified, it.body.size.toLong()) }
+        )
+
+    override suspend fun delete(key: String): RemoteResult<Unit> {
+        objects.remove(key)
+        return RemoteResult.Ok(Unit)
+    }
+
+    override suspend fun ping(): RemoteResult<Unit> = RemoteResult.Ok(Unit)
+}
+
+private class FakeAnnualSummaryRepository : AnnualSummaryRepository {
+    override fun observeSummary(year: Int): Flow<AnnualSummary?> = flowOf(null)
+    override fun observeSummaries(): Flow<List<AnnualSummary>> = flowOf(emptyList())
+    override suspend fun getSummary(year: Int): AnnualSummary? = null
+    override suspend fun saveSummary(year: Int, content: String): AnnualSummary =
+        error("not used")
+    override suspend fun deleteSummary(year: Int) = Unit
+}
+
+private class FakeSyncMetadataRepository : SyncMetadataRepository {
+    override fun observeMetadata(objectKey: String): Flow<SyncMetadata?> = flowOf(null)
+    override suspend fun getMetadata(objectKey: String): SyncMetadata? = null
+    override suspend fun saveMetadata(metadata: SyncMetadata) = Unit
+    override suspend fun deleteMetadata(objectKey: String) = Unit
 }

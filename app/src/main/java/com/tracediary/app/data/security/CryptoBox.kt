@@ -1,6 +1,5 @@
 package com.tracediary.app.data.security
 
-import android.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
 import javax.crypto.SecretKeyFactory
@@ -8,6 +7,7 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 import java.security.SecureRandom
+import java.util.Base64
 
 /**
  * 同步内容加密工具：PBKDF2WithHmacSHA256(passphrase, salt, 100k 轮)派生 256 位 key，
@@ -44,12 +44,12 @@ object CryptoBox {
         out[0] = VERSION
         System.arraycopy(iv, 0, out, 1, iv.size)
         System.arraycopy(ct, 0, out, 1 + iv.size, ct.size)
-        return Base64.encodeToString(out, Base64.NO_WRAP)
+        return Base64.getEncoder().encodeToString(out)
     }
 
     /** 解密 [encryptToBase64] 输出。失败抛异常（GCM tag 不通过、版本不匹配、Base64 损坏等）。 */
     fun decryptFromBase64(key: SecretKey, base64: String): ByteArray {
-        val raw = Base64.decode(base64, Base64.NO_WRAP)
+        val raw = Base64.getDecoder().decode(base64)
         require(raw.isNotEmpty() && raw[0] == VERSION) { "未知或不兼容的加密版本" }
         require(raw.size > 1 + IV_BYTES) { "密文长度不足" }
         val iv = raw.copyOfRange(1, 1 + IV_BYTES)

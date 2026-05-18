@@ -4,13 +4,21 @@ import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
+interface CloudCipherCredentialStore {
+    fun saveLocalPassword(value: String?)
+    fun loadLocalPassword(): String?
+    fun loadOrCreateCloudCipherSalt(): ByteArray
+    fun rotateCloudCipherSalt(): ByteArray
+    fun saveCloudCipherSalt(bytes: ByteArray)
+}
+
 /**
  * 云同步敏感字段（AccessKey / 本机数据密码）安全存储。
  *
  * 与 [PassphraseStore] 隔离：使用独立的 prefs 文件 [PREF_FILE_NAME]，
  * 避免数据库 passphrase 与云凭证写到同一个加密文件，便于分别清空与排错。
  */
-class SecureCredentialStore(context: Context) {
+class SecureCredentialStore(context: Context) : CloudCipherCredentialStore {
 
     private val appContext = context.applicationContext
 
@@ -56,7 +64,7 @@ class SecureCredentialStore(context: Context) {
 
     /** 本机保存的数据密码；传 null / 空字符串等价于清除。 */
     @Synchronized
-    fun saveLocalPassword(value: String?) {
+    override fun saveLocalPassword(value: String?) {
         if (value.isNullOrEmpty()) {
             prefs.edit().remove(KEY_LOCAL_PASSWORD).apply()
         } else {
@@ -65,7 +73,7 @@ class SecureCredentialStore(context: Context) {
     }
 
     @Synchronized
-    fun loadLocalPassword(): String? {
+    override fun loadLocalPassword(): String? {
         val value = prefs.getString(KEY_LOCAL_PASSWORD, null)
         return if (value.isNullOrEmpty()) null else value
     }
@@ -76,7 +84,7 @@ class SecureCredentialStore(context: Context) {
      * 修改密码时 [rotateCloudCipherSalt] 会显式生成新 salt 并触发 rekey 流程。
      */
     @Synchronized
-    fun loadOrCreateCloudCipherSalt(): ByteArray {
+    override fun loadOrCreateCloudCipherSalt(): ByteArray {
         val existing = prefs.getString(KEY_CLOUD_CIPHER_SALT, null)
         if (existing != null) return android.util.Base64.decode(existing, android.util.Base64.NO_WRAP)
         val generated = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
@@ -88,12 +96,18 @@ class SecureCredentialStore(context: Context) {
 
     /** 修改同步密码时生成新的 salt。调用方负责用旧 key 解远端、用新 key 重新上传。 */
     @Synchronized
-    fun rotateCloudCipherSalt(): ByteArray {
+    override fun rotateCloudCipherSalt(): ByteArray {
         val generated = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
-        prefs.edit()
-            .putString(KEY_CLOUD_CIPHER_SALT, android.util.Base64.encodeToString(generated, android.util.Base64.NO_WRAP))
-            .apply()
+        saveCloudCipherSalt(generated)
         return generated
+    }
+
+    /** 显式写入指定 salt，用于密码轮换失败后的回滚恢复。 */
+    @Synchronized
+    override fun saveCloudCipherSalt(bytes: ByteArray) {
+        prefs.edit()
+            .putString(KEY_CLOUD_CIPHER_SALT, android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP))
+            .apply()
     }
 
     private companion object {

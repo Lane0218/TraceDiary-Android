@@ -6,6 +6,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.tracediary.app.TraceDiaryApplication
+import com.tracediary.app.data.security.CloudCipherCredentialStore
+import com.tracediary.app.data.settings.UserPreferencesRepository
+import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.model.SyncState
 import com.tracediary.app.domain.model.plainTextWordCount
@@ -16,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,9 +62,13 @@ data class TodayUiState(
 class TodayViewModel(
     private val diaryRepository: DiaryRepository,
     private val calendarUseCase: DiaryCalendarUseCase,
+    private val userPreferencesRepository: UserPreferencesRepository? = null,
+    private val secureCredentialStore: CloudCipherCredentialStore? = null,
+    private val syncEngine: SyncEngine? = null,
     private val clock: Clock = Clock.systemDefaultZone(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val autoSaveDebounceMillis: Long = DEFAULT_AUTO_SAVE_DEBOUNCE_MILLIS,
+    private val autoSyncDebounceMillis: Long = DEFAULT_AUTO_SYNC_DEBOUNCE_MILLIS,
 ) : ViewModel() {
 
     private val initialDate: LocalDate = LocalDate.now(clock)
@@ -83,6 +91,7 @@ class TodayViewModel(
     /** 当前正文最后一次入库时的快照，用来判断是否需要 flush。 */
     private var lastPersistedContent: String = ""
     private var autoSaveJob: Job? = null
+    private var autoSyncJob: Job? = null
     private var syncStateJob: Job? = null
 
     init {
@@ -210,6 +219,7 @@ class TodayViewModel(
                 diaryRepository.saveEntry(date, content)
             }
             lastPersistedContent = saved.content
+            scheduleAutoSync(date)
             // 仅当用户没有继续编辑（即仍处于刚刚保存的内容）时才把状态置为 Saved。
             _uiState.update { current ->
                 if (current.selectedDate == date && current.content == saved.content) {
@@ -232,6 +242,22 @@ class TodayViewModel(
         }
     }
 
+    private suspend fun scheduleAutoSync(date: LocalDate) {
+        val preferencesRepository = userPreferencesRepository ?: return
+        val store = secureCredentialStore ?: return
+        val engine = syncEngine ?: return
+        val prefs = preferencesRepository.preferences.first()
+        if (!prefs.syncEnabled) return
+        if (store.loadLocalPassword().isNullOrEmpty()) return
+        autoSyncJob?.cancel()
+        autoSyncJob = viewModelScope.launch {
+            delay(autoSyncDebounceMillis)
+            withContext(ioDispatcher) {
+                engine.uploadDiary(date)
+            }
+        }
+    }
+
     private fun formatMonthLabel(date: LocalDate): String =
         "${date.year}年${date.monthValue}月"
 
@@ -242,6 +268,7 @@ class TodayViewModel(
 
     companion object {
         const val DEFAULT_AUTO_SAVE_DEBOUNCE_MILLIS: Long = 600L
+        const val DEFAULT_AUTO_SYNC_DEBOUNCE_MILLIS: Long = 5_000L
 
         fun factory(application: TraceDiaryApplication): ViewModelProvider.Factory =
             viewModelFactory {
@@ -249,6 +276,9 @@ class TodayViewModel(
                     TodayViewModel(
                         diaryRepository = application.diaryRepository,
                         calendarUseCase = application.calendarUseCase,
+                        userPreferencesRepository = application.userPreferencesRepository,
+                        secureCredentialStore = application.secureCredentialStore,
+                        syncEngine = application.syncEngine,
                     )
                 }
             }

@@ -66,6 +66,13 @@ sealed interface SyncOpStatus {
 
 enum class SyncOperation { Upload, Download, Merge }
 
+sealed interface PasswordRotationStatus {
+    data object Idle : PasswordRotationStatus
+    data object Working : PasswordRotationStatus
+    data class Success(val message: String) : PasswordRotationStatus
+    data class Failed(val message: String) : PasswordRotationStatus
+}
+
 /**
  * 设置页 UI 状态。包含 DataStore 持久化字段以及仅在内存中保留的敏感字段。
  */
@@ -83,11 +90,15 @@ data class SettingsUiState(
     val syncAccessKeyId: String = "",
     val syncAccessKeySecret: String = "",
     val localPassword: String = "",
+    val oldSyncPassword: String = "",
+    val newSyncPassword: String = "",
+    val confirmNewSyncPassword: String = "",
     val saveStatus: SaveStatus = SaveStatus.Idle,
     val saveError: String? = null,
     val backupStatus: BackupStatus = BackupStatus.Idle,
     val lastImportResult: ImportResult? = null,
     val syncOpStatus: SyncOpStatus = SyncOpStatus.Idle,
+    val passwordRotationStatus: PasswordRotationStatus = PasswordRotationStatus.Idle,
 )
 
 class SettingsViewModel(
@@ -209,6 +220,86 @@ class SettingsViewModel(
             store.saveLocalPassword(state.localPassword.takeIf { it.isNotEmpty() })
         } else {
             store.saveLocalPassword(null)
+        }
+    }
+
+    fun onOldSyncPasswordChanged(value: String) {
+        _uiState.update {
+            it.copy(oldSyncPassword = value, passwordRotationStatus = PasswordRotationStatus.Idle)
+        }
+    }
+
+    fun onNewSyncPasswordChanged(value: String) {
+        _uiState.update {
+            it.copy(newSyncPassword = value, passwordRotationStatus = PasswordRotationStatus.Idle)
+        }
+    }
+
+    fun onConfirmNewSyncPasswordChanged(value: String) {
+        _uiState.update {
+            it.copy(confirmNewSyncPassword = value, passwordRotationStatus = PasswordRotationStatus.Idle)
+        }
+    }
+
+    fun onRotateSyncPassword() {
+        val engine = syncEngine ?: run {
+            _uiState.update {
+                it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("同步引擎尚未初始化"))
+            }
+            return
+        }
+        if (hasSyncWorkInFlight()) return
+        val snapshot = _uiState.value
+        val oldPassword = snapshot.oldSyncPassword
+        val newPassword = snapshot.newSyncPassword
+        val confirmPassword = snapshot.confirmNewSyncPassword
+        when {
+            oldPassword.isBlank() -> {
+                _uiState.update {
+                    it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("请输入旧同步密码"))
+                }
+                return
+            }
+            newPassword.isBlank() -> {
+                _uiState.update {
+                    it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("请输入新同步密码"))
+                }
+                return
+            }
+            newPassword != confirmPassword -> {
+                _uiState.update {
+                    it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("两次输入的新同步密码不一致"))
+                }
+                return
+            }
+        }
+
+        _uiState.update { it.copy(passwordRotationStatus = PasswordRotationStatus.Working) }
+        viewModelScope.launch {
+            val result = try {
+                withContext(Dispatchers.IO) { engine.rotateSyncPassword(oldPassword, newPassword) }
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                RemoteResult.Err(
+                    code = com.tracediary.app.data.sync.ErrorCode.UNKNOWN,
+                    message = "${t.javaClass.simpleName}: ${t.message ?: "未知异常"}",
+                    cause = t,
+                )
+            }
+            _uiState.update {
+                when (result) {
+                    is RemoteResult.Ok -> it.copy(
+                        localPassword = newPassword,
+                        oldSyncPassword = "",
+                        newSyncPassword = "",
+                        confirmNewSyncPassword = "",
+                        passwordRotationStatus = PasswordRotationStatus.Success("同步密码已更新"),
+                    )
+                    is RemoteResult.Err -> it.copy(
+                        passwordRotationStatus = PasswordRotationStatus.Failed(result.message)
+                    )
+                }
+            }
         }
     }
 
@@ -361,7 +452,7 @@ class SettingsViewModel(
             return
         }
         // 若已有同步任务在跑，直接忽略，避免并发触发同一个 SyncEngine。
-        if (_uiState.value.syncOpStatus is SyncOpStatus.Working) return
+        if (hasSyncWorkInFlight()) return
         _uiState.update { it.copy(syncOpStatus = SyncOpStatus.Working(op)) }
         viewModelScope.launch {
             val result = try {
@@ -386,6 +477,10 @@ class SettingsViewModel(
 
     fun resetSyncOpStatus() {
         _uiState.update { it.copy(syncOpStatus = SyncOpStatus.Idle) }
+    }
+
+    fun resetPasswordRotationStatus() {
+        _uiState.update { it.copy(passwordRotationStatus = PasswordRotationStatus.Idle) }
     }
 
     /**
@@ -499,6 +594,12 @@ class SettingsViewModel(
             index = indexOf(token, index + token.length)
         }
         return count
+    }
+
+    private fun hasSyncWorkInFlight(): Boolean {
+        val state = _uiState.value
+        return state.syncOpStatus is SyncOpStatus.Working ||
+            state.passwordRotationStatus is PasswordRotationStatus.Working
     }
 
     companion object {

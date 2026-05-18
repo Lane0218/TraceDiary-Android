@@ -3,12 +3,14 @@ package com.tracediary.app.data.sync
 import com.tracediary.app.domain.model.AnnualSummary
 import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.model.SyncState
+import com.tracediary.app.data.security.CryptoBox
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import javax.crypto.SecretKey
 
 /**
  * 单对象同步报文。SyncState 是本地视角的状态，不参与序列化。
@@ -68,14 +70,64 @@ fun SyncAnnualDto.toDomain(): AnnualSummary = AnnualSummary(
     syncState = SyncState.Synced,
 )
 
-fun encodeDiary(entry: DiaryEntry): ByteArray =
-    syncJson.encodeToString(entry.toSyncDto()).toByteArray(Charsets.UTF_8)
+internal enum class SyncPayloadFormat { Envelope, LegacyPlaintext }
 
-fun decodeDiary(bytes: ByteArray): DiaryEntry =
-    syncJson.decodeFromString<SyncDiaryDto>(bytes.toString(Charsets.UTF_8)).toDomain()
+internal data class DecodedDiaryPayload(
+    val entry: DiaryEntry,
+    val format: SyncPayloadFormat,
+)
 
-fun encodeAnnual(summary: AnnualSummary): ByteArray =
-    syncJson.encodeToString(summary.toSyncDto()).toByteArray(Charsets.UTF_8)
+internal data class DecodedAnnualPayload(
+    val summary: AnnualSummary,
+    val format: SyncPayloadFormat,
+)
 
-fun decodeAnnual(bytes: ByteArray): AnnualSummary =
-    syncJson.decodeFromString<SyncAnnualDto>(bytes.toString(Charsets.UTF_8)).toDomain()
+fun encodeDiary(entry: DiaryEntry, key: SecretKey): ByteArray {
+    val payload = syncJson.encodeToString(entry.toSyncDto()).toByteArray(Charsets.UTF_8)
+    val envelope = DiaryEnvelope(
+        date = entry.date.format(dateFormatter),
+        updatedAt = entry.updatedAt.toString(),
+        cipher = CryptoBox.encryptToBase64(key, payload),
+    )
+    return syncJson.encodeToString(envelope).toByteArray(Charsets.UTF_8)
+}
+
+fun decodeDiary(bytes: ByteArray, key: SecretKey): DiaryEntry =
+    decodeDiaryPayload(bytes, key).entry
+
+internal fun decodeDiaryPayload(bytes: ByteArray, key: SecretKey): DecodedDiaryPayload {
+    val raw = bytes.toString(Charsets.UTF_8)
+    val envelope = runCatching { syncJson.decodeFromString<DiaryEnvelope>(raw) }.getOrNull()
+    if (envelope != null) {
+        val payload = CryptoBox.decryptFromBase64(key, envelope.cipher)
+        val dto = syncJson.decodeFromString<SyncDiaryDto>(payload.toString(Charsets.UTF_8))
+        return DecodedDiaryPayload(dto.toDomain(), SyncPayloadFormat.Envelope)
+    }
+    val dto = syncJson.decodeFromString<SyncDiaryDto>(raw)
+    return DecodedDiaryPayload(dto.toDomain(), SyncPayloadFormat.LegacyPlaintext)
+}
+
+fun encodeAnnual(summary: AnnualSummary, key: SecretKey): ByteArray {
+    val payload = syncJson.encodeToString(summary.toSyncDto()).toByteArray(Charsets.UTF_8)
+    val envelope = AnnualEnvelope(
+        year = summary.year,
+        updatedAt = summary.updatedAt.toString(),
+        cipher = CryptoBox.encryptToBase64(key, payload),
+    )
+    return syncJson.encodeToString(envelope).toByteArray(Charsets.UTF_8)
+}
+
+fun decodeAnnual(bytes: ByteArray, key: SecretKey): AnnualSummary =
+    decodeAnnualPayload(bytes, key).summary
+
+internal fun decodeAnnualPayload(bytes: ByteArray, key: SecretKey): DecodedAnnualPayload {
+    val raw = bytes.toString(Charsets.UTF_8)
+    val envelope = runCatching { syncJson.decodeFromString<AnnualEnvelope>(raw) }.getOrNull()
+    if (envelope != null) {
+        val payload = CryptoBox.decryptFromBase64(key, envelope.cipher)
+        val dto = syncJson.decodeFromString<SyncAnnualDto>(payload.toString(Charsets.UTF_8))
+        return DecodedAnnualPayload(dto.toDomain(), SyncPayloadFormat.Envelope)
+    }
+    val dto = syncJson.decodeFromString<SyncAnnualDto>(raw)
+    return DecodedAnnualPayload(dto.toDomain(), SyncPayloadFormat.LegacyPlaintext)
+}

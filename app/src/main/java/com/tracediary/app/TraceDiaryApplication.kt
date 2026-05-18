@@ -112,6 +112,7 @@ class TraceDiaryApplication : Application() {
         syncMetadataRepository = DefaultSyncMetadataRepository(database.syncMetadataDao())
         syncEngine = SyncEngine(
             storageProvider = { buildRemoteStorageOrNull() },
+            secureCredentialStore = secureCredentialStore,
             diaryRepository = diaryRepository,
             annualSummaryRepository = annualSummaryRepository,
             syncMetadataRepository = syncMetadataRepository,

@@ -3,12 +3,20 @@ package com.tracediary.app.data.sync
 import com.tracediary.app.domain.model.AnnualSummary
 import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.model.SyncState
+import com.tracediary.app.data.security.CryptoBox
+import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 import java.time.LocalDate
+import javax.crypto.SecretKey
 
 class SyncSerializationTest {
+
+    private val key: SecretKey = CryptoBox.deriveKey("sync-password", "salt-123456789012".toByteArray())
 
     @Test
     fun encodeThenDecodeDiary_isLossless() {
@@ -20,13 +28,16 @@ class SyncSerializationTest {
             syncState = SyncState.LocalOnly,
         )
 
-        val decoded = decodeDiary(encodeDiary(entry))
+        val encoded = encodeDiary(entry, key)
+        val decoded = decodeDiary(encoded, key)
 
         assertEquals(entry.date, decoded.date)
         assertEquals(entry.content, decoded.content)
         assertEquals(entry.createdAt, decoded.createdAt)
         assertEquals(entry.updatedAt, decoded.updatedAt)
         // toDomain 强制 syncState=Synced，这里不参与对比
+        assertTrue(encoded.toString(Charsets.UTF_8).contains("\"cipher\""))
+        assertFalse(encoded.toString(Charsets.UTF_8).contains(entry.content))
     }
 
     @Test
@@ -39,7 +50,8 @@ class SyncSerializationTest {
             syncState = SyncState.Pending,
         )
 
-        val decoded = decodeAnnual(encodeAnnual(summary))
+        val encoded = encodeAnnual(summary, key)
+        val decoded = decodeAnnual(encoded, key)
 
         assertEquals(summary.year, decoded.year)
         assertEquals(summary.content, decoded.content)
@@ -61,7 +73,7 @@ class SyncSerializationTest {
             }
         """.trimIndent()
 
-        val decoded = decodeDiary(json.toByteArray(Charsets.UTF_8))
+        val decoded = decodeDiary(json.toByteArray(Charsets.UTF_8), key)
 
         assertEquals(LocalDate.of(2025, 1, 2), decoded.date)
         assertEquals("hello", decoded.content)
@@ -81,9 +93,23 @@ class SyncSerializationTest {
             }
         """.trimIndent()
 
-        val decoded = decodeAnnual(json.toByteArray(Charsets.UTF_8))
+        val decoded = decodeAnnual(json.toByteArray(Charsets.UTF_8), key)
 
         assertEquals(2025, decoded.year)
         assertEquals("y", decoded.content)
+    }
+
+    @Test
+    fun decodeDiary_rejectsCorruptedCipher() {
+        val envelope = DiaryEnvelope(
+            date = "2025-01-02",
+            updatedAt = "2025-01-02T03:04:06Z",
+            cipher = "not-valid-base64",
+        )
+        val bytes = syncJson.encodeToString(envelope).toByteArray(Charsets.UTF_8)
+
+        assertThrows(Throwable::class.java) {
+            decodeDiary(bytes, key)
+        }
     }
 }

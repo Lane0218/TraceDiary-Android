@@ -401,6 +401,67 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                     }
                 }
             }
+
+            item { Text("修改同步密码", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        val rotationWorking = state.passwordRotationStatus is PasswordRotationStatus.Working
+                        OutlinedTextField(
+                            value = state.oldSyncPassword,
+                            onValueChange = viewModel::onOldSyncPasswordChanged,
+                            label = { Text("旧同步密码") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            enabled = !rotationWorking,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        )
+                        OutlinedTextField(
+                            value = state.newSyncPassword,
+                            onValueChange = viewModel::onNewSyncPasswordChanged,
+                            label = { Text("新同步密码") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            enabled = !rotationWorking,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        )
+                        OutlinedTextField(
+                            value = state.confirmNewSyncPassword,
+                            onValueChange = viewModel::onConfirmNewSyncPasswordChanged,
+                            label = { Text("确认新同步密码") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            enabled = !rotationWorking,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        )
+                        Button(
+                            onClick = viewModel::onRotateSyncPassword,
+                            enabled = !rotationWorking && state.syncOpStatus !is SyncOpStatus.Working,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                        ) {
+                            Text(if (rotationWorking) "更新中…" else "更新同步密码")
+                        }
+                        when (val status = state.passwordRotationStatus) {
+                            PasswordRotationStatus.Idle -> Unit
+                            PasswordRotationStatus.Working -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            is PasswordRotationStatus.Success -> Text(
+                                text = status.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            is PasswordRotationStatus.Failed -> Text(
+                                text = status.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -484,6 +545,7 @@ private fun stageLabel(stage: SyncEngine.SyncStage): String = when (stage) {
     SyncEngine.SyncStage.Uploading -> "上传中"
     SyncEngine.SyncStage.Downloading -> "下载中"
     SyncEngine.SyncStage.Merging -> "合并中"
+    SyncEngine.SyncStage.Rekeying -> "正在更新同步密码"
     SyncEngine.SyncStage.Done -> "已完成"
     SyncEngine.SyncStage.Failed -> "失败"
 }
