@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,19 +30,30 @@ import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,7 +67,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.DiaryEntry
+import com.tracediary.app.domain.model.SyncState
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -96,7 +111,11 @@ fun TodayScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(text = "今天", style = MaterialTheme.typography.displayLarge)
-                IconButton(onClick = {}) { Icon(Icons.Outlined.MoreVert, null) }
+                TodayOverflowMenu(
+                    selectedDate = state.selectedDate,
+                    onPickDate = viewModel::onSelectDate,
+                    onClearContent = { viewModel.onContentChanged("") },
+                )
             }
         }
 
@@ -117,6 +136,7 @@ fun TodayScreen(
                 content = state.content,
                 wordCount = state.wordCount,
                 saveStatus = state.saveStatus,
+                syncState = state.currentEntrySyncState,
                 onContentChanged = viewModel::onContentChanged,
             )
         }
@@ -245,6 +265,7 @@ private fun EntryEditorCard(
     content: String,
     wordCount: Int,
     saveStatus: SaveStatus,
+    syncState: SyncState?,
     onContentChanged: (String) -> Unit,
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
@@ -298,14 +319,14 @@ private fun EntryEditorCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
-                SaveStatusIndicator(saveStatus)
+                SaveStatusIndicator(saveStatus = saveStatus, syncState = syncState)
             }
         }
     }
 }
 
 @Composable
-private fun SaveStatusIndicator(saveStatus: SaveStatus) {
+private fun SaveStatusIndicator(saveStatus: SaveStatus, syncState: SyncState?) {
     val (label, icon, tint) = when (saveStatus) {
         SaveStatus.Idle -> Triple(
             "未编辑",
@@ -328,12 +349,31 @@ private fun SaveStatusIndicator(saveStatus: SaveStatus) {
             MaterialTheme.colorScheme.error
         )
     }
+    // 仅在条目已落库（saveStatus 非 Idle 且存在同步态）时拼接同步态文案，避免新建未保存条目误显示。
+    val syncLabel: String? = if (saveStatus != SaveStatus.Idle && syncState != null) {
+        when (syncState) {
+            SyncState.Synced -> "云同步完成"
+            SyncState.Pending -> "等待云同步"
+            SyncState.LocalOnly -> "仅本地保存"
+            SyncState.Failed -> "云同步失败"
+            SyncState.Conflict -> "云同步冲突"
+        }
+    } else {
+        null
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = tint,
         )
+        if (syncLabel != null) {
+            Text(
+                text = " · $syncLabel",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Spacer(modifier = Modifier.width(4.dp))
         Icon(
             imageVector = icon,
@@ -372,5 +412,99 @@ private fun PreviousYearEntryCard(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TodayOverflowMenu(
+    selectedDate: LocalDate,
+    onPickDate: (LocalDate) -> Unit,
+    onClearContent: () -> Unit,
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showClearConfirm by remember { mutableStateOf(false) }
+
+    Box {
+        IconButton(onClick = { menuExpanded = true }) {
+            Icon(Icons.Outlined.MoreVert, contentDescription = "更多操作")
+        }
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("跳到指定日期") },
+                onClick = {
+                    menuExpanded = false
+                    showDatePicker = true
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("清空当日内容") },
+                onClick = {
+                    menuExpanded = false
+                    showClearConfirm = true
+                }
+            )
+        }
+    }
+
+    if (showDatePicker) {
+        val zone = remember { ZoneId.systemDefault() }
+        val initialMillis = remember(selectedDate) {
+            selectedDate.atStartOfDay(zone).toInstant().toEpochMilli()
+        }
+        // SPEC: 仅允许补写历史，不允许写未来。
+        val todayMillis = remember {
+            LocalDate.now().atStartOfDay(zone).toInstant().toEpochMilli()
+        }
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = initialMillis,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                    utcTimeMillis <= todayMillis
+                override fun isSelectableYear(year: Int): Boolean =
+                    year <= LocalDate.now().year
+            }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val picked = pickerState.selectedDateMillis
+                    if (picked != null) {
+                        val date = Instant.ofEpochMilli(picked)
+                            .atZone(zone)
+                            .toLocalDate()
+                        onPickDate(date)
+                    }
+                    showDatePicker = false
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("取消") }
+            }
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
+
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("清空当天内容？") },
+            text = { Text("清空后无法恢复，是否继续？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onClearContent()
+                    showClearConfirm = false
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) { Text("取消") }
+            }
+        )
     }
 }
