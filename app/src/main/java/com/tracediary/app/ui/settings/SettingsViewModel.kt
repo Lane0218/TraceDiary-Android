@@ -364,7 +364,16 @@ class SettingsViewModel(
         if (_uiState.value.syncOpStatus is SyncOpStatus.Working) return
         _uiState.update { it.copy(syncOpStatus = SyncOpStatus.Working(op)) }
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) { action(engine) }
+            val result = try {
+                withContext(Dispatchers.IO) { action(engine) }
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                RemoteResult.Err(
+                    code = com.tracediary.app.data.sync.ErrorCode.UNKNOWN,
+                    message = "${t.javaClass.simpleName}: ${t.message ?: "未知异常"}",
+                    cause = t,
+                )
+            }
             _uiState.update {
                 val next = when (result) {
                     is RemoteResult.Ok -> SyncOpStatus.Done(op, result.value)
