@@ -339,13 +339,11 @@ class TodayViewModel(
 
     private suspend fun scheduleAutoSync(date: LocalDate) {
         val preferencesRepository = userPreferencesRepository ?: return
-        val store = secureCredentialStore ?: return
         val engine = syncEngine ?: return
         val prefs = preferencesRepository.preferences.first()
         if (!prefs.syncEnabled) return
-        // 应用密码未解锁时不触发；记住密码且自动解锁后 store.loadLocalPassword() 即为有效值。
-        if (appPasswordManager != null && !appPasswordManager.isUnlocked()) return
-        if (store.loadLocalPassword().isNullOrEmpty()) return
+        // 优先看应用密码是否可用：解锁态下 activePassword 可能仅在内存中（未记住密码）。
+        if (!hasActivePassword()) return
         autoSyncJob?.cancel()
         autoSyncJob = viewModelScope.launch {
             delay(autoSyncDebounceMillis)
@@ -357,12 +355,10 @@ class TodayViewModel(
 
     private suspend fun deleteRemoteIfNeeded(date: LocalDate) {
         val preferencesRepository = userPreferencesRepository ?: return
-        val store = secureCredentialStore ?: return
         val engine = syncEngine ?: return
         val prefs = preferencesRepository.preferences.first()
         if (!prefs.syncEnabled) return
-        if (appPasswordManager != null && !appPasswordManager.isUnlocked()) return
-        if (store.loadLocalPassword().isNullOrEmpty()) return
+        if (!hasActivePassword()) return
         val result = withContext(ioDispatcher) { engine.deleteDiary(date) }
         if (result is RemoteResult.Err) {
             _uiState.update { current ->
@@ -371,6 +367,18 @@ class TodayViewModel(
                 } else current
             }
         }
+    }
+
+    /** 当前是否存在可用应用密码：优先 manager 解锁态，回退到 SecureCredentialStore（兼容旧测试 fixture）。 */
+    private fun hasActivePassword(): Boolean {
+        val managerPassword = appPasswordManager?.loadActivePassword()
+        if (!managerPassword.isNullOrEmpty()) return true
+        // 旧路径：未注入 manager 时退回 SecureCredentialStore，保持兼容。
+        if (appPasswordManager == null) {
+            val store = secureCredentialStore ?: return false
+            return !store.loadLocalPassword().isNullOrEmpty()
+        }
+        return false
     }
 
     private fun formatMonthLabel(date: LocalDate): String =

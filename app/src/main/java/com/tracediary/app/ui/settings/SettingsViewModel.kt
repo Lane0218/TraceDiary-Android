@@ -212,12 +212,16 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * @deprecated 应用密码迁移后改由 [AppPasswordManager] 持有；保留此字段仅用于向后兼容
+     * （密码轮换成功后回填、单元测试 fixture）。新增代码应使用 [AppPasswordManager.loadActivePassword]。
+     */
     fun onLocalPasswordChanged(value: String) {
         _uiState.update { it.copy(localPassword = value) }
     }
 
     /**
-     * 保存本机数据密码：开关开启时持久化；开关关闭时确保磁盘清空。
+     * @deprecated 同上。仅在测试场景与历史路径中调用；新代码请使用 [AppPasswordManager.changePassword]。
      */
     fun onSaveLocalPassword() {
         val state = _uiState.value
