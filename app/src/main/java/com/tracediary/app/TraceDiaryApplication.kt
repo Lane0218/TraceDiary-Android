@@ -20,6 +20,7 @@ import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.data.sync.SyncProvider
 import com.tracediary.app.data.sync.SyncScheduler
 import com.tracediary.app.data.sync.TencentCosRemoteStorage
+import net.sqlcipher.database.SQLiteDatabase
 import net.sqlcipher.database.SupportFactory
 import com.tracediary.app.domain.repository.AnnualSummaryRepository
 import com.tracediary.app.domain.repository.DiaryRepository
@@ -97,6 +98,8 @@ class TraceDiaryApplication : Application() {
         super.onCreate()
         // SQLCipher 加密本地数据库。passphrase 通过 EncryptedSharedPreferences 安全存放，
         // 首版采用破坏式迁移（既有数据为测试数据，可丢弃）。
+        // SQLCipher 4.x 必须先显式加载 libsqlcipher.so，否则 SupportFactory 会 UnsatisfiedLinkError 闪退。
+        SQLiteDatabase.loadLibs(this)
         val passphrase = PassphraseStore(this).getOrCreate()
         database = Room.databaseBuilder(
             this,
