@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -28,6 +30,8 @@ import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
@@ -61,6 +65,7 @@ import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -68,8 +73,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.model.SyncState
+import com.tracediary.app.domain.usecase.CalendarDay
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
@@ -114,18 +121,24 @@ fun TodayScreen(
                 TodayOverflowMenu(
                     selectedDate = state.selectedDate,
                     onPickDate = viewModel::onSelectDate,
-                    onClearContent = { viewModel.onContentChanged("") },
+                    onClearContent = viewModel::onDeleteCurrentEntry,
                 )
             }
         }
 
         item {
-            WeekCalendarCard(
+            CalendarCard(
                 weekDates = state.weekDates,
                 selectedDate = state.selectedDate,
                 monthLabel = state.displayMonthLabel,
-                onPrevious = viewModel::onPreviousWeek,
-                onNext = viewModel::onNextWeek,
+                displayMonth = state.displayMonth,
+                monthGrid = state.monthGrid,
+                isMonthExpanded = state.isMonthExpanded,
+                onPreviousWeek = viewModel::onPreviousWeek,
+                onNextWeek = viewModel::onNextWeek,
+                onPreviousMonth = viewModel::onPreviousMonth,
+                onNextMonth = viewModel::onNextMonth,
+                onToggleMonthExpand = viewModel::onToggleMonthExpand,
                 onSelectDate = viewModel::onSelectDate,
             )
         }
@@ -137,6 +150,7 @@ fun TodayScreen(
                 wordCount = state.wordCount,
                 saveStatus = state.saveStatus,
                 syncState = state.currentEntrySyncState,
+                deleteErrorMessage = state.deleteErrorMessage,
                 onContentChanged = viewModel::onContentChanged,
             )
         }
@@ -179,12 +193,18 @@ fun TodayScreen(
 }
 
 @Composable
-private fun WeekCalendarCard(
+private fun CalendarCard(
     weekDates: List<LocalDate>,
     selectedDate: LocalDate,
     monthLabel: String,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
+    displayMonth: YearMonth,
+    monthGrid: List<CalendarDay>,
+    isMonthExpanded: Boolean,
+    onPreviousWeek: () -> Unit,
+    onNextWeek: () -> Unit,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onToggleMonthExpand: () -> Unit,
     onSelectDate: (LocalDate) -> Unit,
 ) {
     Card(
@@ -192,67 +212,195 @@ private fun WeekCalendarCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
+            // 标题区：左右切换按钮 + 月份 + 展开/收起
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onPrevious, modifier = Modifier.size(32.dp)) {
+                IconButton(
+                    onClick = if (isMonthExpanded) onPreviousMonth else onPreviousWeek,
+                    modifier = Modifier.size(32.dp),
+                ) {
                     Icon(
                         Icons.Outlined.ChevronLeft,
-                        contentDescription = "上一周",
+                        contentDescription = if (isMonthExpanded) "上一月" else "上一周",
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }
-                Text(
-                    text = monthLabel,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                )
-                IconButton(onClick = onNext, modifier = Modifier.size(32.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = monthLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    IconButton(onClick = onToggleMonthExpand, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            imageVector = if (isMonthExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                            contentDescription = if (isMonthExpanded) "收起月历" else "展开月历",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = if (isMonthExpanded) onNextMonth else onNextWeek,
+                    modifier = Modifier.size(32.dp),
+                ) {
                     Icon(
                         Icons.Outlined.ChevronRight,
-                        contentDescription = "下一周",
+                        contentDescription = if (isMonthExpanded) "下一月" else "下一周",
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                weekDates.forEach { date ->
-                    val isSelected = date == selectedDate
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            // 修复 Hover：先 clip 再 clickable
-                            .clip(MaterialTheme.shapes.medium)
-                            .background(
-                                if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                else Color.Transparent
-                            )
-                            .clickable { onSelectDate(date) }
-                            .padding(vertical = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.CHINESE),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = date.dayOfMonth.toString(),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
+
+            if (isMonthExpanded) {
+                MonthGrid(
+                    displayMonth = displayMonth,
+                    monthGrid = monthGrid,
+                    selectedDate = selectedDate,
+                    onSelectDate = onSelectDate,
+                )
+            } else {
+                WeekRow(
+                    weekDates = weekDates,
+                    selectedDate = selectedDate,
+                    onSelectDate = onSelectDate,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeekRow(
+    weekDates: List<LocalDate>,
+    selectedDate: LocalDate,
+    onSelectDate: (LocalDate) -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        weekDates.forEach { date ->
+            val isSelected = date == selectedDate
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(
+                        if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                        else Color.Transparent
+                    )
+                    .clickable { onSelectDate(date) }
+                    .padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.CHINESE),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = date.dayOfMonth.toString(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonthGrid(
+    displayMonth: YearMonth,
+    monthGrid: List<CalendarDay>,
+    selectedDate: LocalDate,
+    onSelectDate: (LocalDate) -> Unit,
+) {
+    val weekHeaders = listOf("日", "一", "二", "三", "四", "五", "六")
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            weekHeaders.forEach { day ->
+                Text(
+                    text = day,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        monthGrid.chunked(7).forEach { week ->
+            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+                week.forEach { day ->
+                    MonthDayCell(
+                        day = day,
+                        isSelected = day.date == selectedDate,
+                        onClick = { onSelectDate(day.date) },
+                        modifier = Modifier.weight(1f),
+                    )
                 }
+                if (week.size < 7) {
+                    repeat(7 - week.size) { Spacer(modifier = Modifier.weight(1f)) }
+                }
+            }
+        }
+        if (monthGrid.isNotEmpty()) {
+            Text(
+                text = "${displayMonth.year}年${displayMonth.monthValue}月",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun MonthDayCell(
+    day: CalendarDay,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val baseColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+    val textColor = when {
+        isSelected -> MaterialTheme.colorScheme.onPrimary
+        !day.isInCurrentMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    Box(
+        modifier = modifier
+            .aspectRatio(1.2f)
+            .clip(CircleShape)
+            .background(baseColor)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = day.date.dayOfMonth.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = textColor,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            )
+            if (day.hasRecord) {
+                val badgeColor = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                else MaterialTheme.colorScheme.primary
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(badgeColor),
+                )
             }
         }
     }
@@ -266,6 +414,7 @@ private fun EntryEditorCard(
     wordCount: Int,
     saveStatus: SaveStatus,
     syncState: SyncState?,
+    deleteErrorMessage: String?,
     onContentChanged: (String) -> Unit,
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
@@ -321,6 +470,14 @@ private fun EntryEditorCard(
                 )
                 SaveStatusIndicator(saveStatus = saveStatus, syncState = syncState)
             }
+            if (!deleteErrorMessage.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = deleteErrorMessage,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }
@@ -349,7 +506,6 @@ private fun SaveStatusIndicator(saveStatus: SaveStatus, syncState: SyncState?) {
             MaterialTheme.colorScheme.error
         )
     }
-    // 仅在条目已落库（saveStatus 非 Idle 且存在同步态）时拼接同步态文案，避免新建未保存条目误显示。
     val syncLabel: String? = if (saveStatus != SaveStatus.Idle && syncState != null) {
         when (syncState) {
             SyncState.Synced -> "云同步完成"
@@ -393,7 +549,6 @@ private fun PreviousYearEntryCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            // 修复 Hover
             .clip(MaterialTheme.shapes.medium)
             .clickable { onClick() },
         shape = MaterialTheme.shapes.medium,
@@ -495,7 +650,7 @@ private fun TodayOverflowMenu(
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
             title = { Text("清空当天内容？") },
-            text = { Text("清空后无法恢复，是否继续？") },
+            text = { Text("清空将删除该日期的本地记录，若已启用云同步会同时尝试删除云端对象，操作不可恢复。") },
             confirmButton = {
                 TextButton(onClick = {
                     onClearContent()
