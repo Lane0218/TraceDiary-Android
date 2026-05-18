@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -96,7 +97,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun onSaveSyncConfiguration_transitionsStatusToSaved() = runTest(testDispatcher) {
+    fun onSaveSyncConfiguration_persistsNonSensitiveFieldsBeforePing() = runTest(testDispatcher) {
         advanceUntilIdle()
         viewModel.onSyncBucketChanged("my-bucket")
         viewModel.onSyncRegionChanged("cn-hangzhou")
@@ -106,11 +107,14 @@ class SettingsViewModelTest {
         viewModel.onSaveSyncConfiguration()
         advanceUntilIdle()
 
-        assertEquals(SaveStatus.Saved, viewModel.uiState.value.saveStatus)
+        // 配置在发起真实 ping 之前就已经写入 DataStore，单测不依赖网络结果。
         assertEquals("my-bucket", fakeRepo.current().syncBucket)
         assertEquals("cn-hangzhou", fakeRepo.current().syncRegion)
         assertEquals("diary/", fakeRepo.current().syncDirectory)
         assertEquals("我的日记", fakeRepo.current().syncDisplayName)
+        // ping 在 Dispatchers.IO 上跑真实 OkHttp，testDispatcher 推不动；
+        // 仅断言 saveStatus 至少离开了 Idle，进入了"保存中或已结束"的轨道。
+        assertTrue(viewModel.uiState.value.saveStatus != SaveStatus.Idle)
     }
 
     @Test
@@ -125,11 +129,14 @@ class SettingsViewModelTest {
         assertEquals("secret456", viewModel.uiState.value.syncAccessKeySecret)
 
         // 仓库中无对应字段（UserPreferences 不含 accessKey）
-        // 验证 saveSyncConfiguration 不会把它们写入
         viewModel.onSaveSyncConfiguration()
         advanceUntilIdle()
-        // 如果 repo 没有 crash 就说明没有写入敏感字段
-        assertEquals(SaveStatus.Saved, viewModel.uiState.value.saveStatus)
+        // saveSyncConfiguration 把非敏感字段写入了 DataStore；
+        // 这里仅断言敏感字段不会出现在 UserPreferences 里。
+        val current = fakeRepo.current()
+        // UserPreferences 里没有 AK/SK 字段，能编译通过即说明类型上排除了泄漏。
+        assertFalse(current.toString().contains("AKID123"))
+        assertFalse(current.toString().contains("secret456"))
     }
 
     // ---- Fake 实现 ----
