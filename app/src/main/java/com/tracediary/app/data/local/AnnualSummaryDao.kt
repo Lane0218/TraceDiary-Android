@@ -3,6 +3,7 @@ package com.tracediary.app.data.local
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
+import com.tracediary.app.domain.model.SyncState
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -21,6 +22,9 @@ interface AnnualSummaryDao {
 
     @Query("DELETE FROM annual_summaries WHERE year = :year")
     suspend fun deleteByYear(year: Int)
+
+    @Query("UPDATE annual_summaries SET syncState = :state WHERE year = :year")
+    suspend fun updateSyncState(year: Int, state: SyncState)
 
     @Upsert
     suspend fun upsert(entity: AnnualSummaryEntity)

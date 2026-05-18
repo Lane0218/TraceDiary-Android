@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Query
 import androidx.room.Upsert
+import com.tracediary.app.domain.model.SyncState
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -39,6 +40,9 @@ interface DiaryEntryDao {
 
     @Query("DELETE FROM diary_entries WHERE epochDay = :epochDay")
     suspend fun deleteByDate(epochDay: Long)
+
+    @Query("UPDATE diary_entries SET syncState = :state WHERE epochDay = :epochDay")
+    suspend fun updateSyncState(epochDay: Long, state: SyncState)
 
     @Upsert
     suspend fun upsert(entity: DiaryEntryEntity)

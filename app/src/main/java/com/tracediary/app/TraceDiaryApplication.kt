@@ -7,17 +7,32 @@ import com.tracediary.app.data.notifications.DailyReminderScheduler
 import com.tracediary.app.data.notifications.DailyReminderWorker
 import com.tracediary.app.data.repository.DefaultAnnualSummaryRepository
 import com.tracediary.app.data.repository.DefaultDiaryRepository
+import com.tracediary.app.data.repository.DefaultSyncMetadataRepository
 import com.tracediary.app.data.security.PassphraseStore
+import com.tracediary.app.data.security.SecureCredentialStore
 import com.tracediary.app.data.settings.DataStoreUserPreferencesRepository
+import com.tracediary.app.data.settings.UserPreferences
 import com.tracediary.app.data.settings.UserPreferencesRepository
+import com.tracediary.app.data.sync.AliyunOssRemoteStorage
+import com.tracediary.app.data.sync.RemoteCredential
+import com.tracediary.app.data.sync.RemoteStorage
+import com.tracediary.app.data.sync.SyncEngine
+import com.tracediary.app.data.sync.SyncProvider
+import com.tracediary.app.data.sync.TencentCosRemoteStorage
 import net.sqlcipher.database.SupportFactory
 import com.tracediary.app.domain.repository.AnnualSummaryRepository
 import com.tracediary.app.domain.repository.DiaryRepository
+import com.tracediary.app.domain.repository.SyncMetadataRepository
 import com.tracediary.app.domain.usecase.DiaryCalendarUseCase
 import com.tracediary.app.domain.usecase.DiaryStatisticsUseCase
 import com.tracediary.app.domain.usecase.ExportDiaryDataUseCase
 import com.tracediary.app.domain.usecase.ImportDiaryDataUseCase
 import com.tracediary.app.domain.usecase.SearchDiaryEntriesUseCase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import java.time.Clock
 
 class TraceDiaryApplication : Application() {
@@ -34,6 +49,15 @@ class TraceDiaryApplication : Application() {
         private set
 
     lateinit var dailyReminderScheduler: DailyReminderScheduler
+        private set
+
+    lateinit var syncMetadataRepository: SyncMetadataRepository
+        private set
+
+    lateinit var secureCredentialStore: SecureCredentialStore
+        private set
+
+    lateinit var syncEngine: SyncEngine
         private set
 
     val calendarUseCase = DiaryCalendarUseCase()
@@ -55,6 +79,16 @@ class TraceDiaryApplication : Application() {
         )
     }
 
+    /**
+     * 用户偏好的最新快照。SyncEngine.storageProvider 是同步 lambda，
+     * 不能直接 collect Flow，所以这里维护一个 @Volatile 缓存，由
+     * applicationScope 持续 collect preferences 写入。
+     */
+    @Volatile
+    private var latestPreferences: UserPreferences? = null
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     override fun onCreate() {
         super.onCreate()
         // SQLCipher 加密本地数据库。passphrase 通过 EncryptedSharedPreferences 安全存放，
@@ -73,7 +107,52 @@ class TraceDiaryApplication : Application() {
         annualSummaryRepository = DefaultAnnualSummaryRepository(database.annualSummaryDao())
         userPreferencesRepository = DataStoreUserPreferencesRepository(applicationContext)
         dailyReminderScheduler = DailyReminderScheduler(applicationContext)
+
+        // 同步相关：先建凭证库，再建元数据仓库，最后组装 SyncEngine。
+        secureCredentialStore = SecureCredentialStore(applicationContext)
+        syncMetadataRepository = DefaultSyncMetadataRepository(database.syncMetadataDao())
+        syncEngine = SyncEngine(
+            storageProvider = { buildRemoteStorageOrNull() },
+            diaryRepository = diaryRepository,
+            annualSummaryRepository = annualSummaryRepository,
+            syncMetadataRepository = syncMetadataRepository,
+            clock = Clock.systemDefaultZone(),
+        )
+
+        // 持续缓存 preferences 最新值，供 storageProvider 同步读取。
+        applicationScope.launch {
+            userPreferencesRepository.preferences.collect { latestPreferences = it }
+        }
+
         // 提前创建通知 channel，避免 worker 第一次执行时还没注册 channel。
         DailyReminderWorker.ensureChannel(applicationContext)
+    }
+
+    /**
+     * 根据当前偏好与凭证拼装 RemoteStorage。任一环节缺配置就返回 null，
+     * 由 SyncEngine 转为 [com.tracediary.app.data.sync.ErrorCode.AUTH] 错误。
+     */
+    private fun buildRemoteStorageOrNull(): RemoteStorage? {
+        val prefs = latestPreferences ?: return null
+        if (!prefs.syncEnabled) return null
+        if (prefs.syncBucket.isBlank() || prefs.syncRegion.isBlank()) return null
+        val (id, secret) = secureCredentialStore.loadCloudCredential() ?: return null
+        val provider = when (prefs.syncProvider.lowercase()) {
+            "aliyun", "oss", "aliyun_oss" -> SyncProvider.ALIYUN_OSS
+            "tencent", "cos", "tencent_cos" -> SyncProvider.TENCENT_COS
+            else -> return null
+        }
+        val credential = RemoteCredential(
+            provider = provider,
+            region = prefs.syncRegion,
+            bucket = prefs.syncBucket,
+            accessKeyId = id,
+            accessKeySecret = secret,
+            pathPrefix = prefs.syncDirectory.trim('/'),
+        )
+        return when (provider) {
+            SyncProvider.ALIYUN_OSS -> AliyunOssRemoteStorage(credential)
+            SyncProvider.TENCENT_COS -> TencentCosRemoteStorage(credential)
+        }
     }
 }

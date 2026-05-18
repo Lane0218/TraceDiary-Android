@@ -45,4 +45,8 @@ class DefaultAnnualSummaryRepository(
     override suspend fun deleteSummary(year: Int) {
         annualSummaryDao.deleteByYear(year)
     }
+
+    override suspend fun setSyncState(year: Int, state: SyncState) {
+        annualSummaryDao.updateSyncState(year, state)
+    }
 }

@@ -1,6 +1,7 @@
 package com.tracediary.app.domain.repository
 
 import com.tracediary.app.domain.model.AnnualSummary
+import com.tracediary.app.domain.model.SyncState
 import kotlinx.coroutines.flow.Flow
 
 interface AnnualSummaryRepository {
@@ -13,4 +14,12 @@ interface AnnualSummaryRepository {
     suspend fun saveSummary(year: Int, content: String): AnnualSummary
 
     suspend fun deleteSummary(year: Int)
+
+    /**
+     * 更新本地年度总结的同步状态。条目不存在时静默忽略。
+     *
+     * 默认空实现：旧的 fake/test 实现无需为同步功能补 override。
+     * 生产实现 [com.tracediary.app.data.repository.DefaultAnnualSummaryRepository] 必须重写此方法。
+     */
+    suspend fun setSyncState(year: Int, state: SyncState) = Unit
 }

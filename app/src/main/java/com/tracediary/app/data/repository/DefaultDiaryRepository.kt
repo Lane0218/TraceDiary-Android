@@ -67,6 +67,10 @@ class DefaultDiaryRepository(
         diaryEntryDao.deleteByDate(date.toEpochDay())
     }
 
+    override suspend fun setSyncState(date: LocalDate, state: SyncState) {
+        diaryEntryDao.updateSyncState(date.toEpochDay(), state)
+    }
+
     override suspend fun searchEntries(query: String, year: Int?, recordedOnly: Boolean): List<DiaryEntry> {
         val normalizedQuery = query.trim()
         if (recordedOnly && normalizedQuery.isEmpty()) {
