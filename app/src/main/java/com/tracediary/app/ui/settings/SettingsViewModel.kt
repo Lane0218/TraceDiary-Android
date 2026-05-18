@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.notifications.DailyReminderScheduler
+import com.tracediary.app.data.security.AppPasswordManager
 import com.tracediary.app.data.security.SecureCredentialStore
 import com.tracediary.app.data.settings.UserPreferencesRepository
 import com.tracediary.app.data.sync.AliyunOssRemoteStorage
@@ -18,6 +19,7 @@ import com.tracediary.app.data.sync.SyncProvider
 import com.tracediary.app.data.sync.SyncScheduler
 import com.tracediary.app.data.sync.TencentCosRemoteStorage
 import com.tracediary.app.domain.usecase.ExportDiaryDataUseCase
+import com.tracediary.app.domain.usecase.ExportFormat
 import com.tracediary.app.domain.usecase.ImportDiaryDataUseCase
 import com.tracediary.app.domain.usecase.ImportOptions
 import com.tracediary.app.domain.usecase.ImportResult
@@ -110,6 +112,7 @@ class SettingsViewModel(
     private val secureCredentialStore: SecureCredentialStore? = null,
     private val syncEngine: SyncEngine? = null,
     private val syncScheduler: SyncScheduler? = null,
+    private val appPasswordManager: AppPasswordManager? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -193,12 +196,15 @@ class SettingsViewModel(
     }
 
     /**
-     * 切换"在本机安全保存密码"开关。关闭时同时清除已存储的密码与内存中的输入，
-     * 避免开关关闭后磁盘里仍残留密文。
+     * 切换"在本机记住密码"开关。
+     *
+     * 关闭时把内存里的输入与 SecureCredentialStore 内的密码缓存一并抹除，避免开关
+     * 关闭后磁盘里仍残留密文；同时同步到 [AppPasswordManager]，下一次冷启动会强制要求输入密码。
      */
     fun onToggleSavePasswordLocally(value: Boolean) {
         viewModelScope.launch {
             repository.setSavePasswordLocally(value)
+            appPasswordManager?.setRememberPasswordEnabled(value)
             if (!value) {
                 secureCredentialStore?.saveLocalPassword(null)
                 _uiState.update { it.copy(localPassword = "") }
@@ -242,12 +248,6 @@ class SettingsViewModel(
     }
 
     fun onRotateSyncPassword() {
-        val engine = syncEngine ?: run {
-            _uiState.update {
-                it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("同步引擎尚未初始化"))
-            }
-            return
-        }
         if (hasSyncWorkInFlight()) return
         val snapshot = _uiState.value
         val oldPassword = snapshot.oldSyncPassword
@@ -256,49 +256,80 @@ class SettingsViewModel(
         when {
             oldPassword.isBlank() -> {
                 _uiState.update {
-                    it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("请输入旧同步密码"))
+                    it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("请输入旧密码"))
                 }
                 return
             }
             newPassword.isBlank() -> {
                 _uiState.update {
-                    it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("请输入新同步密码"))
+                    it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("请输入新密码"))
                 }
                 return
             }
             newPassword != confirmPassword -> {
                 _uiState.update {
-                    it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("两次输入的新同步密码不一致"))
+                    it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("两次输入的新密码不一致"))
                 }
                 return
             }
         }
 
+        val manager = appPasswordManager
+        if (manager != null && !manager.verifyPassword(oldPassword)) {
+            _uiState.update {
+                it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("旧密码错误"))
+            }
+            return
+        }
+
         _uiState.update { it.copy(passwordRotationStatus = PasswordRotationStatus.Working) }
         viewModelScope.launch {
-            val result = try {
-                withContext(Dispatchers.IO) { engine.rotateSyncPassword(oldPassword, newPassword) }
-            } catch (t: Throwable) {
-                if (t is kotlinx.coroutines.CancellationException) throw t
-                RemoteResult.Err(
-                    code = com.tracediary.app.data.sync.ErrorCode.UNKNOWN,
-                    message = "${t.javaClass.simpleName}: ${t.message ?: "未知异常"}",
-                    cause = t,
-                )
-            }
-            _uiState.update {
-                when (result) {
-                    is RemoteResult.Ok -> it.copy(
-                        localPassword = newPassword,
-                        oldSyncPassword = "",
-                        newSyncPassword = "",
-                        confirmNewSyncPassword = "",
-                        passwordRotationStatus = PasswordRotationStatus.Success("同步密码已更新"),
-                    )
-                    is RemoteResult.Err -> it.copy(
-                        passwordRotationStatus = PasswordRotationStatus.Failed(result.message)
+            // 仅在云同步引擎已配置时执行远端 rekey；纯本地用户也允许只更新本地验证器。
+            val engine = syncEngine
+            val remoteResult: RemoteResult<SyncEngine.SyncSummary>? = if (engine != null) {
+                try {
+                    withContext(Dispatchers.IO) { engine.rotateSyncPassword(oldPassword, newPassword) }
+                } catch (t: Throwable) {
+                    if (t is kotlinx.coroutines.CancellationException) throw t
+                    RemoteResult.Err(
+                        code = com.tracediary.app.data.sync.ErrorCode.UNKNOWN,
+                        message = "${t.javaClass.simpleName}: ${t.message ?: "未知异常"}",
+                        cause = t,
                     )
                 }
+            } else null
+
+            // 远端 rekey 出错或处于未配置态时，AUTH 错误视为"无云同步"——继续本地轮换；其它错误回滚。
+            val remoteOk = when (remoteResult) {
+                null -> true
+                is RemoteResult.Ok -> true
+                is RemoteResult.Err -> remoteResult.code == com.tracediary.app.data.sync.ErrorCode.AUTH
+            }
+            if (!remoteOk) {
+                val err = remoteResult as RemoteResult.Err
+                _uiState.update {
+                    it.copy(passwordRotationStatus = PasswordRotationStatus.Failed(err.message))
+                }
+                return@launch
+            }
+
+            // 远端成功（或无云端）后再更新本地验证器。
+            val localOk = manager?.changePassword(oldPassword, newPassword)?.isSuccess ?: true
+            if (!localOk) {
+                _uiState.update {
+                    it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("本地密码更新失败"))
+                }
+                return@launch
+            }
+
+            _uiState.update {
+                it.copy(
+                    localPassword = newPassword,
+                    oldSyncPassword = "",
+                    newSyncPassword = "",
+                    confirmNewSyncPassword = "",
+                    passwordRotationStatus = PasswordRotationStatus.Success("应用密码已更新"),
+                )
             }
         }
     }
@@ -486,10 +517,10 @@ class SettingsViewModel(
     /**
      * 导出当前数据库内容到 SAF 选定的 Uri。
      *
-     * - JSON 序列化与文件 I/O 均放在 [Dispatchers.IO]，避免阻塞 UI 线程。
+     * - 序列化 / 打包与文件 I/O 均放在 [Dispatchers.IO]，避免阻塞 UI 线程。
      * - 失败时使用中文兜底消息，避免把底层异常字符串直接抛给用户。
      */
-    fun onExport(uri: Uri, contentResolver: ContentResolver) {
+    fun onExport(uri: Uri, contentResolver: ContentResolver, format: ExportFormat = ExportFormat.Json) {
         val useCase = exportUseCase ?: run {
             _uiState.update { it.copy(backupStatus = BackupStatus.Failed("导出功能尚未初始化")) }
             return
@@ -497,21 +528,19 @@ class SettingsViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(backupStatus = BackupStatus.Working) }
             try {
-                val payload = withContext(Dispatchers.IO) { useCase() }
-                val entryCount = payload.estimatedEntries()
-                val summaryCount = payload.estimatedSummaries()
+                val payload = withContext(Dispatchers.IO) { useCase(format) }
                 withContext(Dispatchers.IO) {
                     contentResolver.openOutputStream(uri, "wt")
-                        ?.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                        ?.use { it.write(payload.bytes) }
                         ?: error("无法写入所选位置")
                 }
                 val message = buildString {
                     append("已导出 ")
-                    append(entryCount)
+                    append(payload.entryCount)
                     append(" 条日记")
-                    if (summaryCount > 0) {
+                    if (payload.summaryCount > 0) {
                         append("、")
-                        append(summaryCount)
+                        append(payload.summaryCount)
                         append(" 篇年度总结")
                     }
                 }
@@ -525,7 +554,7 @@ class SettingsViewModel(
     }
 
     /**
-     * 从 SAF 选定的 Uri 读取备份 JSON 并按 [options] 合并入库。
+     * 从 SAF 选定的 Uri 读取备份文件并按 [options] 合并入库。支持 JSON / TXT ZIP / Markdown ZIP。
      */
     fun onImport(uri: Uri, contentResolver: ContentResolver, options: ImportOptions) {
         val useCase = importUseCase ?: run {
@@ -537,10 +566,10 @@ class SettingsViewModel(
             try {
                 val payload = withContext(Dispatchers.IO) {
                     contentResolver.openInputStream(uri)?.use { stream ->
-                        stream.bufferedReader(Charsets.UTF_8).readText()
+                        stream.readBytes()
                     } ?: error("无法读取所选文件")
                 }
-                val result = useCase(payload, options)
+                val result = withContext(Dispatchers.IO) { useCase(payload, options) }
                 val message = buildString {
                     append("导入 ")
                     append(result.importedEntries)
@@ -581,21 +610,6 @@ class SettingsViewModel(
         _uiState.update { it.copy(backupStatus = BackupStatus.Idle) }
     }
 
-    // 通过对 JSON 文本中字段名的简单计数估算条目数量，避免在 onExport 中重复反序列化。
-    private fun String.estimatedEntries(): Int = countOccurrences("\"date\"")
-    private fun String.estimatedSummaries(): Int = countOccurrences("\"year\"")
-
-    private fun String.countOccurrences(token: String): Int {
-        if (token.isEmpty()) return 0
-        var count = 0
-        var index = indexOf(token)
-        while (index >= 0) {
-            count++
-            index = indexOf(token, index + token.length)
-        }
-        return count
-    }
-
     private fun hasSyncWorkInFlight(): Boolean {
         val state = _uiState.value
         return state.syncOpStatus is SyncOpStatus.Working ||
@@ -620,6 +634,7 @@ class SettingsViewModel(
                         secureCredentialStore = application.secureCredentialStore,
                         syncEngine = application.syncEngine,
                         syncScheduler = application.syncScheduler,
+                        appPasswordManager = application.appPasswordManager,
                     ) as T
                 }
             }

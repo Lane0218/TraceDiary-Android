@@ -3,7 +3,6 @@ package com.tracediary.app.ui.settings
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -31,6 +30,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.sync.SyncEngine
+import com.tracediary.app.domain.usecase.ExportFormat
 import com.tracediary.app.domain.usecase.ImportOptions
 import com.tracediary.app.domain.usecase.MergeStrategy
 
@@ -164,11 +164,6 @@ private fun SettingsSubPageContainer(title: String, onBack: () -> Unit, content:
 
 @Composable
 private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
-    val context = LocalContext.current
-    // 密码字段绑到 ViewModel：开关开启时由 SecureCredentialStore 持久化；
-    // 确认密码仅在内存校验，不入库，避免重复存储。
-    var confirmPassword by remember { mutableStateOf("") }
-
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -177,57 +172,80 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
     ) {
         item {
             Text(
-                "即使不使用云同步，本地数据也会经过此密码加密。请务必牢记。",
+                "应用密码同时用于解锁、保护本地数据库与加密云端备份，请务必牢记。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         item {
-            OutlinedTextField(
-                value = state.localPassword,
-                onValueChange = viewModel::onLocalPasswordChanged,
-                label = { Text("数据密码") },
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-            )
-        }
-        item {
-            OutlinedTextField(
-                value = confirmPassword,
-                onValueChange = { confirmPassword = it },
-                label = { Text("确认密码") },
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-            )
-        }
-        item {
             ToggleItem(
-                title = "在本机安全保存密码",
-                subtitle = "关闭后每次打开 App 均需输入密码",
+                title = "在本机记住密码",
+                subtitle = "关闭后每次冷启动均需输入应用密码",
                 checked = state.savePasswordLocally,
                 onCheckedChange = viewModel::onToggleSavePasswordLocally
             )
         }
         item {
-            Button(
-                onClick = {
-                    val pwd = state.localPassword
-                    when {
-                        state.savePasswordLocally && pwd.isEmpty() -> {
-                            Toast.makeText(context, "请输入密码", Toast.LENGTH_SHORT).show()
-                        }
-                        state.savePasswordLocally && pwd != confirmPassword -> {
-                            Toast.makeText(context, "两次输入的密码不一致", Toast.LENGTH_SHORT).show()
-                        }
-                        else -> {
-                            viewModel.onSaveLocalPassword()
-                            Toast.makeText(context, "已保存密码设置", Toast.LENGTH_SHORT).show()
-                        }
+            Text("修改应用密码", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    val rotationWorking = state.passwordRotationStatus is PasswordRotationStatus.Working
+                    OutlinedTextField(
+                        value = state.oldSyncPassword,
+                        onValueChange = viewModel::onOldSyncPasswordChanged,
+                        label = { Text("旧密码") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !rotationWorking,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    )
+                    OutlinedTextField(
+                        value = state.newSyncPassword,
+                        onValueChange = viewModel::onNewSyncPasswordChanged,
+                        label = { Text("新密码") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !rotationWorking,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    )
+                    OutlinedTextField(
+                        value = state.confirmNewSyncPassword,
+                        onValueChange = viewModel::onConfirmNewSyncPasswordChanged,
+                        label = { Text("确认新密码") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !rotationWorking,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    )
+                    Button(
+                        onClick = viewModel::onRotateSyncPassword,
+                        enabled = !rotationWorking && state.syncOpStatus !is SyncOpStatus.Working,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Text(if (rotationWorking) "更新中…" else "更新应用密码")
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium
-            ) { Text("保存密码设置") }
+                    when (val status = state.passwordRotationStatus) {
+                        PasswordRotationStatus.Idle -> Unit
+                        PasswordRotationStatus.Working -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        is PasswordRotationStatus.Success -> Text(
+                            text = status.message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        is PasswordRotationStatus.Failed -> Text(
+                            text = status.message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -401,67 +419,6 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                     }
                 }
             }
-
-            item { Text("修改同步密码", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
-            item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        val rotationWorking = state.passwordRotationStatus is PasswordRotationStatus.Working
-                        OutlinedTextField(
-                            value = state.oldSyncPassword,
-                            onValueChange = viewModel::onOldSyncPasswordChanged,
-                            label = { Text("旧同步密码") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            enabled = !rotationWorking,
-                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        )
-                        OutlinedTextField(
-                            value = state.newSyncPassword,
-                            onValueChange = viewModel::onNewSyncPasswordChanged,
-                            label = { Text("新同步密码") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            enabled = !rotationWorking,
-                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        )
-                        OutlinedTextField(
-                            value = state.confirmNewSyncPassword,
-                            onValueChange = viewModel::onConfirmNewSyncPasswordChanged,
-                            label = { Text("确认新同步密码") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            enabled = !rotationWorking,
-                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        )
-                        Button(
-                            onClick = viewModel::onRotateSyncPassword,
-                            enabled = !rotationWorking && state.syncOpStatus !is SyncOpStatus.Working,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.medium,
-                        ) {
-                            Text(if (rotationWorking) "更新中…" else "更新同步密码")
-                        }
-                        when (val status = state.passwordRotationStatus) {
-                            PasswordRotationStatus.Idle -> Unit
-                            PasswordRotationStatus.Working -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                            is PasswordRotationStatus.Success -> Text(
-                                text = status.message,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            is PasswordRotationStatus.Failed -> Text(
-                                text = status.message,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -546,6 +503,7 @@ private fun stageLabel(stage: SyncEngine.SyncStage): String = when (stage) {
     SyncEngine.SyncStage.Downloading -> "下载中"
     SyncEngine.SyncStage.Merging -> "合并中"
     SyncEngine.SyncStage.Rekeying -> "正在更新同步密码"
+    SyncEngine.SyncStage.Deleting -> "正在删除云端对象"
     SyncEngine.SyncStage.Done -> "已完成"
     SyncEngine.SyncStage.Failed -> "失败"
 }
@@ -554,6 +512,7 @@ private fun formatSummary(summary: SyncEngine.SyncSummary): String = buildString
     append("上传 ").append(summary.uploaded).append(" 项，")
     append("下载 ").append(summary.downloaded).append(" 项，")
     append("跳过 ").append(summary.skipped).append(" 项")
+    if (summary.deleted > 0) append("，删除 ").append(summary.deleted).append(" 项")
     if (summary.failed > 0) append("，失败 ").append(summary.failed).append(" 项")
     if (summary.conflicts > 0) append("，冲突 ").append(summary.conflicts).append(" 项")
     if (summary.errors.isNotEmpty()) {
@@ -693,12 +652,13 @@ private fun DataManagementPage(
 
     // 导入合并策略仅作用于本次操作，不需要落库；默认"保留较新"。
     var mergeStrategy by remember { mutableStateOf(MergeStrategy.KeepNewer) }
+    var exportFormat by remember { mutableStateOf(ExportFormat.Json) }
 
     val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        ActivityResultContracts.CreateDocument(exportMimeType(exportFormat))
     ) { uri ->
         if (uri != null) {
-            viewModel.onExport(uri, context.contentResolver)
+            viewModel.onExport(uri, context.contentResolver, exportFormat)
         }
     }
     val importLauncher = rememberLauncherForActivityResult(
@@ -720,11 +680,39 @@ private fun DataManagementPage(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = if (isImport) "从 JSON 备份文件恢复历史记录，可选择遇到重复时如何处理。"
-            else "导出全部日记与年度总结为通用 JSON 文件，可放在云盘或本机长期保存。",
+            text = if (isImport) "支持导入 JSON 备份或 TXT/Markdown ZIP 压缩包，可选择遇到重复时如何处理。"
+            else "导出全部日记与年度总结，支持 JSON、TXT ZIP、Markdown ZIP 三种格式，便于跨平台备份。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        if (!isImport) {
+            Text(
+                "导出格式",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = exportFormat == ExportFormat.Json,
+                    onClick = { exportFormat = ExportFormat.Json },
+                    label = { Text("JSON") },
+                    enabled = !isWorking,
+                )
+                FilterChip(
+                    selected = exportFormat == ExportFormat.TextZip,
+                    onClick = { exportFormat = ExportFormat.TextZip },
+                    label = { Text("TXT 压缩包") },
+                    enabled = !isWorking,
+                )
+                FilterChip(
+                    selected = exportFormat == ExportFormat.MarkdownZip,
+                    onClick = { exportFormat = ExportFormat.MarkdownZip },
+                    label = { Text("Markdown 压缩包") },
+                    enabled = !isWorking,
+                )
+            }
+        }
 
         if (isImport) {
             Text(
@@ -757,12 +745,15 @@ private fun DataManagementPage(
         Button(
             onClick = {
                 if (isImport) {
-                    importLauncher.launch(arrayOf("application/json"))
+                    importLauncher.launch(arrayOf("application/json", "application/zip", "*/*"))
                 } else {
-                    val fileName = "tracediary_backup_" +
-                        java.time.LocalDate.now()
-                            .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) +
-                        ".json"
+                    val today = java.time.LocalDate.now()
+                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"))
+                    val fileName = when (exportFormat) {
+                        ExportFormat.Json -> "tracediary_backup_$today.json"
+                        ExportFormat.TextZip -> "tracediary_backup_${today}_txt.zip"
+                        ExportFormat.MarkdownZip -> "tracediary_backup_${today}_md.zip"
+                    }
                     exportLauncher.launch(fileName)
                 }
             },
@@ -800,6 +791,11 @@ private fun DataManagementPage(
             )
         }
     }
+}
+
+private fun exportMimeType(format: ExportFormat): String = when (format) {
+    ExportFormat.Json -> "application/json"
+    ExportFormat.TextZip, ExportFormat.MarkdownZip -> "application/zip"
 }
 
 @Composable
