@@ -147,6 +147,7 @@ fun ReviewScreen(
                     state = state.search,
                     onKeywordChanged = viewModel::onKeywordChanged,
                     onYearFilterChanged = viewModel::onYearFilterChanged,
+                    onRecordedOnlyChanged = viewModel::onToggleRecordedOnly,
                     onJumpToToday = onJumpToToday,
                 )
             }
@@ -606,6 +607,7 @@ private fun SearchContent(
     state: SearchUiState,
     onKeywordChanged: (String) -> Unit,
     onYearFilterChanged: (Int?) -> Unit,
+    onRecordedOnlyChanged: (Boolean) -> Unit,
     onJumpToToday: (LocalDate) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -662,6 +664,11 @@ private fun SearchContent(
                             label = { Text("${year}年") },
                         )
                     }
+                    FilterChip(
+                        selected = state.recordedOnly,
+                        onClick = { onRecordedOnlyChanged(!state.recordedOnly) },
+                        label = { Text("仅有记录日期") },
+                    )
                 }
             }
             if (state.results.isEmpty()) {

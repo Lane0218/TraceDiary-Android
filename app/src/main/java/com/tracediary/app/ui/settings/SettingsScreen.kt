@@ -11,6 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
@@ -598,6 +600,9 @@ private fun DataManagementPage(
 
 @Composable
 private fun AboutPage() {
+    var showPrivacyDialog by remember { mutableStateOf(false) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -629,14 +634,48 @@ private fun AboutPage() {
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column {
-                SettingsRow(icon = Icons.Outlined.Gavel, title = "隐私政策", onClick = {})
+                SettingsRow(icon = Icons.Outlined.Gavel, title = "隐私政策", onClick = { showPrivacyDialog = true })
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
                     color = MaterialTheme.colorScheme.outlineVariant
                 )
-                SettingsRow(icon = Icons.Outlined.Update, title = "检查更新", onClick = {})
+                SettingsRow(icon = Icons.Outlined.Update, title = "检查更新", onClick = { showUpdateDialog = true })
             }
         }
+    }
+
+    if (showPrivacyDialog) {
+        AlertDialog(
+            onDismissRequest = { showPrivacyDialog = false },
+            title = { Text("隐私政策") },
+            text = {
+                Text(
+                    text = "TraceDiary 是一款单机日记应用。\n\n" +
+                        "1. 你的所有日记和年度总结默认仅保存在本机的加密数据库中。\n" +
+                        "2. 若你主动启用云同步，数据会通过 HTTPS 传输至你自行配置的对象存储（如阿里云 OSS、腾讯云 COS），由你自己掌握访问凭证。\n" +
+                        "3. 应用不收集任何遥测信息，不接入第三方分析或广告 SDK。\n" +
+                        "4. 应用不会主动向除你配置的云存储以外的任何服务器发送日记内容。\n" +
+                        "5. 你可以随时通过「导出备份」导出全部数据，或卸载应用以清除本机数据。\n" +
+                        "6. 若你启用了云同步，停用同步后请自行前往对象存储删除已上传的备份文件。",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showPrivacyDialog = false }) { Text("我知道了") }
+            },
+        )
+    }
+
+    if (showUpdateDialog) {
+        AlertDialog(
+            onDismissRequest = { showUpdateDialog = false },
+            title = { Text("检查更新") },
+            text = { Text("当前版本已是最新（v1.0）") },
+            confirmButton = {
+                TextButton(onClick = { showUpdateDialog = false }) { Text("好的") }
+            },
+        )
     }
 }
 
