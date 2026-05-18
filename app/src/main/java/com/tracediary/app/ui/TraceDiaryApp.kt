@@ -14,8 +14,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tracediary.app.TraceDiaryApplication
+import com.tracediary.app.data.security.AppLockState
 import com.tracediary.app.ui.review.ReviewScreen
+import com.tracediary.app.ui.security.AppLockScreen
+import com.tracediary.app.ui.security.AppLockViewModel
 import com.tracediary.app.ui.settings.SettingsScreen
 import com.tracediary.app.ui.stats.StatsScreen
 import com.tracediary.app.ui.today.TodayScreen
@@ -24,6 +31,23 @@ import java.time.LocalDate
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TraceDiaryApp() {
+    val application = LocalContext.current.applicationContext as TraceDiaryApplication
+    val lockViewModel: AppLockViewModel = viewModel(factory = AppLockViewModel.factory(application))
+    val lockState by lockViewModel.lockState.collectAsStateWithLifecycle()
+    val lockUi by lockViewModel.uiState.collectAsStateWithLifecycle()
+
+    if (lockState != AppLockState.Unlocked) {
+        AppLockScreen(
+            state = lockState,
+            rememberPassword = lockUi.rememberPassword,
+            errorMessage = lockUi.errorMessage,
+            onRememberChanged = lockViewModel::onToggleRemember,
+            onSetupPassword = lockViewModel::onSetupPassword,
+            onUnlock = lockViewModel::onUnlock,
+        )
+        return
+    }
+
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     // LocalDate 不能直接 Saveable，这里以 epochDay 形式持久化；-1 视为无值。
     var pendingTodayEpochDay by rememberSaveable { mutableStateOf(Long.MIN_VALUE) }

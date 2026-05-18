@@ -7,7 +7,9 @@ import com.tracediary.app.data.notifications.DailyReminderScheduler
 import com.tracediary.app.data.notifications.DailyReminderWorker
 import com.tracediary.app.data.repository.DefaultAnnualSummaryRepository
 import com.tracediary.app.data.repository.DefaultDiaryRepository
+import com.tracediary.app.data.repository.DefaultPendingSyncDeletionRepository
 import com.tracediary.app.data.repository.DefaultSyncMetadataRepository
+import com.tracediary.app.data.security.AppPasswordManager
 import com.tracediary.app.data.security.PassphraseStore
 import com.tracediary.app.data.security.SecureCredentialStore
 import com.tracediary.app.data.settings.DataStoreUserPreferencesRepository
@@ -23,6 +25,7 @@ import com.tracediary.app.data.sync.TencentCosRemoteStorage
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import com.tracediary.app.domain.repository.AnnualSummaryRepository
 import com.tracediary.app.domain.repository.DiaryRepository
+import com.tracediary.app.domain.repository.PendingSyncDeletionRepository
 import com.tracediary.app.domain.repository.SyncMetadataRepository
 import com.tracediary.app.domain.usecase.DiaryCalendarUseCase
 import com.tracediary.app.domain.usecase.DiaryStatisticsUseCase
@@ -55,7 +58,13 @@ class TraceDiaryApplication : Application() {
     lateinit var syncMetadataRepository: SyncMetadataRepository
         private set
 
+    lateinit var pendingSyncDeletionRepository: PendingSyncDeletionRepository
+        private set
+
     lateinit var secureCredentialStore: SecureCredentialStore
+        private set
+
+    lateinit var appPasswordManager: AppPasswordManager
         private set
 
     lateinit var syncEngine: SyncEngine
@@ -109,13 +118,17 @@ class TraceDiaryApplication : Application() {
 
         // 同步相关：先建凭证库，再建元数据仓库，最后组装 SyncEngine。
         secureCredentialStore = SecureCredentialStore(applicationContext)
+        appPasswordManager = AppPasswordManager(applicationContext, secureCredentialStore)
         syncMetadataRepository = DefaultSyncMetadataRepository(database.syncMetadataDao())
+        pendingSyncDeletionRepository =
+            DefaultPendingSyncDeletionRepository(database.pendingSyncDeletionDao())
         syncEngine = SyncEngine(
             storageProvider = { buildRemoteStorageOrNull() },
             secureCredentialStore = secureCredentialStore,
             diaryRepository = diaryRepository,
             annualSummaryRepository = annualSummaryRepository,
             syncMetadataRepository = syncMetadataRepository,
+            pendingSyncDeletionRepository = pendingSyncDeletionRepository,
             clock = Clock.systemDefaultZone(),
         )
 
@@ -185,6 +198,7 @@ class TraceDiaryApplication : Application() {
         const val DB_META_PREFS = "tracediary_db_meta"
         const val KEY_DB_FORMAT_VERSION = "db_format_version"
         // 升级 SQLCipher 大版本或修改加密参数时 +1，触发启动时清库重建。
-        const val CURRENT_DB_FORMAT_VERSION = 1
+        // v2：新增 pending_sync_deletions 表 + 用户密码包裹 SQLCipher 数据密钥（DEK）。
+        const val CURRENT_DB_FORMAT_VERSION = 2
     }
 }
