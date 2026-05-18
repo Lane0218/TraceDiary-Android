@@ -494,6 +494,16 @@ private fun formatSummary(summary: SyncEngine.SyncSummary): String = buildString
     append("跳过 ").append(summary.skipped).append(" 项")
     if (summary.failed > 0) append("，失败 ").append(summary.failed).append(" 项")
     if (summary.conflicts > 0) append("，冲突 ").append(summary.conflicts).append(" 项")
+    if (summary.errors.isNotEmpty()) {
+        append("\n\n失败明细：")
+        // 最多展示 5 条，避免对话框溢出。
+        summary.errors.take(5).forEach { e ->
+            append("\n• ").append(e)
+        }
+        if (summary.errors.size > 5) {
+            append("\n…还有 ").append(summary.errors.size - 5).append(" 条未展开")
+        }
+    }
 }
 
 @Composable

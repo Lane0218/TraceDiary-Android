@@ -47,6 +47,7 @@ class SyncEngine(
         val skipped: Int = 0,
         val failed: Int = 0,
         val conflicts: Int = 0,
+        val errors: List<String> = emptyList(),
     )
 
     private val _state = MutableStateFlow(SyncEngineState())
@@ -66,6 +67,7 @@ class SyncEngine(
         var failed = 0
         var conflicts = 0
         var progress = 0
+        val errors = mutableListOf<String>()
 
         for (entry in diaries) {
             when (val r = uploadDiary(storage, entry)) {
@@ -74,6 +76,7 @@ class SyncEngine(
                 UploadOutcome.Conflict -> conflicts++
                 is UploadOutcome.Failed -> {
                     failed++
+                    errors += "diary/${entry.date}: ${r.error.message}"
                     runCatching {
                         diaryRepository.setSyncState(entry.date, SyncState.Failed)
                     }
@@ -94,6 +97,7 @@ class SyncEngine(
                 UploadOutcome.Conflict -> conflicts++
                 is UploadOutcome.Failed -> {
                     failed++
+                    errors += "annual/${summary.year}: ${r.error.message}"
                     runCatching {
                         annualSummaryRepository.setSyncState(summary.year, SyncState.Failed)
                     }
@@ -107,7 +111,7 @@ class SyncEngine(
             emit(SyncStage.Uploading, progress, total, null)
         }
 
-        val summaryResult = SyncSummary(uploaded, 0, skipped, failed, conflicts)
+        val summaryResult = SyncSummary(uploaded, 0, skipped, failed, conflicts, errors.toList())
         emit(SyncStage.Done, total, total, null)
         return RemoteResult.Ok(summaryResult)
     }
