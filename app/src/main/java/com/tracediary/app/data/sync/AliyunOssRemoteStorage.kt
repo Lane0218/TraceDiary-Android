@@ -5,7 +5,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.xmlpull.v1.XmlPullParser
@@ -15,6 +14,7 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.format.DateTimeFormatter
+import java.util.Base64
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
@@ -64,6 +64,7 @@ class AliyunOssRemoteStorage(
         }
         val auth = ossAuthorization(stringToSign)
         val mediaType = contentType.toMediaTypeOrNull()
+        // OSS PutObject 不支持 If-Match；并发判断由上传前的 HEAD/时间戳处理。
         val builder = Request.Builder()
             .url("https://$host/$finalKey")
             .put(body.toRequestBody(mediaType))
@@ -71,7 +72,6 @@ class AliyunOssRemoteStorage(
             .header("Date", date)
             .header("Content-Type", contentType)
             .header("Authorization", auth)
-        if (ifMatchEtag != null) builder.header("If-Match", ifMatchEtag)
 
         runCatching { client.newCall(builder.build()).execute() }
             .fold(
@@ -264,7 +264,7 @@ private fun base64HmacSha1(key: String, data: String): String {
     val mac = Mac.getInstance("HmacSHA1")
     mac.init(SecretKeySpec(key.toByteArray(Charsets.UTF_8), "HmacSHA1"))
     val raw = mac.doFinal(data.toByteArray(Charsets.UTF_8))
-    return android.util.Base64.encodeToString(raw, android.util.Base64.NO_WRAP)
+    return Base64.getEncoder().encodeToString(raw)
 }
 
 /** RFC 1123 GMT 时间字符串，例如 Sun, 06 Nov 1994 08:49:37 GMT。 */
