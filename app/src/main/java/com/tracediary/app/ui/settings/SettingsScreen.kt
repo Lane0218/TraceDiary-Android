@@ -28,7 +28,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracediary.app.TraceDiaryApplication
+import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.domain.usecase.ImportOptions
 import com.tracediary.app.domain.usecase.MergeStrategy
 
@@ -163,8 +165,8 @@ private fun SettingsSubPageContainer(title: String, onBack: () -> Unit, content:
 @Composable
 private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
     val context = LocalContext.current
-    // TODO: 数据密码、确认密码属于敏感字段，待接入 EncryptedSharedPreferences/Keystore 后再持久化。
-    var password by remember { mutableStateOf("") }
+    // 密码字段绑到 ViewModel：开关开启时由 SecureCredentialStore 持久化；
+    // 确认密码仅在内存校验，不入库，避免重复存储。
     var confirmPassword by remember { mutableStateOf("") }
 
     LazyColumn(
@@ -182,8 +184,8 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
         }
         item {
             OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
+                value = state.localPassword,
+                onValueChange = viewModel::onLocalPasswordChanged,
                 label = { Text("数据密码") },
                 modifier = Modifier.fillMaxWidth(),
                 visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
@@ -209,8 +211,19 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
         item {
             Button(
                 onClick = {
-                    // TODO: 接入加密存储后再持久化密码本身，目前仅给出占位反馈。
-                    Toast.makeText(context, "密码功能即将上线", Toast.LENGTH_SHORT).show()
+                    val pwd = state.localPassword
+                    when {
+                        state.savePasswordLocally && pwd.isEmpty() -> {
+                            Toast.makeText(context, "请输入密码", Toast.LENGTH_SHORT).show()
+                        }
+                        state.savePasswordLocally && pwd != confirmPassword -> {
+                            Toast.makeText(context, "两次输入的密码不一致", Toast.LENGTH_SHORT).show()
+                        }
+                        else -> {
+                            viewModel.onSaveLocalPassword()
+                            Toast.makeText(context, "已保存密码设置", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium
@@ -341,6 +354,22 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                 ) { Text(buttonLabel) }
             }
 
+            if (state.saveStatus == SaveStatus.Failed && !state.saveError.isNullOrBlank()) {
+                item {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Text(
+                            text = "连接失败：${state.saveError}",
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+
             if (state.saveStatus == SaveStatus.Saved) {
                 item {
                     Card(
@@ -353,23 +382,126 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Text("配置成功！请选择首次同步方式：", style = MaterialTheme.typography.titleSmall)
-                            SyncChoiceItem("上传本机数据到云端", "适合第一次使用云同步")
-                            SyncChoiceItem("从云端恢复到本机", "适合换机或重装 App")
-                            SyncChoiceItem("合并本机和云端数据", "适合两端均有不同数据")
+                            SyncChoiceItem(
+                                title = "上传本机数据到云端",
+                                desc = "适合第一次使用云同步",
+                                onClick = viewModel::onUploadLocal,
+                            )
+                            SyncChoiceItem(
+                                title = "从云端恢复到本机",
+                                desc = "适合换机或重装 App",
+                                onClick = viewModel::onDownloadRemote,
+                            )
+                            SyncChoiceItem(
+                                title = "合并本机和云端数据",
+                                desc = "适合两端均有不同数据",
+                                onClick = viewModel::onMergeAll,
+                            )
                         }
                     }
                 }
             }
         }
     }
+
+    SyncOpDialogs(state = state, viewModel = viewModel)
+}
+
+/**
+ * 三个一次性同步按钮共用的进度 / 结果 / 失败弹窗。
+ *
+ * 进度文案直接订阅 [SettingsViewModel.syncEngineState]：stage + progress/total，
+ * 这样用户切换页面也不会丢失实时进度。
+ */
+@Composable
+private fun SyncOpDialogs(state: SettingsUiState, viewModel: SettingsViewModel) {
+    when (val status = state.syncOpStatus) {
+        SyncOpStatus.Idle -> Unit
+        is SyncOpStatus.Working -> {
+            val engineState = viewModel.syncEngineState?.collectAsStateWithLifecycle()?.value
+            AlertDialog(
+                onDismissRequest = { /* 同步进行中禁止点击外部关闭 */ },
+                title = { Text(status.operation.workingTitle()) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val stageText = engineState?.stage?.let { stageLabel(it) } ?: "正在准备…"
+                        Text(stageText)
+                        if (engineState != null && engineState.total > 0) {
+                            LinearProgressIndicator(
+                                progress = {
+                                    (engineState.progress.toFloat() / engineState.total)
+                                        .coerceIn(0f, 1f)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(
+                                text = "${engineState.progress} / ${engineState.total}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                },
+                // 同步操作不可中断（SyncEngine 没有提供取消 API），所以不暴露按钮。
+                confirmButton = {},
+            )
+        }
+        is SyncOpStatus.Done -> AlertDialog(
+            onDismissRequest = viewModel::resetSyncOpStatus,
+            title = { Text("${status.operation.title()}完成") },
+            text = { Text(formatSummary(status.summary)) },
+            confirmButton = {
+                TextButton(onClick = viewModel::resetSyncOpStatus) { Text("好的") }
+            },
+        )
+        is SyncOpStatus.Failed -> AlertDialog(
+            onDismissRequest = viewModel::resetSyncOpStatus,
+            title = { Text("${status.operation.title()}失败") },
+            text = { Text(status.message) },
+            confirmButton = {
+                TextButton(onClick = viewModel::resetSyncOpStatus) { Text("我知道了") }
+            },
+        )
+    }
+}
+
+private fun SyncOperation.title(): String = when (this) {
+    SyncOperation.Upload -> "上传"
+    SyncOperation.Download -> "恢复"
+    SyncOperation.Merge -> "合并"
+}
+
+private fun SyncOperation.workingTitle(): String = when (this) {
+    SyncOperation.Upload -> "正在上传到云端"
+    SyncOperation.Download -> "正在从云端恢复"
+    SyncOperation.Merge -> "正在合并本机与云端"
+}
+
+private fun stageLabel(stage: SyncEngine.SyncStage): String = when (stage) {
+    SyncEngine.SyncStage.Idle -> "准备中"
+    SyncEngine.SyncStage.Uploading -> "上传中"
+    SyncEngine.SyncStage.Downloading -> "下载中"
+    SyncEngine.SyncStage.Merging -> "合并中"
+    SyncEngine.SyncStage.Done -> "已完成"
+    SyncEngine.SyncStage.Failed -> "失败"
+}
+
+private fun formatSummary(summary: SyncEngine.SyncSummary): String = buildString {
+    append("上传 ").append(summary.uploaded).append(" 项，")
+    append("下载 ").append(summary.downloaded).append(" 项，")
+    append("跳过 ").append(summary.skipped).append(" 项")
+    if (summary.failed > 0) append("，失败 ").append(summary.failed).append(" 项")
+    if (summary.conflicts > 0) append("，冲突 ").append(summary.conflicts).append(" 项")
 }
 
 @Composable
-private fun SyncChoiceItem(title: String, desc: String) {
+private fun SyncChoiceItem(title: String, desc: String, onClick: () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { /* TODO: 真实导入/导出/合并由后续同步阶段接入。 */ },
+            .clickable(onClick = onClick),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surface
     ) {

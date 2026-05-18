@@ -18,6 +18,7 @@ import com.tracediary.app.data.sync.RemoteCredential
 import com.tracediary.app.data.sync.RemoteStorage
 import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.data.sync.SyncProvider
+import com.tracediary.app.data.sync.SyncScheduler
 import com.tracediary.app.data.sync.TencentCosRemoteStorage
 import net.sqlcipher.database.SupportFactory
 import com.tracediary.app.domain.repository.AnnualSummaryRepository
@@ -58,6 +59,9 @@ class TraceDiaryApplication : Application() {
         private set
 
     lateinit var syncEngine: SyncEngine
+        private set
+
+    lateinit var syncScheduler: SyncScheduler
         private set
 
     val calendarUseCase = DiaryCalendarUseCase()
@@ -126,6 +130,9 @@ class TraceDiaryApplication : Application() {
 
         // 提前创建通知 channel，避免 worker 第一次执行时还没注册 channel。
         DailyReminderWorker.ensureChannel(applicationContext)
+
+        // 周期同步调度器：仅实例化，由用户在设置页切换开关时显式 schedule / cancel。
+        syncScheduler = SyncScheduler(applicationContext)
     }
 
     /**

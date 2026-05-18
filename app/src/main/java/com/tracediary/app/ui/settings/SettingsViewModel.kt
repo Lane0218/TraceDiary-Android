@@ -7,8 +7,16 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.notifications.DailyReminderScheduler
-import com.tracediary.app.data.settings.UserPreferences
+import com.tracediary.app.data.security.SecureCredentialStore
 import com.tracediary.app.data.settings.UserPreferencesRepository
+import com.tracediary.app.data.sync.AliyunOssRemoteStorage
+import com.tracediary.app.data.sync.RemoteCredential
+import com.tracediary.app.data.sync.RemoteResult
+import com.tracediary.app.data.sync.RemoteStorage
+import com.tracediary.app.data.sync.SyncEngine
+import com.tracediary.app.data.sync.SyncProvider
+import com.tracediary.app.data.sync.SyncScheduler
+import com.tracediary.app.data.sync.TencentCosRemoteStorage
 import com.tracediary.app.domain.usecase.ExportDiaryDataUseCase
 import com.tracediary.app.domain.usecase.ImportDiaryDataUseCase
 import com.tracediary.app.domain.usecase.ImportOptions
@@ -19,7 +27,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
@@ -43,6 +50,23 @@ sealed interface BackupStatus {
 }
 
 /**
+ * 三个一次性同步按钮（上传 / 下载 / 合并）的执行状态。
+ *
+ * - [Idle]：未触发或弹窗已被用户关闭。
+ * - [Working]：协程仍在跑，UI 显示进度对话框，进度数据从 [SyncEngine.state] 实时取。
+ * - [Done]：成功结束，附带 [SyncEngine.SyncSummary]。
+ * - [Failed]：失败，附带可显示给用户的错误消息。
+ */
+sealed interface SyncOpStatus {
+    data object Idle : SyncOpStatus
+    data class Working(val operation: SyncOperation) : SyncOpStatus
+    data class Done(val operation: SyncOperation, val summary: SyncEngine.SyncSummary) : SyncOpStatus
+    data class Failed(val operation: SyncOperation, val message: String) : SyncOpStatus
+}
+
+enum class SyncOperation { Upload, Download, Merge }
+
+/**
  * 设置页 UI 状态。包含 DataStore 持久化字段以及仅在内存中保留的敏感字段。
  */
 data class SettingsUiState(
@@ -55,12 +79,15 @@ data class SettingsUiState(
     val syncRegion: String = "",
     val syncDirectory: String = "TraceDiary/",
     val syncDisplayName: String = "",
-    // 敏感字段：仅停留在内存。TODO: 接入 EncryptedSharedPreferences / Keystore 后再持久化。
+    // AK/SK 与本机密码：通过 SecureCredentialStore（EncryptedSharedPreferences）持久化。
     val syncAccessKeyId: String = "",
     val syncAccessKeySecret: String = "",
+    val localPassword: String = "",
     val saveStatus: SaveStatus = SaveStatus.Idle,
+    val saveError: String? = null,
     val backupStatus: BackupStatus = BackupStatus.Idle,
     val lastImportResult: ImportResult? = null,
+    val syncOpStatus: SyncOpStatus = SyncOpStatus.Idle,
 )
 
 class SettingsViewModel(
@@ -68,13 +95,31 @@ class SettingsViewModel(
     private val reminderScheduler: DailyReminderScheduler? = null,
     private val exportUseCase: ExportDiaryDataUseCase? = null,
     private val importUseCase: ImportDiaryDataUseCase? = null,
-    private val saveDelayMillis: Long = DEFAULT_SAVE_DELAY_MILLIS
+    private val saveDelayMillis: Long = DEFAULT_SAVE_DELAY_MILLIS,
+    private val secureCredentialStore: SecureCredentialStore? = null,
+    private val syncEngine: SyncEngine? = null,
+    private val syncScheduler: SyncScheduler? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
+    /** 暴露同步引擎进度供 UI 直接 collect，避免在 VM 中重复维护一份镜像。 */
+    val syncEngineState: StateFlow<SyncEngine.SyncEngineState>? = syncEngine?.state
+
     init {
+        // 启动时把已持久化的 AK/SK 与本机密码回填到内存 state，保证页面打开就能看到。
+        secureCredentialStore?.let { store ->
+            val cred = store.loadCloudCredential()
+            val pwd = store.loadLocalPassword().orEmpty()
+            _uiState.update { current ->
+                current.copy(
+                    syncAccessKeyId = cred?.first.orEmpty(),
+                    syncAccessKeySecret = cred?.second.orEmpty(),
+                    localPassword = pwd,
+                )
+            }
+        }
         // 收集 DataStore 偏好，与 UI state 保持同步。敏感字段、saveStatus 不被覆盖。
         viewModelScope.launch {
             repository.preferences.collect { prefs ->
@@ -136,12 +181,47 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * 切换"在本机安全保存密码"开关。关闭时同时清除已存储的密码与内存中的输入，
+     * 避免开关关闭后磁盘里仍残留密文。
+     */
     fun onToggleSavePasswordLocally(value: Boolean) {
-        viewModelScope.launch { repository.setSavePasswordLocally(value) }
+        viewModelScope.launch {
+            repository.setSavePasswordLocally(value)
+            if (!value) {
+                secureCredentialStore?.saveLocalPassword(null)
+                _uiState.update { it.copy(localPassword = "") }
+            }
+        }
+    }
+
+    fun onLocalPasswordChanged(value: String) {
+        _uiState.update { it.copy(localPassword = value) }
+    }
+
+    /**
+     * 保存本机数据密码：开关开启时持久化；开关关闭时确保磁盘清空。
+     */
+    fun onSaveLocalPassword() {
+        val state = _uiState.value
+        val store = secureCredentialStore ?: return
+        if (state.savePasswordLocally) {
+            store.saveLocalPassword(state.localPassword.takeIf { it.isNotEmpty() })
+        } else {
+            store.saveLocalPassword(null)
+        }
     }
 
     fun onToggleSync(value: Boolean) {
-        viewModelScope.launch { repository.setSyncEnabled(value) }
+        viewModelScope.launch {
+            repository.setSyncEnabled(value)
+            // 周期同步开关与 DataStore 状态保持一致：开 -> KEEP 入队，关 -> 立即取消。
+            if (value) {
+                syncScheduler?.schedule()
+            } else {
+                syncScheduler?.cancel()
+            }
+        }
     }
 
     fun onSyncProviderChanged(provider: String) {
@@ -150,38 +230,61 @@ class SettingsViewModel(
     }
 
     fun onSyncBucketChanged(value: String) {
-        _uiState.update { it.copy(syncBucket = value, saveStatus = SaveStatus.Idle) }
+        _uiState.update { it.copy(syncBucket = value, saveStatus = SaveStatus.Idle, saveError = null) }
     }
 
     fun onSyncRegionChanged(value: String) {
-        _uiState.update { it.copy(syncRegion = value, saveStatus = SaveStatus.Idle) }
+        _uiState.update { it.copy(syncRegion = value, saveStatus = SaveStatus.Idle, saveError = null) }
     }
 
     fun onSyncDirectoryChanged(value: String) {
-        _uiState.update { it.copy(syncDirectory = value, saveStatus = SaveStatus.Idle) }
+        _uiState.update { it.copy(syncDirectory = value, saveStatus = SaveStatus.Idle, saveError = null) }
     }
 
     fun onSyncDisplayNameChanged(value: String) {
-        _uiState.update { it.copy(syncDisplayName = value, saveStatus = SaveStatus.Idle) }
-    }
-
-    // 敏感字段仅保留在内存，不入 DataStore。
-    fun onSyncAccessKeyIdChanged(value: String) {
-        _uiState.update { it.copy(syncAccessKeyId = value, saveStatus = SaveStatus.Idle) }
-    }
-
-    fun onSyncAccessKeySecretChanged(value: String) {
-        _uiState.update { it.copy(syncAccessKeySecret = value, saveStatus = SaveStatus.Idle) }
+        _uiState.update { it.copy(syncDisplayName = value, saveStatus = SaveStatus.Idle, saveError = null) }
     }
 
     /**
-     * 保存非敏感云同步配置；当前未实现真实联网验证，仅模拟一段延迟后置为 Saved。
-     * TODO: 接入真正的 OSS/COS 连通性校验后再切换状态。
+     * AK 输入：先更新内存 state；当 AK/SK 同时非空时，立即落到加密 prefs；
+     * 任一字段被清空时调用 [SecureCredentialStore.clearCloudCredential]，避免半截状态被保留。
+     */
+    fun onSyncAccessKeyIdChanged(value: String) {
+        _uiState.update {
+            it.copy(syncAccessKeyId = value, saveStatus = SaveStatus.Idle, saveError = null)
+        }
+        persistCloudCredential()
+    }
+
+    fun onSyncAccessKeySecretChanged(value: String) {
+        _uiState.update {
+            it.copy(syncAccessKeySecret = value, saveStatus = SaveStatus.Idle, saveError = null)
+        }
+        persistCloudCredential()
+    }
+
+    private fun persistCloudCredential() {
+        val store = secureCredentialStore ?: return
+        val state = _uiState.value
+        val id = state.syncAccessKeyId
+        val secret = state.syncAccessKeySecret
+        if (id.isNotBlank() && secret.isNotBlank()) {
+            store.saveCloudCredential(id, secret)
+        } else {
+            store.clearCloudCredential()
+        }
+    }
+
+    /**
+     * 保存非敏感云同步配置并发起一次 ping 验证连通性。
+     *
+     * 流程：DataStore.saveSyncConfiguration → 持久化 AK/SK → 临时 RemoteStorage.ping。
+     * 失败时把错误消息透出到 [SettingsUiState.saveError]，以便 UI 展示。
      */
     fun onSaveSyncConfiguration() {
         val snapshot = _uiState.value
         viewModelScope.launch {
-            _uiState.update { it.copy(saveStatus = SaveStatus.Saving) }
+            _uiState.update { it.copy(saveStatus = SaveStatus.Saving, saveError = null) }
             repository.saveSyncConfiguration(
                 provider = snapshot.syncProvider,
                 bucket = snapshot.syncBucket,
@@ -189,11 +292,91 @@ class SettingsViewModel(
                 directory = snapshot.syncDirectory,
                 displayName = snapshot.syncDisplayName
             )
-            if (saveDelayMillis > 0) {
-                delay(saveDelayMillis)
+            // 持久化凭证（已由输入回调覆盖，但保存按钮再兜底一次，应对从 init 直接进保存的场景）。
+            persistCloudCredential()
+
+            val pingResult = withContext(Dispatchers.IO) { tryConnect(snapshot) }
+            when (pingResult) {
+                is RemoteResult.Ok -> _uiState.update {
+                    it.copy(saveStatus = SaveStatus.Saved, saveError = null)
+                }
+                is RemoteResult.Err -> _uiState.update {
+                    it.copy(saveStatus = SaveStatus.Failed, saveError = pingResult.message)
+                }
             }
-            _uiState.update { it.copy(saveStatus = SaveStatus.Saved) }
         }
+    }
+
+    /** 用当前 UI 快照构造一个临时 [RemoteStorage] 并发起一次 ping。 */
+    private suspend fun tryConnect(snapshot: SettingsUiState): RemoteResult<Unit> {
+        if (snapshot.syncBucket.isBlank() || snapshot.syncRegion.isBlank()) {
+            return RemoteResult.Err(
+                code = com.tracediary.app.data.sync.ErrorCode.AUTH,
+                message = "请填写存储桶与地域",
+            )
+        }
+        if (snapshot.syncAccessKeyId.isBlank() || snapshot.syncAccessKeySecret.isBlank()) {
+            return RemoteResult.Err(
+                code = com.tracediary.app.data.sync.ErrorCode.AUTH,
+                message = "请填写 AccessKey ID 与 Secret",
+            )
+        }
+        val provider = when (snapshot.syncProvider.lowercase()) {
+            "aliyun", "oss", "aliyun_oss" -> SyncProvider.ALIYUN_OSS
+            "tencent", "cos", "tencent_cos" -> SyncProvider.TENCENT_COS
+            else -> return RemoteResult.Err(
+                code = com.tracediary.app.data.sync.ErrorCode.UNKNOWN,
+                message = "未知的云服务商：${snapshot.syncProvider}",
+            )
+        }
+        val credential = RemoteCredential(
+            provider = provider,
+            region = snapshot.syncRegion,
+            bucket = snapshot.syncBucket,
+            accessKeyId = snapshot.syncAccessKeyId,
+            accessKeySecret = snapshot.syncAccessKeySecret,
+            pathPrefix = snapshot.syncDirectory.trim('/'),
+        )
+        val storage: RemoteStorage = when (provider) {
+            SyncProvider.ALIYUN_OSS -> AliyunOssRemoteStorage(credential)
+            SyncProvider.TENCENT_COS -> TencentCosRemoteStorage(credential)
+        }
+        return storage.ping()
+    }
+
+    // ---------- 三个一次性同步入口 ----------
+
+    fun onUploadLocal() = launchSyncOp(SyncOperation.Upload) { it.uploadAll() }
+    fun onDownloadRemote() = launchSyncOp(SyncOperation.Download) { it.downloadAll() }
+    fun onMergeAll() = launchSyncOp(SyncOperation.Merge) { it.mergeAll() }
+
+    private fun launchSyncOp(
+        op: SyncOperation,
+        action: suspend (SyncEngine) -> RemoteResult<SyncEngine.SyncSummary>,
+    ) {
+        val engine = syncEngine ?: run {
+            _uiState.update {
+                it.copy(syncOpStatus = SyncOpStatus.Failed(op, "同步引擎尚未初始化"))
+            }
+            return
+        }
+        // 若已有同步任务在跑，直接忽略，避免并发触发同一个 SyncEngine。
+        if (_uiState.value.syncOpStatus is SyncOpStatus.Working) return
+        _uiState.update { it.copy(syncOpStatus = SyncOpStatus.Working(op)) }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { action(engine) }
+            _uiState.update {
+                val next = when (result) {
+                    is RemoteResult.Ok -> SyncOpStatus.Done(op, result.value)
+                    is RemoteResult.Err -> SyncOpStatus.Failed(op, result.message)
+                }
+                it.copy(syncOpStatus = next)
+            }
+        }
+    }
+
+    fun resetSyncOpStatus() {
+        _uiState.update { it.copy(syncOpStatus = SyncOpStatus.Idle) }
     }
 
     /**
@@ -310,7 +493,7 @@ class SettingsViewModel(
     }
 
     companion object {
-        private const val DEFAULT_SAVE_DELAY_MILLIS: Long = 400L
+        private const val DEFAULT_SAVE_DELAY_MILLIS: Long = 0L
 
         fun factory(application: TraceDiaryApplication): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
@@ -324,6 +507,9 @@ class SettingsViewModel(
                         reminderScheduler = application.dailyReminderScheduler,
                         exportUseCase = application.exportDiaryDataUseCase,
                         importUseCase = application.importDiaryDataUseCase,
+                        secureCredentialStore = application.secureCredentialStore,
+                        syncEngine = application.syncEngine,
+                        syncScheduler = application.syncScheduler,
                     ) as T
                 }
             }
