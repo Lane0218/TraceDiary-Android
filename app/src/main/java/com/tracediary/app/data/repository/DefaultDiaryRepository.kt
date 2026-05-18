@@ -63,6 +63,11 @@ class DefaultDiaryRepository(
         return entry
     }
 
+    override suspend fun upsertImportedEntry(entry: DiaryEntry): DiaryEntry {
+        diaryEntryDao.upsert(DiaryEntryEntity.fromDomain(entry))
+        return entry
+    }
+
     override suspend fun deleteEntry(date: LocalDate) {
         diaryEntryDao.deleteByDate(date.toEpochDay())
     }

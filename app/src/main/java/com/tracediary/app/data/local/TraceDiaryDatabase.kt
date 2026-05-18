@@ -8,9 +8,10 @@ import androidx.room.TypeConverters
     entities = [
         DiaryEntryEntity::class,
         AnnualSummaryEntity::class,
-        SyncMetadataEntity::class
+        SyncMetadataEntity::class,
+        PendingSyncDeletionEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -20,4 +21,6 @@ abstract class TraceDiaryDatabase : RoomDatabase() {
     abstract fun annualSummaryDao(): AnnualSummaryDao
 
     abstract fun syncMetadataDao(): SyncMetadataDao
+
+    abstract fun pendingSyncDeletionDao(): PendingSyncDeletionDao
 }

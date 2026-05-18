@@ -42,6 +42,11 @@ class DefaultAnnualSummaryRepository(
         return summary
     }
 
+    override suspend fun upsertImportedSummary(summary: AnnualSummary): AnnualSummary {
+        annualSummaryDao.upsert(AnnualSummaryEntity.fromDomain(summary))
+        return summary
+    }
+
     override suspend fun deleteSummary(year: Int) {
         annualSummaryDao.deleteByYear(year)
     }

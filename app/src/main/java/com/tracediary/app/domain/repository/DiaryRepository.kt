@@ -21,6 +21,15 @@ interface DiaryRepository {
 
     suspend fun saveEntry(date: LocalDate, content: String): DiaryEntry
 
+    /**
+     * 导入专用写入：保留外部传入的 createdAt / updatedAt / syncState，
+     * 用于备份恢复场景，不复用 [saveEntry] 的 clock 推进逻辑。
+     *
+     * 默认实现退化为 [saveEntry]，让 fake/test 实现无需为导入功能补 override；
+     * 生产实现 [com.tracediary.app.data.repository.DefaultDiaryRepository] 必须重写此方法。
+     */
+    suspend fun upsertImportedEntry(entry: DiaryEntry): DiaryEntry = saveEntry(entry.date, entry.content)
+
     suspend fun deleteEntry(date: LocalDate)
 
     suspend fun searchEntries(query: String, year: Int? = null, recordedOnly: Boolean = true): List<DiaryEntry>
