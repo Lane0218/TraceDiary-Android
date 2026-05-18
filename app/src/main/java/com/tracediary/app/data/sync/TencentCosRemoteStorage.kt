@@ -325,7 +325,7 @@ private fun mapHttpError(resp: Response): RemoteResult.Err {
         in 500..599 -> ErrorCode.NETWORK
         else -> ErrorCode.UNKNOWN
     }
-    return RemoteResult.Err(code, "HTTP ${resp.code} ${resp.message}")
+    return RemoteResult.Err(code, buildRemoteErrorMessage(resp))
 }
 
 private fun mapIoError(t: Throwable): RemoteResult.Err = when (t) {

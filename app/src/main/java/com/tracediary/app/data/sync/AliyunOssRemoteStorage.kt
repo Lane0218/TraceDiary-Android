@@ -299,13 +299,34 @@ private fun mapHttpError(resp: Response): RemoteResult.Err {
         in 500..599 -> ErrorCode.NETWORK
         else -> ErrorCode.UNKNOWN
     }
-    val msg = "HTTP ${resp.code} ${resp.message}"
-    return RemoteResult.Err(code, msg)
+    return RemoteResult.Err(code, buildRemoteErrorMessage(resp))
 }
 
 private fun mapIoError(t: Throwable): RemoteResult.Err = when (t) {
     is IOException -> RemoteResult.Err(ErrorCode.NETWORK, t.message ?: "IO error", t)
     else -> RemoteResult.Err(ErrorCode.UNKNOWN, t.message ?: "未知错误", t)
+}
+
+internal fun buildRemoteErrorMessage(resp: Response): String {
+    val head = "HTTP ${resp.code} ${resp.message}"
+    val body = runCatching { resp.peekBody(MAX_ERROR_BODY).string() }.getOrNull().orEmpty()
+    if (body.isBlank()) return head
+    val errCode = extractXmlTag(body, "Code")
+    val errMsg = extractXmlTag(body, "Message")
+    val reqId = extractXmlTag(body, "RequestId")
+    return buildString {
+        append(head)
+        if (!errCode.isNullOrBlank()) append(" · ").append(errCode)
+        if (!errMsg.isNullOrBlank()) append("：").append(errMsg)
+        if (!reqId.isNullOrBlank()) append("（RequestId ").append(reqId).append("）")
+    }
+}
+
+private const val MAX_ERROR_BODY = 4096L
+
+private fun extractXmlTag(xml: String, tag: String): String? {
+    val regex = Regex("<$tag>([\\s\\S]*?)</$tag>")
+    return regex.find(xml)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }
 }
 
 /**
