@@ -8,6 +8,8 @@ import com.tracediary.app.domain.model.SyncMetadata
 import com.tracediary.app.domain.model.SyncState
 import com.tracediary.app.domain.repository.AnnualSummaryRepository
 import com.tracediary.app.domain.repository.DiaryRepository
+import com.tracediary.app.domain.repository.PendingSyncDeletion
+import com.tracediary.app.domain.repository.PendingSyncDeletionRepository
 import com.tracediary.app.domain.repository.SyncMetadataRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,10 +29,11 @@ class SyncEngine(
     private val diaryRepository: DiaryRepository,
     private val annualSummaryRepository: AnnualSummaryRepository,
     private val syncMetadataRepository: SyncMetadataRepository,
+    private val pendingSyncDeletionRepository: PendingSyncDeletionRepository? = null,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) {
 
-    enum class SyncStage { Idle, Uploading, Downloading, Merging, Rekeying, Done, Failed }
+    enum class SyncStage { Idle, Uploading, Downloading, Merging, Rekeying, Deleting, Done, Failed }
 
     data class SyncEngineState(
         val stage: SyncStage = SyncStage.Idle,
@@ -45,6 +48,7 @@ class SyncEngine(
         val skipped: Int = 0,
         val failed: Int = 0,
         val conflicts: Int = 0,
+        val deleted: Int = 0,
         val errors: List<String> = emptyList(),
     )
 
@@ -72,8 +76,14 @@ class SyncEngine(
     suspend fun uploadAll(): RemoteResult<SyncSummary> = operationMutex.withLock {
         val storage = storageProvider() ?: return@withLock notConfigured()
         val password = loadPasswordContext() ?: return@withLock missingPassword()
+        // 待删除日期/年份不应被重新上传，直接跳过；后续在末尾的待重试阶段处理它们。
+        val pending = pendingSyncDeletionRepository?.getAll().orEmpty()
+        val pendingDates = pending.filterIsInstance<PendingSyncDeletion.Diary>().map { it.date }.toSet()
+        val pendingYears = pending.filterIsInstance<PendingSyncDeletion.Annual>().map { it.year }.toSet()
         val diaries = diaryRepository.observeAllEntries().firstSnapshot()
+            .filter { it.date !in pendingDates }
         val summaries = annualSummaryRepository.observeSummaries().firstSnapshot()
+            .filter { it.year !in pendingYears }
         val total = diaries.size + summaries.size
         emit(SyncStage.Uploading, 0, total, null)
 
@@ -120,9 +130,10 @@ class SyncEngine(
             emit(SyncStage.Uploading, progress, total, null)
         }
 
-        val summaryResult = SyncSummary(uploaded, 0, skipped, failed, conflicts, errors.toList())
+        val baseSummary = SyncSummary(uploaded, 0, skipped, failed, conflicts, 0, errors.toList())
+        val finalSummary = retryPendingDeletions(storage, baseSummary)
         emit(SyncStage.Done, total, total, null)
-        RemoteResult.Ok(summaryResult)
+        RemoteResult.Ok(finalSummary)
     }
 
     suspend fun downloadAll(): RemoteResult<SyncSummary> = operationMutex.withLock {
@@ -191,7 +202,7 @@ class SyncEngine(
         }
 
         emit(SyncStage.Done, total, total, null)
-        RemoteResult.Ok(SyncSummary(0, downloaded, skipped, failed, 0, errors))
+        RemoteResult.Ok(SyncSummary(0, downloaded, skipped, failed, 0, 0, errors))
     }
 
     suspend fun mergeAll(): RemoteResult<SyncSummary> = operationMutex.withLock {
@@ -210,6 +221,10 @@ class SyncEngine(
             return@withLock annualListing
         }
 
+        val pending = pendingSyncDeletionRepository?.getAll().orEmpty()
+        val pendingDates = pending.filterIsInstance<PendingSyncDeletion.Diary>().map { it.date }.toSet()
+        val pendingYears = pending.filterIsInstance<PendingSyncDeletion.Annual>().map { it.year }.toSet()
+
         val remoteDiaryByDate = (diaryListing as RemoteResult.Ok).value
             .mapNotNull { obj -> SyncObjectKeys.parseDiaryKey(obj.key)?.let { it to obj } }
             .toMap()
@@ -222,8 +237,9 @@ class SyncEngine(
         val localDiaryByDate = localDiaries.associateBy { it.date }
         val localAnnualByYear = localSummaries.associateBy { it.year }
 
-        val allDiaryKeys = localDiaryByDate.keys + remoteDiaryByDate.keys
-        val allAnnualKeys = localAnnualByYear.keys + remoteAnnualByYear.keys
+        // 跳过仍处于"待删除"的目标，避免把已删除日期当作"仅远端"重新拉回。
+        val allDiaryKeys = (localDiaryByDate.keys + remoteDiaryByDate.keys) - pendingDates
+        val allAnnualKeys = (localAnnualByYear.keys + remoteAnnualByYear.keys) - pendingYears
         val total = allDiaryKeys.size + allAnnualKeys.size
         emit(SyncStage.Merging, 0, total, null)
 
@@ -289,8 +305,54 @@ class SyncEngine(
             emit(SyncStage.Merging, progress, total, null)
         }
 
+        val baseSummary = SyncSummary(uploaded, downloaded, skipped, failed, conflicts, 0, errors)
+        val finalSummary = retryPendingDeletions(storage, baseSummary)
         emit(SyncStage.Done, total, total, null)
-        RemoteResult.Ok(SyncSummary(uploaded, downloaded, skipped, failed, conflicts, errors))
+        RemoteResult.Ok(finalSummary)
+    }
+
+    /**
+     * 单条日记远端删除：失败时把日期写入待重试表，后续 mergeAll/uploadAll 周期同步会再次尝试。
+     * 本地条目此时通常已被 [DiaryRepository.deleteEntry] 删除，不需要回滚。
+     */
+    suspend fun deleteDiary(date: LocalDate): RemoteResult<SyncSummary> = operationMutex.withLock {
+        val storage = storageProvider() ?: return@withLock notConfigured()
+        loadPasswordContext() ?: return@withLock missingPassword()
+        val objectKey = SyncObjectKeys.diaryObjectKey(date)
+        emit(SyncStage.Deleting, 0, 1, null)
+        when (val result = storage.delete(objectKey)) {
+            is RemoteResult.Ok -> {
+                runCatching { syncMetadataRepository.deleteMetadata(objectKey) }
+                runCatching { pendingSyncDeletionRepository?.clearDiary(date) }
+                emit(SyncStage.Done, 1, 1, null)
+                RemoteResult.Ok(SyncSummary(deleted = 1))
+            }
+            is RemoteResult.Err -> {
+                runCatching { pendingSyncDeletionRepository?.markDiaryPending(date) }
+                emit(SyncStage.Failed, 0, 1, result.message)
+                result
+            }
+        }
+    }
+
+    suspend fun deleteAnnual(year: Int): RemoteResult<SyncSummary> = operationMutex.withLock {
+        val storage = storageProvider() ?: return@withLock notConfigured()
+        loadPasswordContext() ?: return@withLock missingPassword()
+        val objectKey = SyncObjectKeys.annualObjectKey(year)
+        emit(SyncStage.Deleting, 0, 1, null)
+        when (val result = storage.delete(objectKey)) {
+            is RemoteResult.Ok -> {
+                runCatching { syncMetadataRepository.deleteMetadata(objectKey) }
+                runCatching { pendingSyncDeletionRepository?.clearAnnual(year) }
+                emit(SyncStage.Done, 1, 1, null)
+                RemoteResult.Ok(SyncSummary(deleted = 1))
+            }
+            is RemoteResult.Err -> {
+                runCatching { pendingSyncDeletionRepository?.markAnnualPending(year) }
+                emit(SyncStage.Failed, 0, 1, result.message)
+                result
+            }
+        }
     }
 
     suspend fun uploadDiary(date: LocalDate): RemoteResult<SyncSummary> = operationMutex.withLock {
@@ -716,6 +778,43 @@ class SyncEngine(
         val salt = secureCredentialStore.loadOrCreateCloudCipherSalt()
         val key = CryptoBox.deriveKey(password, salt)
         return PasswordContext(password, salt, key)
+    }
+
+    /**
+     * 重试本地已删除但云端删除失败的对象。成功删除一项就清掉对应记录，
+     * 失败保留原记录等待下次同步。错误聚合到 [SyncSummary.errors]，但不会让整体 mergeAll/uploadAll 失败。
+     */
+    private suspend fun retryPendingDeletions(
+        storage: RemoteStorage,
+        base: SyncSummary,
+    ): SyncSummary {
+        val repo = pendingSyncDeletionRepository ?: return base
+        val pending = runCatching { repo.getAll() }.getOrNull().orEmpty()
+        if (pending.isEmpty()) return base
+        emit(SyncStage.Deleting, 0, pending.size, null)
+        var deleted = base.deleted
+        var failed = base.failed
+        val errors = base.errors.toMutableList()
+        var progress = 0
+        for (item in pending) {
+            when (val r = storage.delete(item.objectKey)) {
+                is RemoteResult.Ok -> {
+                    runCatching { syncMetadataRepository.deleteMetadata(item.objectKey) }
+                    when (item) {
+                        is PendingSyncDeletion.Diary -> runCatching { repo.clearDiary(item.date) }
+                        is PendingSyncDeletion.Annual -> runCatching { repo.clearAnnual(item.year) }
+                    }
+                    deleted++
+                }
+                is RemoteResult.Err -> {
+                    failed++
+                    errors += "delete/${item.objectKey}: ${r.message}"
+                }
+            }
+            progress++
+            emit(SyncStage.Deleting, progress, pending.size, null)
+        }
+        return base.copy(deleted = deleted, failed = failed, errors = errors)
     }
 
     private suspend fun markDiaryFailed(date: LocalDate) {
