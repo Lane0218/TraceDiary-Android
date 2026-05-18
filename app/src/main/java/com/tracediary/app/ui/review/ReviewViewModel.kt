@@ -10,7 +10,6 @@ import com.tracediary.app.domain.model.AnnualSummary
 import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.repository.AnnualSummaryRepository
 import com.tracediary.app.domain.repository.DiaryRepository
-import com.tracediary.app.domain.usecase.CalendarDay
 import com.tracediary.app.domain.usecase.DiaryCalendarUseCase
 import com.tracediary.app.domain.usecase.DiarySearchQuery
 import com.tracediary.app.domain.usecase.SearchDiaryEntriesUseCase
@@ -21,26 +20,23 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import java.time.Clock
 import java.time.LocalDate
-import java.time.YearMonth
 import kotlin.OptIn
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 /**
- * 回顾页（日历 / 年度总结 / 搜索）共享的 ViewModel。
+ * 回顾页（搜索 / 年度总结）共享的 ViewModel。
  *
  * 设计要点：
- * - 单一 ViewModel，三个子 UI 状态，便于切 Tab 时复用同一份 entries 数据。
- * - 通过 [DiaryRepository.observeAllEntries] 拿到的全量数据驱动“往年今日”和搜索。
- * - 月份网格依据 [displayMonth] 通过 [DiaryRepository.observeEntriesInMonth] 实时拉取。
+ * - 单一 ViewModel，两个子 UI 状态。
+ * - 通过 [DiaryRepository.observeAllEntries] 拿到的全量数据驱动搜索可用年份。
  */
 class ReviewViewModel(
     private val diaryRepository: DiaryRepository,
     private val annualSummaryRepository: AnnualSummaryRepository,
-    private val calendarUseCase: DiaryCalendarUseCase,
+    @Suppress("UNUSED_PARAMETER") calendarUseCase: DiaryCalendarUseCase,
     private val searchUseCase: SearchDiaryEntriesUseCase,
     private val clock: Clock = Clock.systemDefaultZone(),
     private val scope: CoroutineScope? = null,
@@ -48,15 +44,11 @@ class ReviewViewModel(
 
     private val workScope: CoroutineScope get() = scope ?: viewModelScope
 
-    private val _state = MutableStateFlow(ReviewUiState.initial(LocalDate.now(clock)))
+    private val _state = MutableStateFlow(ReviewUiState.initial())
     val state: StateFlow<ReviewUiState> = _state.asStateFlow()
 
-    /** 全量 entries，驱动“往年今日”、搜索、可用年份等。 */
+    /** 全量 entries，驱动搜索结果与可用年份。 */
     private var allEntries: List<DiaryEntry> = emptyList()
-
-    /** 当前展示月份对应的 entries，用于月网格“是否有记录”标记。 */
-    private val displayMonthFlow: MutableStateFlow<YearMonth> =
-        MutableStateFlow(_state.value.calendar.displayMonth)
 
     private val keywordFlow = MutableStateFlow(_state.value.search.keyword)
 
@@ -64,7 +56,6 @@ class ReviewViewModel(
 
     init {
         observeAllEntries()
-        observeMonthEntries()
         observeAnnualSummaries()
         observeSearchKeyword()
     }
@@ -79,15 +70,7 @@ class ReviewViewModel(
                     .sortedDescending()
                     .toList()
                 _state.update { current ->
-                    val calendar = current.calendar
-                    val selectedEntry = entries.findEntry(calendar.selectedDate)
-                    val previousYears =
-                        calendarUseCase.previousYearsOnThisDay(entries, calendar.selectedDate)
                     current.copy(
-                        calendar = calendar.copy(
-                            selectedEntry = selectedEntry,
-                            previousYearsOnThisDay = previousYears,
-                        ),
                         search = current.search.copy(
                             availableYears = years,
                             results = runSearch(entries, current.search),
@@ -95,26 +78,6 @@ class ReviewViewModel(
                     )
                 }
             }
-        }
-    }
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private fun observeMonthEntries() {
-        workScope.launch {
-            displayMonthFlow
-                .flatMapLatest { month -> diaryRepository.observeEntriesInMonth(month) }
-                .collectLatest { monthEntries ->
-                    val month = displayMonthFlow.value
-                    val grid = calendarUseCase.monthGrid(month, monthEntries)
-                    _state.update { current ->
-                        current.copy(
-                            calendar = current.calendar.copy(
-                                displayMonth = month,
-                                monthGrid = grid,
-                            ),
-                        )
-                    }
-                }
         }
     }
 
@@ -167,47 +130,6 @@ class ReviewViewModel(
 
     fun onSelectTab(tab: ReviewTab) {
         _state.update { it.copy(selectedTab = tab) }
-    }
-
-    fun onPreviousMonth() {
-        shiftMonth(-1)
-    }
-
-    fun onNextMonth() {
-        shiftMonth(1)
-    }
-
-    fun onJumpToYearMonth(target: YearMonth) {
-        if (displayMonthFlow.value == target) return
-        displayMonthFlow.value = target
-        _state.update { current ->
-            current.copy(
-                calendar = current.calendar.copy(displayMonth = target),
-            )
-        }
-    }
-
-    fun onSelectDate(date: LocalDate) {
-        val entry = allEntries.findEntry(date)
-        val previousYears = calendarUseCase.previousYearsOnThisDay(allEntries, date)
-        _state.update { current ->
-            current.copy(
-                calendar = current.calendar.copy(
-                    selectedDate = date,
-                    selectedEntry = entry,
-                    previousYearsOnThisDay = previousYears,
-                ),
-            )
-        }
-        val month = YearMonth.from(date)
-        if (month != displayMonthFlow.value) {
-            displayMonthFlow.value = month
-            _state.update { current ->
-                current.copy(
-                    calendar = current.calendar.copy(displayMonth = month),
-                )
-            }
-        }
     }
 
     fun onOpenSummary(year: Int) {
@@ -293,11 +215,6 @@ class ReviewViewModel(
         }
     }
 
-    private fun shiftMonth(delta: Long) {
-        val target = displayMonthFlow.value.plusMonths(delta)
-        onJumpToYearMonth(target)
-    }
-
     private fun runSearch(entries: List<DiaryEntry>, search: SearchUiState): List<DiaryEntry> {
         return searchUseCase.search(
             entries,
@@ -308,9 +225,6 @@ class ReviewViewModel(
             ),
         )
     }
-
-    private fun List<DiaryEntry>.findEntry(date: LocalDate): DiaryEntry? =
-        asSequence().filter { it.date == date }.maxByOrNull { it.updatedAt }
 
     private inline fun MutableStateFlow<ReviewUiState>.update(transform: (ReviewUiState) -> ReviewUiState) {
         value = transform(value)
@@ -353,17 +267,9 @@ private fun <T> kotlinx.coroutines.flow.Flow<T>.debounceCompat(timeoutMillis: Lo
         }
     }
 
-enum class ReviewTab { Calendar, AnnualSummary, Search }
+enum class ReviewTab { Search, AnnualSummary }
 
 enum class SaveStatus { Idle, Saving, Saved, Failed }
-
-data class CalendarUiState(
-    val displayMonth: YearMonth,
-    val monthGrid: List<CalendarDay> = emptyList(),
-    val selectedDate: LocalDate,
-    val selectedEntry: DiaryEntry? = null,
-    val previousYearsOnThisDay: List<DiaryEntry> = emptyList(),
-)
 
 data class AnnualUiState(
     val summaries: List<AnnualSummary> = emptyList(),
@@ -383,17 +289,12 @@ data class SearchUiState(
 
 data class ReviewUiState(
     val selectedTab: ReviewTab,
-    val calendar: CalendarUiState,
     val annual: AnnualUiState,
     val search: SearchUiState,
 ) {
     companion object {
-        fun initial(today: LocalDate): ReviewUiState = ReviewUiState(
-            selectedTab = ReviewTab.Calendar,
-            calendar = CalendarUiState(
-                displayMonth = YearMonth.from(today),
-                selectedDate = today,
-            ),
+        fun initial(): ReviewUiState = ReviewUiState(
+            selectedTab = ReviewTab.Search,
             annual = AnnualUiState(),
             search = SearchUiState(),
         )

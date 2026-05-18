@@ -28,8 +28,8 @@ import java.time.YearMonth
 import java.time.ZoneOffset
 
 /**
- * 验证回顾页 SegmentedButton 三个 Tab（日历 / 年度总结 / 搜索）
- * 在切换后内容区会随之变化，对应 SPEC 6.1.4。
+ * 验证回顾页 SegmentedButton 两个 Tab（搜索 / 年度总结）切换后内容区会随之变化，
+ * 对应 SPEC 6.1.4。
  *
  * 数据源使用空仓储：
  * - 此时 ReviewViewModel.observeAnnualSummaries 计算出的 writableYears = 当年起向前 5 年，
@@ -47,7 +47,7 @@ class ReviewScreenTabsTest {
     )
 
     @Test
-    fun `点击年度总结 Tab 后内容区出现撰写新年度总结入口`() {
+    fun annualSummaryTabShowsWritePrompt() {
         val viewModel = ReviewViewModel(
             diaryRepository = EmptyDiaryRepository(),
             annualSummaryRepository = EmptyAnnualSummaryRepository(),
@@ -74,7 +74,7 @@ class ReviewScreenTabsTest {
     }
 
     @Test
-    fun `点击搜索 Tab 后出现搜索输入提示`() {
+    fun defaultTabIsSearch() {
         val viewModel = ReviewViewModel(
             diaryRepository = EmptyDiaryRepository(),
             annualSummaryRepository = EmptyAnnualSummaryRepository(),
@@ -92,10 +92,8 @@ class ReviewScreenTabsTest {
         }
 
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("搜索").performClick()
-        composeTestRule.waitForIdle()
 
-        // 搜索 Tab 内容区会展示输入框 placeholder
+        // 默认就是搜索 Tab，placeholder 已可见。
         composeTestRule.onNodeWithText("搜索日记内容...").assertIsDisplayed()
     }
 

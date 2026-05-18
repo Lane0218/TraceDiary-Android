@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,9 +24,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.ChevronLeft
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -56,24 +52,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.AnnualSummary
 import com.tracediary.app.domain.model.DiaryEntry
-import com.tracediary.app.domain.model.SyncState
-import com.tracediary.app.domain.usecase.CalendarDay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
-private val MonthTitleFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy年M月")
-private val PreviousYearFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
+private val EntryDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
 private const val ContentPreviewLimit: Int = 60
 
 @Composable
@@ -107,9 +96,8 @@ fun ReviewScreen(
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
             ) {
                 val tabs = listOf(
-                    ReviewTab.Calendar to "日历",
-                    ReviewTab.AnnualSummary to "年度总结",
                     ReviewTab.Search to "搜索",
+                    ReviewTab.AnnualSummary to "年度总结",
                 )
                 tabs.forEachIndexed { index, (tab, label) ->
                     SegmentedButton(
@@ -131,11 +119,11 @@ fun ReviewScreen(
 
         Box(modifier = Modifier.weight(1f)) {
             when (state.selectedTab) {
-                ReviewTab.Calendar -> CalendarReviewContent(
-                    state = state.calendar,
-                    onPreviousMonth = viewModel::onPreviousMonth,
-                    onNextMonth = viewModel::onNextMonth,
-                    onSelectDate = viewModel::onSelectDate,
+                ReviewTab.Search -> SearchContent(
+                    state = state.search,
+                    onKeywordChanged = viewModel::onKeywordChanged,
+                    onYearFilterChanged = viewModel::onYearFilterChanged,
+                    onRecordedOnlyChanged = viewModel::onToggleRecordedOnly,
                     onJumpToToday = onJumpToToday,
                 )
 
@@ -144,272 +132,6 @@ fun ReviewScreen(
                     onOpenSummary = viewModel::onOpenSummary,
                     onCloseSummary = viewModel::onCloseSummary,
                     onContentChanged = viewModel::onSummaryContentChanged,
-                )
-
-                ReviewTab.Search -> SearchContent(
-                    state = state.search,
-                    onKeywordChanged = viewModel::onKeywordChanged,
-                    onYearFilterChanged = viewModel::onYearFilterChanged,
-                    onRecordedOnlyChanged = viewModel::onToggleRecordedOnly,
-                    onJumpToToday = onJumpToToday,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CalendarReviewContent(
-    state: CalendarUiState,
-    onPreviousMonth: () -> Unit,
-    onNextMonth: () -> Unit,
-    onSelectDate: (LocalDate) -> Unit,
-    onJumpToToday: (LocalDate) -> Unit,
-) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            Card(
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            ) {
-                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(onClick = onPreviousMonth, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Outlined.ChevronLeft, contentDescription = "上一月", modifier = Modifier.size(20.dp))
-                        }
-                        Text(
-                            text = formatMonthTitle(state.displayMonth),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        IconButton(onClick = onNextMonth, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Outlined.ChevronRight, contentDescription = "下一月", modifier = Modifier.size(20.dp))
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    val weekHeaders = listOf("日", "一", "二", "三", "四", "五", "六")
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        weekHeaders.forEach { day ->
-                            Text(
-                                text = day,
-                                modifier = Modifier.weight(1f),
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    state.monthGrid.chunked(7).forEach { week ->
-                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
-                            week.forEach { day ->
-                                val daySyncState = if (day.date == state.selectedDate) {
-                                    state.selectedEntry?.syncState
-                                } else {
-                                    null
-                                }
-                                CalendarDayCell(
-                                    day = day,
-                                    isSelected = day.date == state.selectedDate,
-                                    syncState = daySyncState,
-                                    onClick = { onSelectDate(day.date) },
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                            if (week.size < 7) {
-                                repeat(7 - week.size) {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            Text(
-                text = "往年今日",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(start = 4.dp, top = 4.dp),
-            )
-        }
-
-        if (state.previousYearsOnThisDay.isEmpty()) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.large,
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                ) {
-                    Text(
-                        text = "暂无往年今日记录",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
-            }
-        } else {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.large,
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                ) {
-                    Column {
-                        state.previousYearsOnThisDay.forEachIndexed { index, entry ->
-                            ListItem(
-                                headlineContent = {
-                                    Text(
-                                        text = entry.date.format(PreviousYearFormatter),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                },
-                                supportingContent = {
-                                    Text(
-                                        text = entry.content.preview(),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                },
-                                leadingContent = {
-                                    Icon(
-                                        Icons.Outlined.CalendarToday,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                },
-                                trailingContent = {
-                                    Icon(
-                                        Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                },
-                                modifier = Modifier
-                                    .clip(MaterialTheme.shapes.large)
-                                    .clickable { onJumpToToday(entry.date) },
-                            )
-                            if (index < state.previousYearsOnThisDay.lastIndex) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        item { Spacer(modifier = Modifier.height(16.dp)) }
-    }
-}
-
-@Composable
-private fun CalendarDayCell(
-    day: CalendarDay,
-    isSelected: Boolean,
-    syncState: SyncState?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val baseColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-    val textColor = when {
-        isSelected -> MaterialTheme.colorScheme.onPrimary
-        !day.isInCurrentMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-    Box(
-        modifier = modifier
-            .aspectRatio(1.2f)
-            .clip(CircleShape)
-            .background(baseColor)
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = day.date.dayOfMonth.toString(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = textColor,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            )
-            if (day.hasRecord) {
-                val badgeColor = when {
-                    isSelected && syncState == null -> MaterialTheme.colorScheme.onPrimary
-                    syncState != null -> syncStateBadgeColor(syncState)
-                    else -> MaterialTheme.colorScheme.primary
-                }
-                val badgeDescription = syncState?.let { syncStateLabel(it) } ?: "有记录"
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(badgeColor)
-                        .semantics { contentDescription = badgeDescription },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun syncStateBadgeColor(state: SyncState): Color = when (state) {
-    SyncState.Synced -> MaterialTheme.colorScheme.primary
-    SyncState.Pending -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-    SyncState.LocalOnly -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-    SyncState.Failed -> MaterialTheme.colorScheme.error
-    SyncState.Conflict -> Color(0xFFE08C2A)
-}
-
-private fun syncStateLabel(state: SyncState): String = when (state) {
-    SyncState.Synced -> "已同步"
-    SyncState.Pending -> "待同步"
-    SyncState.LocalOnly -> "仅本地"
-    SyncState.Failed -> "同步失败"
-    SyncState.Conflict -> "存在冲突"
-}
-
-@Composable
-private fun SelectedDayPreviewCard(state: CalendarUiState) {
-    Card(
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = state.selectedDate.format(PreviousYearFormatter),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            val entry = state.selectedEntry
-            if (entry == null || entry.content.isBlank()) {
-                Text(
-                    text = "这一天还没有记录",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                )
-            } else {
-                Text(
-                    text = entry.content.preview(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
@@ -722,7 +444,7 @@ private fun SearchContent(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = entry.date.format(PreviousYearFormatter),
+                                text = entry.date.format(EntryDateFormatter),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                             )
@@ -742,9 +464,6 @@ private fun SearchContent(
     }
 }
 
-private fun formatMonthTitle(month: YearMonth): String =
-    month.atDay(1).format(MonthTitleFormatter)
-
 private fun String.preview(): String {
     val trimmed = trim().replace('\n', ' ')
     return if (trimmed.length <= ContentPreviewLimit) trimmed
@@ -758,4 +477,5 @@ private fun SaveStatus.label(): String = when (this) {
     SaveStatus.Failed -> "保存失败，稍后重试"
 }
 
+@Suppress("unused")
 private fun DiaryEntry.preview(): String = content.preview()

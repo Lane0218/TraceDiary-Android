@@ -59,60 +59,27 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `切换月份后 displayMonth 与 monthGrid 同步更新`() = runTest(dispatcher) {
+    fun `初始 Tab 默认为搜索`() = runTest(dispatcher) {
         val repo = FakeDiaryRepository(initialEntries = listOf(entry("2026-05-17", "今天")))
         val viewModel = createViewModel(repo, FakeAnnualSummaryRepository())
         advanceUntilIdle()
 
-        // 初始为 2026-05
-        assertEquals(YearMonth.of(2026, 5), viewModel.state.value.calendar.displayMonth)
-        assertTrue(viewModel.state.value.calendar.monthGrid.isNotEmpty())
-
-        viewModel.onPreviousMonth()
-        advanceUntilIdle()
-        assertEquals(YearMonth.of(2026, 4), viewModel.state.value.calendar.displayMonth)
-
-        viewModel.onNextMonth()
-        viewModel.onNextMonth()
-        advanceUntilIdle()
-        assertEquals(YearMonth.of(2026, 6), viewModel.state.value.calendar.displayMonth)
-
-        // monthGrid 长度始终是 7 的倍数
-        assertEquals(0, viewModel.state.value.calendar.monthGrid.size % 7)
+        assertEquals(ReviewTab.Search, viewModel.state.value.selectedTab)
 
         viewModelJob.cancel()
     }
 
     @Test
-    fun `选中日期后 selectedEntry 与 previousYearsOnThisDay 正确加载`() = runTest(dispatcher) {
-        val entries = listOf(
-            entry("2024-05-17", "前年五一七"),
-            entry("2025-05-17", "去年五一七"),
-            entry("2026-05-17", "今天五一七"),
-            entry("2026-05-15", "五一五"),
-        )
-        val repo = FakeDiaryRepository(initialEntries = entries)
+    fun `切换 Tab 后 selectedTab 同步更新`() = runTest(dispatcher) {
+        val repo = FakeDiaryRepository()
         val viewModel = createViewModel(repo, FakeAnnualSummaryRepository())
         advanceUntilIdle()
 
-        viewModel.onSelectDate(LocalDate.parse("2026-05-15"))
-        advanceUntilIdle()
+        viewModel.onSelectTab(ReviewTab.AnnualSummary)
+        assertEquals(ReviewTab.AnnualSummary, viewModel.state.value.selectedTab)
 
-        val calendar = viewModel.state.value.calendar
-        assertEquals(LocalDate.parse("2026-05-15"), calendar.selectedDate)
-        assertNotNull(calendar.selectedEntry)
-        assertEquals("五一五", calendar.selectedEntry?.content)
-        assertTrue(calendar.previousYearsOnThisDay.isEmpty())
-
-        viewModel.onSelectDate(LocalDate.parse("2026-05-17"))
-        advanceUntilIdle()
-
-        val updated = viewModel.state.value.calendar
-        assertEquals("今天五一七", updated.selectedEntry?.content)
-        assertEquals(
-            listOf(LocalDate.parse("2025-05-17"), LocalDate.parse("2024-05-17")),
-            updated.previousYearsOnThisDay.map(DiaryEntry::date),
-        )
+        viewModel.onSelectTab(ReviewTab.Search)
+        assertEquals(ReviewTab.Search, viewModel.state.value.selectedTab)
 
         viewModelJob.cancel()
     }

@@ -14,7 +14,10 @@ import org.junit.runner.RunWith
 
 /**
  * 验证 TraceDiaryApp 底部 NavigationBar 4 个 Tab 文案存在，
- * 并且切到「回顾」Tab 后能看到日历分段按钮文案，对应 SPEC 6.1.4 主导航最小回归。
+ * 并且切到「回顾」Tab 后能看到搜索分段按钮文案，对应 SPEC 6.1.4 主导航最小回归。
+ *
+ * 说明：本类需要应用密码已设置（首次启动会被锁定屏拦截）。在真机调试时
+ * 由测试人员先行解锁；CI 仅运行 `gradlew test`，不会执行 androidTest。
  */
 @RunWith(AndroidJUnit4::class)
 class TraceDiaryAppNavigationTest {
@@ -23,7 +26,7 @@ class TraceDiaryAppNavigationTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun `底部导航 4 个 Tab 文案存在`() {
+    fun bottomNavigationLabelsArePresent() {
         composeTestRule.setContent {
             TraceDiaryTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
@@ -34,7 +37,7 @@ class TraceDiaryAppNavigationTest {
 
         composeTestRule.waitForIdle()
 
-        // 这些文案都来自底部 NavigationBar 的 label，必然存在
+        // 这些文案都来自底部 NavigationBar 的 label，未解锁时仅展示锁屏，需要真机解锁后再断言。
         composeTestRule.onNodeWithText("今天").assertIsDisplayed()
         composeTestRule.onNodeWithText("回顾").assertIsDisplayed()
         composeTestRule.onNodeWithText("统计").assertIsDisplayed()
@@ -42,7 +45,7 @@ class TraceDiaryAppNavigationTest {
     }
 
     @Test
-    fun `点击回顾 Tab 后能看到日历分段按钮`() {
+    fun reviewTabShowsSearchSegment() {
         composeTestRule.setContent {
             TraceDiaryTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
@@ -55,7 +58,8 @@ class TraceDiaryAppNavigationTest {
         composeTestRule.onNodeWithText("回顾").performClick()
         composeTestRule.waitForIdle()
 
-        // 切到回顾页后 SegmentedButton 中的「日历」标签应可见
-        composeTestRule.onNodeWithText("日历").assertIsDisplayed()
+        // 回顾页 SegmentedButton 现在只剩"搜索 / 年度总结"两个 Tab。
+        composeTestRule.onNodeWithText("搜索").assertIsDisplayed()
+        composeTestRule.onNodeWithText("年度总结").assertIsDisplayed()
     }
 }
