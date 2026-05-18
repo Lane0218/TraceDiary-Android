@@ -43,7 +43,8 @@ class ExportImportUseCaseTest {
         val export = ExportDiaryDataUseCase(diaryRepo, annualRepo, fixedClock)
         val import = ImportDiaryDataUseCase(diaryRepo, annualRepo)
 
-        val json = export()
+        val payload = export()
+        val json = payload.bytes.toString(Charsets.UTF_8)
         diaryRepo.clear()
         annualRepo.clear()
 

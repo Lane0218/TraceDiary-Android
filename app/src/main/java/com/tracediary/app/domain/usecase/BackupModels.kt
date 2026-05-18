@@ -30,3 +30,19 @@ data class AnnualSummaryBackup(
     val createdAt: String,
     val updatedAt: String,
 )
+
+/** 导出格式。 */
+enum class ExportFormat {
+    Json,
+    TextZip,
+    MarkdownZip,
+}
+
+/** 导出结果：字节内容 + 推荐 MIME + 推荐文件名。 */
+data class ExportPayload(
+    val bytes: ByteArray,
+    val mimeType: String,
+    val suggestedFileName: String,
+    val entryCount: Int,
+    val summaryCount: Int,
+)

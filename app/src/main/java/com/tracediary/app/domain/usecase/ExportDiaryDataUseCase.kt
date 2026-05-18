@@ -7,15 +7,23 @@ import com.tracediary.app.domain.repository.DiaryRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.io.ByteArrayOutputStream
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 /**
- * 将本地日记与年度总结全部读取出来，序列化为可读 JSON 字符串。
+ * 将本地日记与年度总结导出为可读文件。
  *
- * 输出格式见 [DiaryBackup]。日期使用 ISO-8601（Instant.toString），
- * 日记日期使用 yyyy-MM-dd，便于人工阅读和跨平台还原。
+ * 支持格式：
+ * - [ExportFormat.Json]：单个 JSON 文件，结构见 [DiaryBackup]。
+ * - [ExportFormat.TextZip] / [ExportFormat.MarkdownZip]：ZIP 压缩包，
+ *   按 `entries/yyyy-MM-dd.{txt|md}`、`annual/yyyy.{txt|md}` 落盘，正文为纯文本。
+ *
+ * 日期使用 ISO-8601 / yyyy-MM-dd，便于人工阅读和跨平台还原。
  */
 class ExportDiaryDataUseCase(
     private val diaryRepository: DiaryRepository,
@@ -23,18 +31,82 @@ class ExportDiaryDataUseCase(
     private val clock: Clock = Clock.systemDefaultZone(),
 ) {
 
-    suspend operator fun invoke(): String {
+    suspend operator fun invoke(format: ExportFormat = ExportFormat.Json): ExportPayload {
         val entries = diaryRepository.observeAllEntries().first()
         val summaries = annualSummaryRepository.observeSummaries().first()
+        val today = LocalDate.now(clock).format(FILE_NAME_DATE)
+        return when (format) {
+            ExportFormat.Json -> exportJson(entries, summaries, today)
+            ExportFormat.TextZip -> exportZip(entries, summaries, "txt", today)
+            ExportFormat.MarkdownZip -> exportZip(entries, summaries, "md", today)
+        }
+    }
 
+    private fun exportJson(
+        entries: List<DiaryEntry>,
+        summaries: List<AnnualSummary>,
+        today: String,
+    ): ExportPayload {
         val backup = DiaryBackup(
             version = CURRENT_BACKUP_VERSION,
             exportedAt = Instant.now(clock).toString(),
             entries = entries.map(::toBackup),
             annualSummaries = summaries.map(::toBackup),
         )
+        val bytes = JSON.encodeToString(backup).toByteArray(Charsets.UTF_8)
+        return ExportPayload(
+            bytes = bytes,
+            mimeType = "application/json",
+            suggestedFileName = "tracediary_backup_$today.json",
+            entryCount = entries.size,
+            summaryCount = summaries.size,
+        )
+    }
 
-        return JSON.encodeToString(backup)
+    private fun exportZip(
+        entries: List<DiaryEntry>,
+        summaries: List<AnnualSummary>,
+        ext: String,
+        today: String,
+    ): ExportPayload {
+        val buffer = ByteArrayOutputStream()
+        ZipOutputStream(buffer).use { zip ->
+            zip.putNextEntry(ZipEntry("entries/"))
+            zip.closeEntry()
+            for (entry in entries) {
+                zip.putNextEntry(ZipEntry("entries/${entry.date.format(FILE_NAME_DATE)}.$ext"))
+                zip.write(entry.content.toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+            }
+            if (summaries.isNotEmpty()) {
+                zip.putNextEntry(ZipEntry("annual/"))
+                zip.closeEntry()
+                for (summary in summaries) {
+                    zip.putNextEntry(ZipEntry("annual/${summary.year}.$ext"))
+                    zip.write(summary.content.toByteArray(Charsets.UTF_8))
+                    zip.closeEntry()
+                }
+            }
+            zip.putNextEntry(ZipEntry("manifest.json"))
+            val manifest = JSON.encodeToString(
+                DiaryBackup(
+                    version = CURRENT_BACKUP_VERSION,
+                    exportedAt = Instant.now(clock).toString(),
+                    entries = emptyList(),
+                    annualSummaries = emptyList(),
+                )
+            )
+            zip.write(manifest.toByteArray(Charsets.UTF_8))
+            zip.closeEntry()
+        }
+        val name = "tracediary_backup_${today}_${ext}.zip"
+        return ExportPayload(
+            bytes = buffer.toByteArray(),
+            mimeType = "application/zip",
+            suggestedFileName = name,
+            entryCount = entries.size,
+            summaryCount = summaries.size,
+        )
     }
 
     private fun toBackup(entry: DiaryEntry): DiaryEntryBackup = DiaryEntryBackup(
@@ -53,6 +125,8 @@ class ExportDiaryDataUseCase(
 
     companion object {
         const val CURRENT_BACKUP_VERSION: Int = 1
+
+        private val FILE_NAME_DATE: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
         // prettyPrint 让备份文件可被人工查阅；ignoreUnknownKeys 在导入时由 ImportUseCase 复用。
         internal val JSON: Json = Json {
