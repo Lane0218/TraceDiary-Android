@@ -56,6 +56,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -63,6 +65,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.AnnualSummary
 import com.tracediary.app.domain.model.DiaryEntry
+import com.tracediary.app.domain.model.SyncState
 import com.tracediary.app.domain.usecase.CalendarDay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -212,9 +215,15 @@ private fun CalendarReviewContent(
                     state.monthGrid.chunked(7).forEach { week ->
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
                             week.forEach { day ->
+                                val daySyncState = if (day.date == state.selectedDate) {
+                                    state.selectedEntry?.syncState
+                                } else {
+                                    null
+                                }
                                 CalendarDayCell(
                                     day = day,
                                     isSelected = day.date == state.selectedDate,
+                                    syncState = daySyncState,
                                     onClick = { onSelectDate(day.date) },
                                     modifier = Modifier.weight(1f),
                                 )
@@ -315,6 +324,7 @@ private fun CalendarReviewContent(
 private fun CalendarDayCell(
     day: CalendarDay,
     isSelected: Boolean,
+    syncState: SyncState?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -340,18 +350,39 @@ private fun CalendarDayCell(
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
             )
             if (day.hasRecord) {
+                val badgeColor = when {
+                    isSelected && syncState == null -> MaterialTheme.colorScheme.onPrimary
+                    syncState != null -> syncStateBadgeColor(syncState)
+                    else -> MaterialTheme.colorScheme.primary
+                }
+                val badgeDescription = syncState?.let { syncStateLabel(it) } ?: "有记录"
                 Box(
                     modifier = Modifier
-                        .size(3.dp)
+                        .size(6.dp)
                         .clip(CircleShape)
-                        .background(
-                            if (isSelected) MaterialTheme.colorScheme.onPrimary
-                            else MaterialTheme.colorScheme.primary,
-                        ),
+                        .background(badgeColor)
+                        .semantics { contentDescription = badgeDescription },
                 )
             }
         }
     }
+}
+
+@Composable
+private fun syncStateBadgeColor(state: SyncState): Color = when (state) {
+    SyncState.Synced -> MaterialTheme.colorScheme.primary
+    SyncState.Pending -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    SyncState.LocalOnly -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+    SyncState.Failed -> MaterialTheme.colorScheme.error
+    SyncState.Conflict -> Color(0xFFE08C2A)
+}
+
+private fun syncStateLabel(state: SyncState): String = when (state) {
+    SyncState.Synced -> "已同步"
+    SyncState.Pending -> "待同步"
+    SyncState.LocalOnly -> "仅本地"
+    SyncState.Failed -> "同步失败"
+    SyncState.Conflict -> "存在冲突"
 }
 
 @Composable
