@@ -129,6 +129,7 @@ class TraceDiaryApplication : Application() {
             annualSummaryRepository = annualSummaryRepository,
             syncMetadataRepository = syncMetadataRepository,
             pendingSyncDeletionRepository = pendingSyncDeletionRepository,
+            passwordProvider = { appPasswordManager.loadActivePassword() },
             clock = Clock.systemDefaultZone(),
         )
 

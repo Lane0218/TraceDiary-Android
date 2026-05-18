@@ -30,6 +30,7 @@ class SyncEngine(
     private val annualSummaryRepository: AnnualSummaryRepository,
     private val syncMetadataRepository: SyncMetadataRepository,
     private val pendingSyncDeletionRepository: PendingSyncDeletionRepository? = null,
+    private val passwordProvider: () -> String? = { null },
     private val clock: Clock = Clock.systemDefaultZone(),
 ) {
 
@@ -410,7 +411,8 @@ class SyncEngine(
     suspend fun rotateSyncPassword(oldPassword: String, newPassword: String): RemoteResult<SyncSummary> =
         operationMutex.withLock {
             val storage = storageProvider() ?: return@withLock notConfigured()
-            val persistedPassword = secureCredentialStore.loadLocalPassword()
+            val persistedPassword = passwordProvider().takeUnless { it.isNullOrEmpty() }
+                ?: secureCredentialStore.loadLocalPassword()
                 ?: return@withLock missingPassword()
             if (persistedPassword != oldPassword) {
                 emit(SyncStage.Failed, 0, 0, "旧同步密码不正确")
@@ -774,7 +776,10 @@ class SyncEngine(
     }
 
     private fun loadPasswordContext(): PasswordContext? {
-        val password = secureCredentialStore.loadLocalPassword() ?: return null
+        // 优先用 passwordProvider（解锁后内存中的密码），保证关闭"记住密码"时仍可同步。
+        val password = passwordProvider().takeUnless { it.isNullOrEmpty() }
+            ?: secureCredentialStore.loadLocalPassword()
+            ?: return null
         val salt = secureCredentialStore.loadOrCreateCloudCipherSalt()
         val key = CryptoBox.deriveKey(password, salt)
         return PasswordContext(password, salt, key)
