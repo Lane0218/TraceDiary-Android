@@ -65,6 +65,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.net.zetetic.android.database.sqlcipher)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging.interceptor)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
