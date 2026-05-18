@@ -158,7 +158,9 @@ class AliyunOssRemoteStorage(
         val finalPrefix = applyPrefix(prefix)
         val encoded = urlEncodeRfc3986(finalPrefix)
         val date = ossHttpDate()
-        val resource = "/${credential.bucket}/?prefix=$finalPrefix"
+        // OSS V1 签名规则：max-keys/prefix/marker/delimiter 等普通列表参数不参与 CanonicalizedResource，
+        // 只有 acl/uploads/partNumber 等子资源才参与。
+        val resource = "/${credential.bucket}/"
         val stringToSign = "GET\n\n\n$date\n$resource"
         val url = "https://$host/?prefix=$encoded"
         val request = Request.Builder()
@@ -216,7 +218,8 @@ class AliyunOssRemoteStorage(
 
     override suspend fun ping(): RemoteResult<Unit> = withContext(Dispatchers.IO) {
         val date = ossHttpDate()
-        val resource = "/${credential.bucket}/?max-keys=1"
+        // 同 list()：max-keys 不是子资源，不参与 CanonicalizedResource。
+        val resource = "/${credential.bucket}/"
         val stringToSign = "GET\n\n\n$date\n$resource"
         val request = Request.Builder()
             .url("https://$host/?max-keys=1")
