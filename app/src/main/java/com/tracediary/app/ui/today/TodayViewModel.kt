@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -82,9 +83,11 @@ class TodayViewModel(
     /** 当前正文最后一次入库时的快照，用来判断是否需要 flush。 */
     private var lastPersistedContent: String = ""
     private var autoSaveJob: Job? = null
+    private var syncStateJob: Job? = null
 
     init {
         loadEntry(initialDate)
+        observeSyncState(initialDate)
     }
 
     fun onSelectDate(date: LocalDate) {
@@ -101,6 +104,7 @@ class TodayViewModel(
                 )
             }
             loadEntryInternal(date)
+            observeSyncState(date)
         }
     }
 
@@ -169,6 +173,21 @@ class TodayViewModel(
                 // 已经落库过的条目展示“已保存”，让用户离开后回来仍能确认状态；空白条目保持“未编辑”。
                 saveStatus = if (entry != null && entry.content.isNotEmpty()) SaveStatus.Saved else SaveStatus.Idle,
             )
+        }
+    }
+
+    private fun observeSyncState(date: LocalDate) {
+        syncStateJob?.cancel()
+        syncStateJob = viewModelScope.launch {
+            diaryRepository.observeEntry(date).collect { entry ->
+                _uiState.update { current ->
+                    if (current.selectedDate == date) {
+                        current.copy(currentEntrySyncState = entry?.syncState)
+                    } else {
+                        current
+                    }
+                }
+            }
         }
     }
 

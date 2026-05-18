@@ -160,6 +160,21 @@ class TodayViewModelTest {
     }
 
     @Test
+    fun `sync state updates when repository entry changes`() = runTest(dispatcher) {
+        repository.upsert(fixedToday, "今天内容", syncState = SyncState.Failed)
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals(SyncState.Failed, viewModel.uiState.value.currentEntrySyncState)
+
+        repository.setSyncState(fixedToday, SyncState.Synced)
+        advanceUntilIdle()
+
+        assertEquals(SyncState.Synced, viewModel.uiState.value.currentEntrySyncState)
+        assertEquals("今天内容", viewModel.uiState.value.content)
+    }
+
+    @Test
     fun `onPreviousWeek shifts week dates without changing selectedDate`() = runTest(dispatcher) {
         val viewModel = createViewModel()
         advanceUntilIdle()
@@ -193,14 +208,18 @@ private class FakeDiaryRepository(private val clock: Clock) : DiaryRepository {
     var saveInvocationCount: Int = 0
         private set
 
-    fun upsert(date: LocalDate, content: String): DiaryEntry {
+    fun upsert(
+        date: LocalDate,
+        content: String,
+        syncState: SyncState = SyncState.Pending,
+    ): DiaryEntry {
         val now = Instant.now(clock)
         val entry = DiaryEntry(
             date = date,
             content = content,
             createdAt = now,
             updatedAt = now,
-            syncState = SyncState.Pending,
+            syncState = syncState,
         )
         store.value = store.value.toMutableMap().apply { put(date, entry) }
         return entry
@@ -245,6 +264,14 @@ private class FakeDiaryRepository(private val clock: Clock) : DiaryRepository {
 
     override suspend fun deleteEntry(date: LocalDate) {
         store.value = store.value.toMutableMap().apply { remove(date) }
+    }
+
+    override suspend fun setSyncState(date: LocalDate, state: SyncState) {
+        store.value[date]?.let { existing ->
+            store.value = store.value.toMutableMap().apply {
+                put(date, existing.copy(syncState = state))
+            }
+        }
     }
 
     override suspend fun searchEntries(
