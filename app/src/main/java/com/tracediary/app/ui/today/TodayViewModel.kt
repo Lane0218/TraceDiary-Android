@@ -160,6 +160,17 @@ class TodayViewModel(
         shiftMonth(1)
     }
 
+    fun onJumpToMonth(target: YearMonth) {
+        displayMonthFlow.value = target
+        _uiState.update { current ->
+            current.copy(
+                displayMonth = target,
+                displayMonthLabel = "${target.year}年${target.monthValue}月",
+                isMonthExpanded = true,
+            )
+        }
+    }
+
     fun onContentChanged(newContent: String) {
         if (newContent == _uiState.value.content) return
         _uiState.update { current ->

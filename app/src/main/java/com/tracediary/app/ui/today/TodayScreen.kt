@@ -37,20 +37,14 @@ import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -75,10 +69,8 @@ import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.model.SyncState
 import com.tracediary.app.domain.usecase.CalendarDay
 import com.tracediary.app.ui.theme.DiaryContentTextStyle
-import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -122,8 +114,8 @@ fun TodayScreen(
             ) {
                 Text(text = "今天", style = MaterialTheme.typography.displayLarge)
                 TodayOverflowMenu(
-                    selectedDate = state.selectedDate,
-                    onPickDate = viewModel::onSelectDate,
+                    displayMonth = state.displayMonth,
+                    onJumpToMonth = viewModel::onJumpToMonth,
                     onClearContent = viewModel::onDeleteCurrentEntry,
                 )
             }
@@ -568,15 +560,14 @@ private fun PreviousYearEntryCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TodayOverflowMenu(
-    selectedDate: LocalDate,
-    onPickDate: (LocalDate) -> Unit,
+    displayMonth: YearMonth,
+    onJumpToMonth: (YearMonth) -> Unit,
     onClearContent: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    var showDatePicker by remember { mutableStateOf(false) }
+    var showMonthPicker by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
 
     Box {
@@ -588,10 +579,10 @@ private fun TodayOverflowMenu(
             onDismissRequest = { menuExpanded = false }
         ) {
             DropdownMenuItem(
-                text = { Text("跳到指定日期") },
+                text = { Text("跳到指定月份") },
                 onClick = {
                     menuExpanded = false
-                    showDatePicker = true
+                    showMonthPicker = true
                 }
             )
             DropdownMenuItem(
@@ -604,44 +595,15 @@ private fun TodayOverflowMenu(
         }
     }
 
-    if (showDatePicker) {
-        val zone = remember { ZoneId.systemDefault() }
-        val initialMillis = remember(selectedDate) {
-            selectedDate.atStartOfDay(zone).toInstant().toEpochMilli()
-        }
-        // SPEC: 仅允许补写历史，不允许写未来。
-        val todayMillis = remember {
-            LocalDate.now().atStartOfDay(zone).toInstant().toEpochMilli()
-        }
-        val pickerState = rememberDatePickerState(
-            initialSelectedDateMillis = initialMillis,
-            selectableDates = object : SelectableDates {
-                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
-                    utcTimeMillis <= todayMillis
-                override fun isSelectableYear(year: Int): Boolean =
-                    year <= LocalDate.now().year
+    if (showMonthPicker) {
+        YearMonthPickerDialog(
+            initialYearMonth = displayMonth,
+            onDismiss = { showMonthPicker = false },
+            onConfirm = { picked ->
+                showMonthPicker = false
+                onJumpToMonth(picked)
             }
         )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    val picked = pickerState.selectedDateMillis
-                    if (picked != null) {
-                        val date = Instant.ofEpochMilli(picked)
-                            .atZone(zone)
-                            .toLocalDate()
-                        onPickDate(date)
-                    }
-                    showDatePicker = false
-                }) { Text("确定") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("取消") }
-            }
-        ) {
-            DatePicker(state = pickerState)
-        }
     }
 
     if (showClearConfirm) {
@@ -660,4 +622,112 @@ private fun TodayOverflowMenu(
             }
         )
     }
+}
+
+@Composable
+private fun YearMonthPickerDialog(
+    initialYearMonth: YearMonth,
+    onDismiss: () -> Unit,
+    onConfirm: (YearMonth) -> Unit,
+) {
+    val today = remember { YearMonth.now() }
+    var displayYear by remember { mutableStateOf(initialYearMonth.year) }
+    var selectedMonth by remember { mutableStateOf(initialYearMonth) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { displayYear-- },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.ChevronLeft,
+                        contentDescription = "上一年",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Text(
+                    text = "${displayYear}年",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                IconButton(
+                    onClick = { displayYear++ },
+                    enabled = displayYear < today.year,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.ChevronRight,
+                        contentDescription = "下一年",
+                        modifier = Modifier.size(20.dp),
+                        tint = if (displayYear < today.year) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                    )
+                }
+            }
+        },
+        text = {
+            val months = listOf(
+                "1月", "2月", "3月", "4月",
+                "5月", "6月", "7月", "8月",
+                "9月", "10月", "11月", "12月",
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                months.chunked(4).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        row.forEach { label ->
+                            val monthValue = months.indexOf(label) + 1
+                            val ym = YearMonth.of(displayYear, monthValue)
+                            val isFuture = ym.isAfter(today)
+                            val isSelected = ym == selectedMonth
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(MaterialTheme.shapes.medium)
+                                    .background(
+                                        when {
+                                            isSelected -> MaterialTheme.colorScheme.primary
+                                            else -> Color.Transparent
+                                        }
+                                    )
+                                    .clickable(enabled = !isFuture) {
+                                        selectedMonth = ym
+                                    }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = when {
+                                        isSelected -> MaterialTheme.colorScheme.onPrimary
+                                        isFuture -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(selectedMonth) }) { Text("确定") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
 }
