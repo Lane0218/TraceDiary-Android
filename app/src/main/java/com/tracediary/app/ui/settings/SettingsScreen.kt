@@ -203,12 +203,14 @@ private fun SettingsSubPageContainer(title: String, onBack: () -> Unit, content:
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
     val rotationWorking = state.passwordRotationStatus is PasswordRotationStatus.Working
+    val bottomPadding = if (WindowInsets.isImeVisible) 16.dp else 112.dp
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 112.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = bottomPadding),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
@@ -312,11 +314,13 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
+    val bottomPadding = if (WindowInsets.isImeVisible) 16.dp else 112.dp
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 112.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = bottomPadding),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
