@@ -294,7 +294,7 @@ private fun AnnualSummaryEditor(
         modifier = Modifier
             .fillMaxSize()
             .imePadding()
-            .padding(16.dp)
+            .padding(horizontal = 12.dp, vertical = 16.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

@@ -420,8 +420,8 @@ private fun EntryEditorCard(
     Card(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp)) {
             Text(text = title, style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(12.dp))
             TextField(
