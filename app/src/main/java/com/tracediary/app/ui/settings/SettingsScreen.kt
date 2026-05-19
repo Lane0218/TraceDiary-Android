@@ -52,7 +52,11 @@ fun SettingsScreen(
     
     AnimatedContent(targetState = activeSubPage, label = "SettingsTransition") { page ->
         if (page == null) {
-            MainSettingsList(modifier = modifier, onNavigate = { activeSubPage = it })
+            MainSettingsList(
+                state = state,
+                modifier = modifier,
+                onNavigate = { activeSubPage = it }
+            )
         } else {
             SettingsSubPageContainer(title = page, onBack = { activeSubPage = null }) {
                 when (page) {
@@ -73,7 +77,11 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String) -> Unit) {
+private fun MainSettingsList(
+    state: SettingsUiState,
+    modifier: Modifier = Modifier,
+    onNavigate: (String) -> Unit
+) {
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -99,7 +107,7 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.Cloud, 
                         title = "云同步", 
-                        subtitle = "最近同步: 今天 15:30",
+                        subtitle = "最近同步: ${state.lastSyncText}",
                         onClick = { onNavigate("同步设置") }
                     )
                 }
