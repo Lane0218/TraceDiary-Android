@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
@@ -24,7 +25,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -284,12 +288,12 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
 private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 112.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 112.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
             Card(
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
@@ -297,18 +301,16 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 64.dp)
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                            .heightIn(min = 56.dp)
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "云同步",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
+                        Text(
+                            text = "云同步",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
                         Switch(
                             checked = state.syncEnabled,
                             onCheckedChange = viewModel::onToggleSync,
@@ -317,69 +319,95 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                             )
                         )
                     }
-
                     if (state.syncEnabled) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 20.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)
-                        )
-                        Column(
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
+                        SyncRowDivider()
+                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                             SyncProviderSelector(
                                 selectedProvider = state.syncProvider,
                                 onProviderSelected = viewModel::onSyncProviderChanged
                             )
-
-                            SyncInputField(
-                                value = state.syncDisplayName,
-                                onValueChange = viewModel::onSyncDisplayNameChanged,
-                                label = "空间名称"
-                            )
-                            SyncInputField(
-                                value = state.syncBucket,
-                                onValueChange = viewModel::onSyncBucketChanged,
-                                label = "存储桶名称"
-                            )
-                            SyncInputField(
-                                value = state.syncRegion,
-                                onValueChange = viewModel::onSyncRegionChanged,
-                                label = "所在地域"
-                            )
-                            SyncInputField(
-                                value = state.syncDirectory,
-                                onValueChange = viewModel::onSyncDirectoryChanged,
-                                label = "同步目录"
-                            )
-                            SyncInputField(
-                                value = state.syncAccessKeyId,
-                                onValueChange = viewModel::onSyncAccessKeyIdChanged,
-                                label = "AccessKey ID"
-                            )
-                            SyncInputField(
-                                value = state.syncAccessKeySecret,
-                                onValueChange = viewModel::onSyncAccessKeySecretChanged,
-                                label = "AccessKey Secret",
-                                isPassword = true
-                            )
-
-                            Button(
-                                onClick = viewModel::onSaveSyncConfiguration,
-                                enabled = state.saveStatus != SaveStatus.Saving,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Text(
-                                    if (state.saveStatus == SaveStatus.Saving) "验证中…" else "保存并检查",
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
                         }
                     }
+                }
+            }
+        }
+
+        if (state.syncEnabled) {
+            item { SyncSectionLabel("存储") }
+            item {
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Column {
+                        SyncFieldRow(
+                            label = "空间名称",
+                            value = state.syncDisplayName,
+                            onValueChange = viewModel::onSyncDisplayNameChanged
+                        )
+                        SyncRowDivider()
+                        SyncFieldRow(
+                            label = "存储桶",
+                            value = state.syncBucket,
+                            onValueChange = viewModel::onSyncBucketChanged
+                        )
+                        SyncRowDivider()
+                        SyncFieldRow(
+                            label = "所在地域",
+                            value = state.syncRegion,
+                            onValueChange = viewModel::onSyncRegionChanged
+                        )
+                        SyncRowDivider()
+                        SyncFieldRow(
+                            label = "同步目录",
+                            value = state.syncDirectory,
+                            onValueChange = viewModel::onSyncDirectoryChanged
+                        )
+                    }
+                }
+            }
+
+            item { SyncSectionLabel("凭据") }
+            item {
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Column {
+                        SyncFieldRow(
+                            label = "AccessKey ID",
+                            value = state.syncAccessKeyId,
+                            onValueChange = viewModel::onSyncAccessKeyIdChanged
+                        )
+                        SyncRowDivider()
+                        SyncFieldRow(
+                            label = "AccessKey Secret",
+                            value = state.syncAccessKeySecret,
+                            onValueChange = viewModel::onSyncAccessKeySecretChanged,
+                            isPassword = true
+                        )
+                    }
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+
+            item {
+                Button(
+                    onClick = viewModel::onSaveSyncConfiguration,
+                    enabled = state.saveStatus != SaveStatus.Saving,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text(
+                        if (state.saveStatus == SaveStatus.Saving) "验证中…" else "保存并检查",
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }
@@ -388,93 +416,107 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
 }
 
 @Composable
+private fun SyncSectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)
+    )
+}
+
+@Composable
+private fun SyncRowDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 20.dp),
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+    )
+}
+
+@Composable
 private fun SyncProviderSelector(
     selectedProvider: String,
     onProviderSelected: (String) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                .padding(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val providers = listOf("aliyun" to "阿里云", "tencent" to "腾讯云")
-            providers.forEachIndexed { index, (id, label) ->
-                val selected = selectedProvider == id
-                val bgShape = if (index == 0) {
-                    RoundedCornerShape(
-                        topStart = 20.dp,
-                        bottomStart = 20.dp,
-                        topEnd = 4.dp,
-                        bottomEnd = 4.dp
-                    )
-                } else {
-                    RoundedCornerShape(
-                        topStart = 4.dp,
-                        bottomStart = 4.dp,
-                        topEnd = 20.dp,
-                        bottomEnd = 20.dp
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(bgShape)
-                        .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
-                        .clickable { onProviderSelected(id) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                    )
-                    if (selected) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 6.dp)
-                                .size(width = 24.dp, height = 2.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
-                    }
-                }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .padding(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val providers = listOf("aliyun" to "阿里云", "tencent" to "腾讯云")
+        providers.forEach { (id, label) ->
+            val selected = selectedProvider == id
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                    .clickable { onProviderSelected(id) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal
+                )
             }
         }
     }
 }
 
 @Composable
-private fun SyncInputField(value: String, onValueChange: (String) -> Unit, label: String, isPassword: Boolean = false) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+private fun SyncFieldRow(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    isPassword: Boolean = false
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(end = 12.dp)
         )
-        OutlinedTextField(
+        BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp),
+            modifier = Modifier.weight(1f),
             singleLine = true,
-            visualTransformation = if (isPassword) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-            shape = RoundedCornerShape(12.dp),
-            textStyle = MaterialTheme.typography.bodyMedium,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent
-            )
+            visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.End
+            ),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            decorationBox = { innerTextField ->
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = "未填写",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    }
+                    innerTextField()
+                }
+            }
         )
     }
 }
