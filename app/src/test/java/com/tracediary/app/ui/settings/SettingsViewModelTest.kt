@@ -23,6 +23,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
 
@@ -67,18 +68,62 @@ class SettingsViewModelTest {
     @Test
     fun lastSyncText_reflectsLatestMetadataTime() = runTest(testDispatcher) {
         val metadataRepo = FakeSyncMetadataRepository(
-            latest = Instant.parse("2026-05-18T07:30:00Z")
+            latest = Instant.parse("2026-05-17T07:30:00Z")
         )
         viewModel = SettingsViewModel(
             repository = fakeRepo,
             saveDelayMillis = 0L,
             syncMetadataRepository = metadataRepo,
             zoneId = ZoneId.of("Asia/Shanghai"),
+            clock = Clock.fixed(Instant.parse("2026-05-19T02:00:00Z"), ZoneId.of("Asia/Shanghai")),
         )
 
         advanceUntilIdle()
 
-        assertEquals("2026年5月18日 15:30", viewModel.uiState.value.lastSyncText)
+        assertEquals("5月17日 15:30", viewModel.uiState.value.lastSyncText)
+    }
+
+    @Test
+    fun lastSyncText_usesRelativeDateForTodayAndYesterday() = runTest(testDispatcher) {
+        val zoneId = ZoneId.of("Asia/Shanghai")
+        val metadataRepo = FakeSyncMetadataRepository(
+            latest = Instant.parse("2026-05-19T07:30:00Z")
+        )
+        viewModel = SettingsViewModel(
+            repository = fakeRepo,
+            saveDelayMillis = 0L,
+            syncMetadataRepository = metadataRepo,
+            zoneId = zoneId,
+            clock = Clock.fixed(Instant.parse("2026-05-19T10:00:00Z"), zoneId),
+        )
+
+        advanceUntilIdle()
+
+        assertEquals("今天 15:30", viewModel.uiState.value.lastSyncText)
+
+        metadataRepo.publishLatest(Instant.parse("2026-05-18T07:30:00Z"))
+        advanceUntilIdle()
+
+        assertEquals("昨天 15:30", viewModel.uiState.value.lastSyncText)
+    }
+
+    @Test
+    fun lastSyncText_keepsYearForPreviousYears() = runTest(testDispatcher) {
+        val zoneId = ZoneId.of("Asia/Shanghai")
+        val metadataRepo = FakeSyncMetadataRepository(
+            latest = Instant.parse("2025-12-31T15:30:00Z")
+        )
+        viewModel = SettingsViewModel(
+            repository = fakeRepo,
+            saveDelayMillis = 0L,
+            syncMetadataRepository = metadataRepo,
+            zoneId = zoneId,
+            clock = Clock.fixed(Instant.parse("2026-05-19T10:00:00Z"), zoneId),
+        )
+
+        advanceUntilIdle()
+
+        assertEquals("2025年12月31日 23:30", viewModel.uiState.value.lastSyncText)
     }
 
     @Test
@@ -237,6 +282,10 @@ class SettingsViewModelTest {
         override fun observeMetadata(objectKey: String): Flow<SyncMetadata?> = flowOf(null)
 
         override fun observeLatestLastSyncedAt(): Flow<Instant?> = latestFlow
+
+        fun publishLatest(value: Instant?) {
+            latestFlow.value = value
+        }
 
         override suspend fun getMetadata(objectKey: String): SyncMetadata? = null
 

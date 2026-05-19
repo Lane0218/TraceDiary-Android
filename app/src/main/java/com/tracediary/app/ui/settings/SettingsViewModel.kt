@@ -31,7 +31,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -120,6 +122,7 @@ class SettingsViewModel(
     private val appPasswordManager: AppPasswordManager? = null,
     private val syncMetadataRepository: SyncMetadataRepository? = null,
     private val zoneId: ZoneId = ZoneId.systemDefault(),
+    private val clock: Clock = Clock.system(zoneId),
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -162,7 +165,7 @@ class SettingsViewModel(
         viewModelScope.launch {
             syncMetadataRepository?.observeLatestLastSyncedAt()?.collect { lastSyncedAt ->
                 _uiState.update { current ->
-                    current.copy(lastSyncText = formatLastSyncText(lastSyncedAt, zoneId))
+                    current.copy(lastSyncText = formatLastSyncText(lastSyncedAt, zoneId, clock))
                 }
             }
         }
@@ -634,15 +637,24 @@ class SettingsViewModel(
             state.passwordRotationStatus is PasswordRotationStatus.Working
     }
 
-    private fun formatLastSyncText(lastSyncedAt: Instant?, zoneId: ZoneId): String {
+    private fun formatLastSyncText(lastSyncedAt: Instant?, zoneId: ZoneId, clock: Clock): String {
         lastSyncedAt ?: return "暂无同步记录"
         val localDateTime = lastSyncedAt.atZone(zoneId).toLocalDateTime()
-        return "${DateFormatter.format(localDateTime)} ${TimeFormatter.format(localDateTime)}"
+        val date = localDateTime.toLocalDate()
+        val today = LocalDate.now(clock.withZone(zoneId))
+        val dateText = when {
+            date == today -> "今天"
+            date == today.minusDays(1) -> "昨天"
+            date.year == today.year -> MonthDayFormatter.format(localDateTime)
+            else -> DateFormatter.format(localDateTime)
+        }
+        return "$dateText ${TimeFormatter.format(localDateTime)}"
     }
 
     companion object {
         private const val DEFAULT_SAVE_DELAY_MILLIS: Long = 0L
         private val DateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
+        private val MonthDayFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d日")
         private val TimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
         fun factory(application: TraceDiaryApplication): ViewModelProvider.Factory =
