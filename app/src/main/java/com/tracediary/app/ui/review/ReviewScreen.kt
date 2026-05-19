@@ -36,7 +36,6 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -77,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.AnnualSummary
+import com.tracediary.app.ui.components.TraceDropdownMenu
 import com.tracediary.app.ui.theme.DiaryContentTextStyle
 import com.tracediary.app.ui.theme.DiaryExcerptTextStyle
 import kotlinx.coroutines.launch
@@ -348,12 +348,18 @@ private fun AnnualSummaryEditor(
                         modifier = Modifier.size(20.dp),
                     )
                 }
-                DropdownMenu(
+                TraceDropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("删除该年度总结") },
+                        text = {
+                            Text(
+                                text = "删除该年度总结",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        },
                         onClick = {
                             menuExpanded = false
                             showDeleteConfirm = true
