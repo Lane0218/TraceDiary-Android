@@ -25,8 +25,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.EventAvailable
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Card
@@ -52,6 +55,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -109,13 +117,19 @@ fun ReviewScreen(
                     ReviewTab.Search to "搜索",
                     ReviewTab.AnnualSummary to "年度总结",
                 )
-                tabs.forEach { (tab, label) ->
+                tabs.forEachIndexed { index, pair ->
+                    val (tab, label) = pair
                     val selected = state.selectedTab == tab
+                    val bgShape = if (index == 0) {
+                        androidx.compose.foundation.shape.RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp, topEnd = 4.dp, bottomEnd = 4.dp)
+                    } else {
+                        androidx.compose.foundation.shape.RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp, topEnd = 20.dp, bottomEnd = 20.dp)
+                    }
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(CircleShape)
+                            .clip(bgShape)
                             .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
                             .clickable { viewModel.onSelectTab(tab) },
                         contentAlignment = Alignment.Center
@@ -126,6 +140,16 @@ fun ReviewScreen(
                             color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                         )
+                        if (selected) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 6.dp)
+                                    .size(width = 24.dp, height = 2.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                        }
                     }
                 }
             }
@@ -372,6 +396,8 @@ private fun SearchContent(
     onRecordedOnlyChanged: (Boolean) -> Unit,
     onJumpToToday: (LocalDate) -> Unit,
 ) {
+    var yearDropdownExpanded by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         TextField(
             value = state.keyword,
@@ -392,20 +418,10 @@ private fun SearchContent(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 )
             },
-            trailingIcon = {
-                IconButton(onClick = { /* 弹出更多筛选 */ }) {
-                    Icon(
-                        Icons.Outlined.Tune,
-                        contentDescription = "筛选",
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            },
             shape = CircleShape,
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
             ),
@@ -419,16 +435,59 @@ private fun SearchContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FilterChip(
-                selected = state.yearFilter == null,
-                onClick = { onYearFilterChanged(null) },
-                label = { Text("全部年份") },
-                shape = CircleShape,
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.primary
-                )
-            )
+            Box {
+                Surface(
+                    onClick = { yearDropdownExpanded = true },
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.CalendarToday,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = state.yearFilter?.let { "${it}年" } ?: "全部年份",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Icon(
+                            Icons.Outlined.KeyboardArrowDown,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                
+                androidx.compose.material3.DropdownMenu(
+                    expanded = yearDropdownExpanded,
+                    onDismissRequest = { yearDropdownExpanded = false }
+                ) {
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("全部年份") },
+                        onClick = {
+                            onYearFilterChanged(null)
+                            yearDropdownExpanded = false
+                        }
+                    )
+                    state.availableYears.forEach { year ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("${year}年") },
+                            onClick = {
+                                onYearFilterChanged(year)
+                                yearDropdownExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -438,11 +497,18 @@ private fun SearchContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (state.results.isEmpty()) {
+            if (state.keyword.isBlank()) {
                 item {
                     ReviewEmptyState(
-                        title = if (state.keyword.isBlank()) "开始回顾你的记录" else "未找到匹配结果",
-                        description = if (state.keyword.isBlank()) "搜索关键词或选择条件，查找你的历史日记" else "尝试换一个关键词搜索吧"
+                        title = "开始回顾你的记录",
+                        description = "搜索关键词或选择条件，查找你的历史日记"
+                    )
+                }
+            } else if (state.results.isEmpty()) {
+                item {
+                    ReviewEmptyState(
+                        title = "未找到匹配结果",
+                        description = "尝试换一个关键词搜索吧"
                     )
                 }
             } else {
@@ -463,8 +529,28 @@ private fun SearchContent(
                             )
                             if (entry.content.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(4.dp))
+                                
+                                val previewText = entry.content.preview()
+                                val annotatedText = buildAnnotatedString {
+                                    var currentIndex = 0
+                                    var matchIndex = previewText.indexOf(state.keyword, startIndex = currentIndex, ignoreCase = true)
+                                    
+                                    while (matchIndex >= 0) {
+                                        append(previewText.substring(currentIndex, matchIndex))
+                                        withStyle(style = SpanStyle(
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )) {
+                                            append(previewText.substring(matchIndex, matchIndex + state.keyword.length))
+                                        }
+                                        currentIndex = matchIndex + state.keyword.length
+                                        matchIndex = previewText.indexOf(state.keyword, startIndex = currentIndex, ignoreCase = true)
+                                    }
+                                    append(previewText.substring(currentIndex))
+                                }
+                                
                                 Text(
-                                    text = entry.content.preview(),
+                                    text = annotatedText,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
