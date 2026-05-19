@@ -699,7 +699,7 @@ private fun DataManagementPage(state: SettingsUiState, viewModel: SettingsViewMo
 
         item {
             Text(
-                text = if (isImport) "重复记录" else "文件格式",
+                text = if (isImport) "重复记录处理方式" else "文件格式",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 4.dp),
@@ -716,13 +716,14 @@ private fun DataManagementPage(state: SettingsUiState, viewModel: SettingsViewMo
                 Column {
                     if (isImport) {
                         val strategies = listOf(
-                            MergeStrategy.KeepNewer to "保留较新",
-                            MergeStrategy.OverwriteAll to "全部覆盖",
-                            MergeStrategy.SkipExisting to "跳过"
+                            Triple(MergeStrategy.KeepNewer, "保留较新", "同一天有多条记录时，保留更新时间较新的一条"),
+                            Triple(MergeStrategy.OverwriteAll, "全部覆盖", "用导入文件中的记录覆盖本机同日的已有记录"),
+                            Triple(MergeStrategy.SkipExisting, "跳过", "保留本机原有记录，忽略导入文件中的重复项")
                         )
-                        strategies.forEachIndexed { index, (strategy, label) ->
+                        strategies.forEachIndexed { index, (strategy, label, desc) ->
                             ChoiceRow(
                                 label = label,
+                                subtitle = desc,
                                 selected = mergeStrategy == strategy,
                                 enabled = !isWorking,
                                 onClick = { mergeStrategy = strategy }
@@ -732,7 +733,7 @@ private fun DataManagementPage(state: SettingsUiState, viewModel: SettingsViewMo
                     } else {
                         val formats = listOf(
                             ExportFormat.Json to "JSON",
-                            ExportFormat.TextZip to "TXT 压缩包",
+                            ExportFormat.TextZip to "TXT",
                             ExportFormat.MarkdownZip to "Markdown"
                         )
                         formats.forEachIndexed { index, (format, label) ->
@@ -783,7 +784,7 @@ private fun BackupModeSelector(
     selectedMode: String,
     onModeSelected: (String) -> Unit
 ) {
-    val modes = listOf("export" to "导出", "import" to "导入")
+    val modes = listOf("import" to "导入", "export" to "导出")
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -824,7 +825,8 @@ private fun ChoiceRow(
     label: String,
     selected: Boolean,
     enabled: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    subtitle: String? = null
 ) {
     Row(
         modifier = Modifier
@@ -834,18 +836,31 @@ private fun ChoiceRow(
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f)
-        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         if (selected) {
             Icon(
                 imageVector = Icons.Outlined.Check,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier
+                    .padding(start = 12.dp)
+                    .size(20.dp)
             )
         }
     }
