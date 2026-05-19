@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tracediary.app.ui.settings.SettingsViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.sync.SyncEngine
@@ -288,145 +289,145 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
     ) {
         item {
             Card(
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(8.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
-                Column {
+                Box(modifier = Modifier.padding(16.dp)) {
+                    ToggleItem(
+                        title = "云同步",
+                        subtitle = null,
+                        checked = state.syncEnabled,
+                        onCheckedChange = viewModel::onToggleSync
+                    )
+                }
+            }
+        }
+
+        if (state.syncEnabled) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "云服务商",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .height(44.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .padding(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "云同步",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Switch(
-                            checked = state.syncEnabled,
-                            onCheckedChange = viewModel::onToggleSync,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary
-                            )
-                        )
-                    }
-
-                    if (state.syncEnabled) {
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                        )
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(44.dp)
-                                    .background(
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                        CircleShape
-                                    )
-                                    .padding(4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                val providers = listOf("aliyun" to "阿里云 OSS", "tencent" to "腾讯云 COS")
-                                providers.forEachIndexed { index, (id, label) ->
-                                    val selected = state.syncProvider == id
-                                    val bgShape = if (index == 0) {
-                                        RoundedCornerShape(
-                                            topStart = 20.dp,
-                                            bottomStart = 20.dp,
-                                            topEnd = 4.dp,
-                                            bottomEnd = 4.dp
-                                        )
-                                    } else {
-                                        RoundedCornerShape(
-                                            topStart = 4.dp,
-                                            bottomStart = 4.dp,
-                                            topEnd = 20.dp,
-                                            bottomEnd = 20.dp
-                                        )
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .fillMaxHeight()
-                                            .clip(bgShape)
-                                            .background(
-                                                if (selected) MaterialTheme.colorScheme.surface else Color.Transparent
-                                            )
-                                            .clickable { viewModel.onSyncProviderChanged(id) },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = label,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    }
-                                }
-                            }
-
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                TraceTextField(
-                                    value = state.syncDisplayName,
-                                    onValueChange = viewModel::onSyncDisplayNameChanged,
-                                    label = "空间名称 (如: 我的日记)"
+                        val providers = listOf("aliyun" to "阿里云", "tencent" to "腾讯云")
+                        providers.forEachIndexed { index, (id, label) ->
+                            val selected = state.syncProvider == id
+                            val bgShape = if (index == 0) {
+                                RoundedCornerShape(
+                                    topStart = 20.dp,
+                                    bottomStart = 20.dp,
+                                    topEnd = 4.dp,
+                                    bottomEnd = 4.dp
                                 )
-                                TraceTextField(
-                                    value = state.syncBucket,
-                                    onValueChange = viewModel::onSyncBucketChanged,
-                                    label = "存储桶名称 (Bucket)"
-                                )
-                                TraceTextField(
-                                    value = state.syncRegion,
-                                    onValueChange = viewModel::onSyncRegionChanged,
-                                    label = "所在地域 (Region)"
-                                )
-                                TraceTextField(
-                                    value = state.syncDirectory,
-                                    onValueChange = viewModel::onSyncDirectoryChanged,
-                                    label = "同步目录"
-                                )
-                                TraceTextField(
-                                    value = state.syncAccessKeyId,
-                                    onValueChange = viewModel::onSyncAccessKeyIdChanged,
-                                    label = "AccessKey ID"
-                                )
-                                TraceTextField(
-                                    value = state.syncAccessKeySecret,
-                                    onValueChange = viewModel::onSyncAccessKeySecretChanged,
-                                    label = "AccessKey Secret",
-                                    isPassword = true
+                            } else {
+                                RoundedCornerShape(
+                                    topStart = 4.dp,
+                                    bottomStart = 4.dp,
+                                    topEnd = 20.dp,
+                                    bottomEnd = 20.dp
                                 )
                             }
-
-                            Button(
-                                onClick = viewModel::onSaveSyncConfiguration,
-                                enabled = state.saveStatus != SaveStatus.Saving,
+                            Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(52.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                )
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clip(bgShape)
+                                    .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                                    .clickable { viewModel.onSyncProviderChanged(id) },
+                                contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = if (state.saveStatus == SaveStatus.Saving) "验证中…" else "保存并检查连接",
-                                    fontWeight = FontWeight.Bold
+                                    text = label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                                 )
+                                if (selected) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .padding(bottom = 6.dp)
+                                            .size(width = 24.dp, height = 2.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primary)
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
+
+            item {
+                Card(
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        SyncInputField(value = state.syncDisplayName, onValueChange = viewModel::onSyncDisplayNameChanged, label = "空间名称")
+                        SyncInputField(value = state.syncBucket, onValueChange = viewModel::onSyncBucketChanged, label = "存储桶名称 (Bucket)")
+                        SyncInputField(value = state.syncRegion, onValueChange = viewModel::onSyncRegionChanged, label = "所在地域 (Region)")
+                        SyncInputField(value = state.syncDirectory, onValueChange = viewModel::onSyncDirectoryChanged, label = "同步目录")
+                        SyncInputField(value = state.syncAccessKeyId, onValueChange = viewModel::onSyncAccessKeyIdChanged, label = "AccessKey ID")
+                        SyncInputField(value = state.syncAccessKeySecret, onValueChange = viewModel::onSyncAccessKeySecretChanged, label = "AccessKey Secret", isPassword = true)
+
+                        Button(
+                            onClick = viewModel::onSaveSyncConfiguration,
+                            enabled = state.saveStatus != SaveStatus.Saving,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text(
+                                if (state.saveStatus == SaveStatus.Saving) "验证中…" else "保存并检查",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
         }
+    }
+    SyncOpDialogs(state = state, viewModel = viewModel)
+}
+
+@Composable
+private fun SyncInputField(value: String, onValueChange: (String) -> Unit, label: String, isPassword: Boolean = false) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            visualTransformation = if (isPassword) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+            shape = RoundedCornerShape(8.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent
+            )
+        )
     }
 }
 
