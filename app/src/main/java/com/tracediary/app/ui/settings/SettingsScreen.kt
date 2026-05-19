@@ -314,13 +314,6 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                 }
             }
         }
-
-        item {
-            PasswordRotationStatusRow(status = state.passwordRotationStatus)
-        }
-    }
-}
-
 @Composable
 private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
     LazyColumn(
@@ -330,46 +323,63 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
     ) {
         item {
             Card(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
-                Box(modifier = Modifier.padding(16.dp)) {
-                    ToggleItem(
-                        title = "云同步",
-                        subtitle = "自动同步加密日记",
-                        checked = state.syncEnabled,
-                        onCheckedChange = viewModel::onToggleSync
-                    )
-                }
-            }
-        }
-
-        if (state.syncEnabled) {
-            item {
-                SubPageSection(title = "云空间") {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                Column {
+                    // 第一部分：云同步总开关
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "云同步",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = state.syncEnabled,
+                            onCheckedChange = viewModel::onToggleSync,
+                            colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    if (state.syncEnabled) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // 第二部分：厂商切换胶囊 (参照回顾页样式)
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(40.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                    .padding(4.dp)
+                                    .height(44.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), CircleShape)
+                                    .padding(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                val providers = listOf("aliyun" to "阿里云", "tencent" to "腾讯云")
-                                providers.forEach { (id, label) ->
+                                val providers = listOf("aliyun" to "阿里云 OSS", "tencent" to "腾讯云 COS")
+                                providers.forEachIndexed { index, (id, label) ->
                                     val selected = state.syncProvider == id
+                                    val bgShape = if (index == 0) {
+                                        RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp, topEnd = 4.dp, bottomEnd = 4.dp)
+                                    } else {
+                                        RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp, topEnd = 20.dp, bottomEnd = 20.dp)
+                                    }
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
                                             .fillMaxHeight()
-                                            .clip(RoundedCornerShape(6.dp))
+                                            .clip(bgShape)
                                             .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
                                             .clickable { viewModel.onSyncProviderChanged(id) },
                                         contentAlignment = Alignment.Center
@@ -384,34 +394,40 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
-
+                            // 第三部分：连接信息与访问凭证 (合在一起)
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                TraceTextField(value = state.syncDisplayName, onValueChange = viewModel::onSyncDisplayNameChanged, label = "空间名称 (如: 我的日记)")
-                                TraceTextField(value = state.syncBucket, onValueChange = viewModel::onSyncBucketChanged, label = "存储桶名称 (Bucket)")
-                                TraceTextField(value = state.syncRegion, onValueChange = viewModel::onSyncRegionChanged, label = "所在地域 (Region)")
-                                TraceTextField(value = state.syncDirectory, onValueChange = viewModel::onSyncDirectoryChanged, label = "同步目录")
+                                TraceTextField(
+                                    value = state.syncDisplayName,
+                                    onValueChange = viewModel::onSyncDisplayNameChanged,
+                                    label = "空间名称 (如: 我的日记)"
+                                )
+                                TraceTextField(
+                                    value = state.syncBucket,
+                                    onValueChange = viewModel::onSyncBucketChanged,
+                                    label = "存储桶名称 (Bucket)"
+                                )
+                                TraceTextField(
+                                    value = state.syncRegion,
+                                    onValueChange = viewModel::onSyncRegionChanged,
+                                    label = "所在地域 (Region)"
+                                )
+                                TraceTextField(
+                                    value = state.syncDirectory,
+                                    onValueChange = viewModel::onSyncDirectoryChanged,
+                                    label = "同步目录"
+                                )
+                                TraceTextField(
+                                    value = state.syncAccessKeyId,
+                                    onValueChange = viewModel::onSyncAccessKeyIdChanged,
+                                    label = "AccessKey ID"
+                                )
+                                TraceTextField(
+                                    value = state.syncAccessKeySecret,
+                                    onValueChange = viewModel::onSyncAccessKeySecretChanged,
+                                    label = "AccessKey Secret",
+                                    isPassword = true
+                                )
                             }
-                        }
-                    }
-                }
-            }
-
-            item {
-                SubPageSection(title = "访问凭证") {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            TraceTextField(value = state.syncAccessKeyId, onValueChange = viewModel::onSyncAccessKeyIdChanged, label = "AccessKey ID")
-                            TraceTextField(value = state.syncAccessKeySecret, onValueChange = viewModel::onSyncAccessKeySecretChanged, label = "AccessKey Secret", isPassword = true)
-
-                            Spacer(modifier = Modifier.height(4.dp))
 
                             Button(
                                 onClick = viewModel::onSaveSyncConfiguration,
@@ -419,14 +435,11 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(52.dp),
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Text(
-                                    when (state.saveStatus) {
-                                        SaveStatus.Saving -> "验证中…"
-                                        else -> "保存并检查"
-                                    },
+                                    if (state.saveStatus == SaveStatus.Saving) "正在验证..." else "保存并检查连接",
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -434,31 +447,55 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                     }
                 }
             }
+        }
 
-            if (state.saveError != null) {
-                item {
+        if (state.syncEnabled && state.saveError != null) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.ErrorOutline, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("连接检查失败", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = state.saveError ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (state.syncEnabled && state.saveStatus == SaveStatus.Saved) {
+            item {
+                SubPageSection(title = "首次同步操作") {
                     Card(
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Outlined.ErrorOutline, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("连接检查失败", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = state.saveError ?: "",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
-                            )
+                        Column {
+                            SyncChoiceItem(title = "上传本机数据", desc = "适合第一次使用云同步", icon = Icons.Outlined.CloudUpload, onClick = viewModel::onUploadLocal)
+                            HorizontalDivider(modifier = Modifier.padding(start = 52.dp, end = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                            SyncChoiceItem(title = "从云端恢复", desc = "适合换机或重装 App", icon = Icons.Outlined.CloudDownload, onClick = viewModel::onDownloadRemote)
+                            HorizontalDivider(modifier = Modifier.padding(start = 52.dp, end = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                            SyncChoiceItem(title = "合并两端数据", desc = "适合两端均有不同数据", icon = Icons.Outlined.MergeType, onClick = viewModel::onMergeAll)
                         }
                     }
                 }
             }
+        }
+    }
 
+    SyncOpDialogs(state = state, viewModel = viewModel)
+}
             if (state.saveStatus == SaveStatus.Saved) {
                 item {
                     SubPageSection(title = "首次同步操作") {
