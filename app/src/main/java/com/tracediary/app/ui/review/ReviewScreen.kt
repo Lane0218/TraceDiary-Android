@@ -72,6 +72,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.AnnualSummary
+import com.tracediary.app.ui.theme.DiaryContentTextStyle
+import com.tracediary.app.ui.theme.DiaryExcerptTextStyle
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
@@ -353,11 +355,11 @@ private fun AnnualSummaryEditor(
             placeholder = {
                 Text(
                     text = "记下这一年的收获、成长与思考……",
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = DiaryContentTextStyle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                 )
             },
-            textStyle = MaterialTheme.typography.bodyLarge,
+            textStyle = DiaryContentTextStyle,
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
@@ -551,7 +553,7 @@ private fun SearchContent(
                                 
                                 Text(
                                     text = annotatedText,
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = DiaryExcerptTextStyle,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }

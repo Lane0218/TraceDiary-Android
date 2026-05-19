@@ -85,3 +85,19 @@ val Typography = Typography(
         letterSpacing = 0.sp
     )
 )
+
+val DiaryContentTextStyle = TextStyle(
+    fontFamily = FontFamily.Default,
+    fontWeight = FontWeight.Normal,
+    fontSize = 15.sp,
+    lineHeight = 26.sp,
+    letterSpacing = 0.sp
+)
+
+val DiaryExcerptTextStyle = TextStyle(
+    fontFamily = FontFamily.Default,
+    fontWeight = FontWeight.Normal,
+    fontSize = 14.sp,
+    lineHeight = 22.sp,
+    letterSpacing = 0.sp
+)

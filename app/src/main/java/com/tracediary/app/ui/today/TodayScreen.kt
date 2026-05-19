@@ -74,6 +74,7 @@ import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.model.SyncState
 import com.tracediary.app.domain.usecase.CalendarDay
+import com.tracediary.app.ui.theme.DiaryContentTextStyle
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -440,11 +441,11 @@ private fun EntryEditorCard(
                 placeholder = {
                     Text(
                         text = "记录今天发生了什么…",
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = DiaryContentTextStyle,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                     )
                 },
-                textStyle = MaterialTheme.typography.bodyLarge,
+                textStyle = DiaryContentTextStyle,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
