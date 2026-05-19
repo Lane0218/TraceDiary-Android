@@ -164,18 +164,25 @@ private fun SettingsSubPageContainer(title: String, onBack: () -> Unit, content:
 
 @Composable
 private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
+    val rotationWorking = state.passwordRotationStatus is PasswordRotationStatus.Working
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text(
-                "应用密码同时用于解锁、保护本地数据库与加密云端备份，请务必牢记。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Text(
+                    text = "应用密码同时用于解锁、保护本地数据库与加密云端备份，请务必牢记。",
+                    modifier = Modifier.padding(12.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         item {
             ToggleItem(
@@ -186,65 +193,67 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
             )
         }
         item {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             Text("修改应用密码", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    val rotationWorking = state.passwordRotationStatus is PasswordRotationStatus.Working
-                    OutlinedTextField(
-                        value = state.oldSyncPassword,
-                        onValueChange = viewModel::onOldSyncPasswordChanged,
-                        label = { Text("旧密码") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        enabled = !rotationWorking,
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                    )
-                    OutlinedTextField(
-                        value = state.newSyncPassword,
-                        onValueChange = viewModel::onNewSyncPasswordChanged,
-                        label = { Text("新密码") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        enabled = !rotationWorking,
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                    )
-                    OutlinedTextField(
-                        value = state.confirmNewSyncPassword,
-                        onValueChange = viewModel::onConfirmNewSyncPasswordChanged,
-                        label = { Text("确认新密码") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        enabled = !rotationWorking,
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                    )
-                    Button(
-                        onClick = viewModel::onRotateSyncPassword,
-                        enabled = !rotationWorking && state.syncOpStatus !is SyncOpStatus.Working,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium,
-                    ) {
-                        Text(if (rotationWorking) "更新中…" else "更新应用密码")
-                    }
-                    when (val status = state.passwordRotationStatus) {
-                        PasswordRotationStatus.Idle -> Unit
-                        PasswordRotationStatus.Working -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        is PasswordRotationStatus.Success -> Text(
-                            text = status.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        is PasswordRotationStatus.Failed -> Text(
-                            text = status.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = state.oldSyncPassword,
+                    onValueChange = viewModel::onOldSyncPasswordChanged,
+                    label = { Text("旧密码") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = !rotationWorking,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    shape = MaterialTheme.shapes.medium,
+                )
+                OutlinedTextField(
+                    value = state.newSyncPassword,
+                    onValueChange = viewModel::onNewSyncPasswordChanged,
+                    label = { Text("新密码") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = !rotationWorking,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    shape = MaterialTheme.shapes.medium,
+                )
+                OutlinedTextField(
+                    value = state.confirmNewSyncPassword,
+                    onValueChange = viewModel::onConfirmNewSyncPasswordChanged,
+                    label = { Text("确认新密码") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = !rotationWorking,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    shape = MaterialTheme.shapes.medium,
+                )
+            }
+        }
+        item {
+            Button(
+                onClick = viewModel::onRotateSyncPassword,
+                enabled = !rotationWorking && state.syncOpStatus !is SyncOpStatus.Working,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text(if (rotationWorking) "更新中…" else "更新应用密码")
+            }
+        }
+        item {
+            when (val status = state.passwordRotationStatus) {
+                PasswordRotationStatus.Idle -> Unit
+                PasswordRotationStatus.Working -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                is PasswordRotationStatus.Success -> Text(
+                    text = status.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                is PasswordRotationStatus.Failed -> Text(
+                    text = status.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         }
     }
@@ -291,7 +300,8 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                     onValueChange = viewModel::onSyncDisplayNameChanged,
                     label = { Text("云空间名称 (如: 我的日记)") },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.medium
                 )
             }
             item {
@@ -300,7 +310,8 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                     onValueChange = viewModel::onSyncBucketChanged,
                     label = { Text("存储桶名称 (Bucket)") },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.medium
                 )
             }
             item {
@@ -309,7 +320,8 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                     onValueChange = viewModel::onSyncRegionChanged,
                     label = { Text("所在地域 (Region)") },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.medium
                 )
             }
             item {
@@ -318,7 +330,8 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                     onValueChange = viewModel::onSyncDirectoryChanged,
                     label = { Text("同步目录") },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.medium
                 )
             }
 
@@ -329,7 +342,8 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                     onValueChange = viewModel::onSyncAccessKeyIdChanged,
                     label = { Text("AccessKey ID") },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.medium
                 )
             }
             item {
@@ -339,7 +353,8 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                     label = { Text("AccessKey Secret") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    shape = MaterialTheme.shapes.medium
                 )
             }
 
@@ -367,7 +382,7 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                 Button(
                     onClick = viewModel::onSaveSyncConfiguration,
                     enabled = state.saveStatus != SaveStatus.Saving,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = MaterialTheme.shapes.medium
                 ) { Text(buttonLabel) }
             }
@@ -758,7 +773,7 @@ private fun DataManagementPage(
                 }
             },
             enabled = !isWorking,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = MaterialTheme.shapes.medium,
         ) {
             Text(

@@ -34,6 +34,8 @@ import java.time.YearMonth
 import java.time.temporal.WeekFields
 import java.util.Locale
 
+import com.tracediary.app.ui.components.TraceDropdown
+
 @Composable
 fun StatsScreen(
     modifier: Modifier = Modifier,
@@ -187,10 +189,11 @@ private fun MonthlyTrendCard(
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                YearPickerChip(
+                TraceDropdown(
                     label = "${year}年",
-                    availableYears = availableYears,
-                    onSelectYear = onSelectYear,
+                    options = availableYears,
+                    optionLabel = { "${it}年" },
+                    onSelect = onSelectYear,
                 )
             }
             val maxVal = data.maxOfOrNull(MonthlyWordCount::wordCount)?.coerceAtLeast(1) ?: 1
@@ -239,10 +242,11 @@ private fun HeatmapCard(
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(text = "年度热力图", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                YearPickerChip(
+                TraceDropdown(
                     label = "${year}年",
-                    availableYears = availableYears,
-                    onSelectYear = onSelectYear,
+                    options = availableYears,
+                    optionLabel = { "${it}年" },
+                    onSelect = onSelectYear,
                 )
             }
 
@@ -337,43 +341,6 @@ private fun HeatmapDay?.toCellColor(): Color {
         2 -> primary.copy(alpha = 0.5f)
         3 -> primary.copy(alpha = 0.75f)
         else -> primary
-    }
-}
-
-@Composable
-private fun YearPickerChip(
-    label: String,
-    availableYears: List<Int>,
-    onSelectYear: (Int) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        Surface(
-            modifier = Modifier.clip(CircleShape).clickable { expanded = true },
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(text = label, style = MaterialTheme.typography.labelSmall)
-                Icon(Icons.Outlined.ArrowDropDown, null, modifier = Modifier.size(14.dp))
-            }
-        }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            availableYears.forEach { year ->
-                DropdownMenuItem(
-                    text = { Text("${year}年") },
-                    onClick = {
-                        expanded = false
-                        onSelectYear(year)
-                    },
-                )
-            }
-        }
     }
 }
 

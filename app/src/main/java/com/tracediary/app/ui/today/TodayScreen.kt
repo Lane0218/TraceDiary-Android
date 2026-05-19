@@ -354,12 +354,7 @@ private fun MonthGrid(
             }
         }
         if (monthGrid.isNotEmpty()) {
-            Text(
-                text = "${displayMonth.year}年${displayMonth.monthValue}月",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.padding(top = 4.dp),
-            )
+            Spacer(modifier = Modifier.height(4.dp))
         }
     }
 }
