@@ -237,8 +237,8 @@ private fun AnnualSummaryList(
         if (state.summaries.isEmpty()) {
             item {
                 ReviewEmptyState(
-                    title = “尚未撰写年度总结”,
-                    description = “点击右下角的”+”按钮，开启你的年度回顾与总结吧”,
+                    title = "尚未撰写年度总结",
+                    description = "点击右下角的“+”按钮，开启你的年度回顾与总结吧",
                     modifier = Modifier.fillParentMaxHeight(),
                 )
             }
