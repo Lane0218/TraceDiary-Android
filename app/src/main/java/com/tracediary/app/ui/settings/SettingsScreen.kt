@@ -297,42 +297,38 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
-                Column {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 56.dp)
-                            .padding(horizontal = 20.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "云同步",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "云同步",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = state.syncEnabled,
+                        onCheckedChange = viewModel::onToggleSync,
+                        colors = SwitchDefaults.colors(
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
                         )
-                        Switch(
-                            checked = state.syncEnabled,
-                            onCheckedChange = viewModel::onToggleSync,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary
-                            )
-                        )
-                    }
-                    if (state.syncEnabled) {
-                        SyncRowDivider()
-                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                            SyncProviderSelector(
-                                selectedProvider = state.syncProvider,
-                                onProviderSelected = viewModel::onSyncProviderChanged
-                            )
-                        }
-                    }
+                    )
                 }
             }
         }
 
         if (state.syncEnabled) {
+            item {
+                SyncProviderSelector(
+                    selectedProvider = state.syncProvider,
+                    onProviderSelected = viewModel::onSyncProviderChanged
+                )
+            }
+
             item { SyncSectionLabel("存储") }
             item {
                 Card(
@@ -439,32 +435,36 @@ private fun SyncProviderSelector(
     selectedProvider: String,
     onProviderSelected: (String) -> Unit
 ) {
+    val providers = listOf("aliyun" to "阿里云", "tencent" to "腾讯云")
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(36.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(3.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        val providers = listOf("aliyun" to "阿里云", "tencent" to "腾讯云")
         providers.forEach { (id, label) ->
             val selected = selectedProvider == id
-            Box(
+            Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
-                    .clickable { onProviderSelected(id) },
-                contentAlignment = Alignment.Center
+                    .clickable { onProviderSelected(id) }
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Box(
+                    modifier = Modifier
+                        .size(width = 20.dp, height = 2.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.primary
+                            else Color.Transparent
+                        )
                 )
             }
         }
