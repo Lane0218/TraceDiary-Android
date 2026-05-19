@@ -72,7 +72,7 @@ fun SettingsScreen(
                         viewModel = viewModel,
                     )
                     "通知提醒" -> NotificationPage(state = state, viewModel = viewModel)
-                    "关于我们" -> AboutPage()
+                    "关于" -> AboutPage()
                     else -> Text("开发中...")
                 }
             }
@@ -162,7 +162,7 @@ private fun MainSettingsList(
                     SettingsRow(
                         icon = Icons.Outlined.Info, 
                         title = "关于 TraceDiary", 
-                        onClick = { onNavigate("关于我们") }
+                        onClick = { onNavigate("关于") }
                     )
                 }
             }
@@ -440,9 +440,13 @@ private fun SyncProviderSelector(
     ) {
         providers.forEach { (id, label) ->
             val selected = selectedProvider == id
+            val interactionSource = remember { MutableInteractionSource() }
             Column(
                 modifier = Modifier
-                    .clickable { onProviderSelected(id) }
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null
+                    ) { onProviderSelected(id) }
                     .padding(horizontal = 4.dp, vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -1082,25 +1086,28 @@ private fun AboutPage() {
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         Spacer(modifier = Modifier.height(32.dp))
-        Box(
-            modifier = Modifier.size(80.dp).clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Outlined.AutoStories, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
-        }
+        // Logo Section
+        Icon(
+            imageVector = Icons.Outlined.AutoStories,
+            contentDescription = "Logo",
+            modifier = Modifier.size(56.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = "TraceDiary", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text(text = "Version 1.0.0", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(text = "TraceDiary", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(text = "版本：1.0.0", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        
         Card(
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Column {
-                SettingsRow(icon = Icons.Outlined.Gavel, title = "隐私政策", onClick = { showPrivacyDialog = true })
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                SettingsRow(icon = Icons.Outlined.Update, title = "检查更新", onClick = { showUpdateDialog = true })
+                AboutRow(title = "隐私政策", onClick = { showPrivacyDialog = true })
+                HorizontalDivider(modifier = Modifier.padding(start = 20.dp, end = 20.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                AboutRow(title = "检查更新", onClick = { showUpdateDialog = true })
             }
         }
     }
@@ -1116,8 +1123,7 @@ private fun AboutPage() {
                         "2. 若你主动启用云同步，数据会通过 HTTPS 传输至你自行配置的对象存储。\n" +
                         "3. 应用不收集任何遥测信息，不接入第三方分析或广告 SDK。\n" +
                         "4. 您可以随时通过「导出备份」导出全部数据。",
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             },
             confirmButton = { TextButton(onClick = { showPrivacyDialog = false }) { Text("我知道了") } }
@@ -1130,6 +1136,31 @@ private fun AboutPage() {
             title = { Text("检查更新") },
             text = { Text("当前版本已是最新（v1.0）") },
             confirmButton = { TextButton(onClick = { showUpdateDialog = false }) { Text("好的") } }
+        )
+    }
+}
+
+@Composable
+private fun AboutRow(title: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.size(20.dp)
         )
     }
 }
