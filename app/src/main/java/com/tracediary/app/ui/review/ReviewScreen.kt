@@ -63,6 +63,7 @@ import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.AnnualSummary
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val EntryDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
@@ -227,7 +228,9 @@ private fun AnnualSummaryList(
                         },
                         trailingContent = {
                             Text(
-                                text = summary.updatedAt.format(DateTimeFormatter.ofPattern("yyyy.MM.dd")),
+                                text = DateTimeFormatter.ofPattern("yyyy.MM.dd")
+                                    .withZone(ZoneId.systemDefault())
+                                    .format(summary.updatedAt),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
