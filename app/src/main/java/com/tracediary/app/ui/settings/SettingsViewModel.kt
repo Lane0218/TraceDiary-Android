@@ -18,6 +18,7 @@ import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.data.sync.SyncProvider
 import com.tracediary.app.data.sync.SyncScheduler
 import com.tracediary.app.data.sync.TencentCosRemoteStorage
+import com.tracediary.app.domain.repository.SyncMetadataRepository
 import com.tracediary.app.domain.usecase.ExportDiaryDataUseCase
 import com.tracediary.app.domain.usecase.ExportFormat
 import com.tracediary.app.domain.usecase.ImportDiaryDataUseCase
@@ -30,6 +31,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * 保存按钮的状态机：用于"保存并验证连接"的反馈。
@@ -101,6 +105,7 @@ data class SettingsUiState(
     val lastImportResult: ImportResult? = null,
     val syncOpStatus: SyncOpStatus = SyncOpStatus.Idle,
     val passwordRotationStatus: PasswordRotationStatus = PasswordRotationStatus.Idle,
+    val lastSyncText: String = "暂无同步记录",
 )
 
 class SettingsViewModel(
@@ -113,6 +118,8 @@ class SettingsViewModel(
     private val syncEngine: SyncEngine? = null,
     private val syncScheduler: SyncScheduler? = null,
     private val appPasswordManager: AppPasswordManager? = null,
+    private val syncMetadataRepository: SyncMetadataRepository? = null,
+    private val zoneId: ZoneId = ZoneId.systemDefault(),
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -149,6 +156,13 @@ class SettingsViewModel(
                         syncDirectory = prefs.syncDirectory,
                         syncDisplayName = prefs.syncDisplayName
                     )
+                }
+            }
+        }
+        viewModelScope.launch {
+            syncMetadataRepository?.observeLatestLastSyncedAt()?.collect { lastSyncedAt ->
+                _uiState.update { current ->
+                    current.copy(lastSyncText = formatLastSyncText(lastSyncedAt, zoneId))
                 }
             }
         }
@@ -620,8 +634,16 @@ class SettingsViewModel(
             state.passwordRotationStatus is PasswordRotationStatus.Working
     }
 
+    private fun formatLastSyncText(lastSyncedAt: Instant?, zoneId: ZoneId): String {
+        lastSyncedAt ?: return "暂无同步记录"
+        val localDateTime = lastSyncedAt.atZone(zoneId).toLocalDateTime()
+        return "${DateFormatter.format(localDateTime)} ${TimeFormatter.format(localDateTime)}"
+    }
+
     companion object {
         private const val DEFAULT_SAVE_DELAY_MILLIS: Long = 0L
+        private val DateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
+        private val TimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
         fun factory(application: TraceDiaryApplication): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
@@ -639,6 +661,7 @@ class SettingsViewModel(
                         syncEngine = application.syncEngine,
                         syncScheduler = application.syncScheduler,
                         appPasswordManager = application.appPasswordManager,
+                        syncMetadataRepository = application.syncMetadataRepository,
                     ) as T
                 }
             }

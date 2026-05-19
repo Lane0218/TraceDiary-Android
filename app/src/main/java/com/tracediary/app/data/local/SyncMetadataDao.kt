@@ -13,6 +13,9 @@ interface SyncMetadataDao {
     @Query("SELECT * FROM sync_metadata WHERE objectKey = :objectKey")
     suspend fun getByObjectKey(objectKey: String): SyncMetadataEntity?
 
+    @Query("SELECT MAX(lastSyncedAtEpochMilli) FROM sync_metadata")
+    fun observeLatestLastSyncedAtEpochMilli(): Flow<Long?>
+
     @Upsert
     suspend fun upsert(entity: SyncMetadataEntity)
 

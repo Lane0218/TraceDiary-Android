@@ -52,7 +52,11 @@ fun SettingsScreen(
     
     AnimatedContent(targetState = activeSubPage, label = "SettingsTransition") { page ->
         if (page == null) {
-            MainSettingsList(modifier = modifier, onNavigate = { activeSubPage = it })
+            MainSettingsList(
+                state = state,
+                modifier = modifier,
+                onNavigate = { activeSubPage = it }
+            )
         } else {
             SettingsSubPageContainer(title = page, onBack = { activeSubPage = null }) {
                 when (page) {
@@ -73,7 +77,11 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String) -> Unit) {
+private fun MainSettingsList(
+    state: SettingsUiState,
+    modifier: Modifier = Modifier,
+    onNavigate: (String) -> Unit
+) {
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -99,7 +107,7 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.Cloud, 
                         title = "云同步", 
-                        subtitle = "最近同步: 今天 15:30",
+                        subtitle = "最近同步: ${state.lastSyncText}",
                         onClick = { onNavigate("同步设置") }
                     )
                 }
@@ -427,7 +435,7 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                 }
             }
 
-            if (state.syncError != null) {
+            if (state.saveError != null) {
                 item {
                     Card(
                         shape = RoundedCornerShape(12.dp),
@@ -442,7 +450,7 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = state.syncError ?: "",
+                                text = state.saveError ?: "",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
                             )
@@ -451,10 +459,10 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                 }
             }
 
-            if (state.lastSyncTime != null && state.syncError == null) {
+            if (state.saveError == null) {
                 item {
                     Text(
-                        text = "上次同步 ${state.lastSyncTime}",
+                        text = "上次同步 ${state.lastSyncText}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -618,7 +626,7 @@ private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewMode
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     TextButton(onClick = {
-                        viewModel.onDailyReminderTimeChanged(
+                        viewModel.onReminderTimeChanged(
                             String.format("%02d:%02d", selectedHour, selectedMinute)
                         )
                         showTimePicker = false

@@ -738,6 +738,9 @@ private class FakeSyncMetadataRepository : SyncMetadataRepository {
     override fun observeMetadata(objectKey: String): Flow<SyncMetadata?> =
         flowOf(store[objectKey])
 
+    override fun observeLatestLastSyncedAt(): Flow<Instant?> =
+        flowOf(store.values.mapNotNull { it.lastSyncedAt }.maxOrNull())
+
     override suspend fun getMetadata(objectKey: String): SyncMetadata? = store[objectKey]
 
     override suspend fun saveMetadata(metadata: SyncMetadata) {

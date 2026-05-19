@@ -518,6 +518,7 @@ private class FakeAnnualSummaryRepository : AnnualSummaryRepository {
 
 private class FakeSyncMetadataRepository : SyncMetadataRepository {
     override fun observeMetadata(objectKey: String): Flow<SyncMetadata?> = flowOf(null)
+    override fun observeLatestLastSyncedAt(): Flow<Instant?> = flowOf(null)
     override suspend fun getMetadata(objectKey: String): SyncMetadata? = null
     override suspend fun saveMetadata(metadata: SyncMetadata) = Unit
     override suspend fun deleteMetadata(objectKey: String) = Unit
