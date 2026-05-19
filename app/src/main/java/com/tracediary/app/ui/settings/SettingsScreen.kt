@@ -308,11 +308,6 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Medium
                             )
-                            Text(
-                                text = if (state.syncEnabled) "同步加密日记与年度总结" else "关闭后仅保存在本机",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                         Switch(
                             checked = state.syncEnabled,
@@ -345,12 +340,12 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                             SyncInputField(
                                 value = state.syncBucket,
                                 onValueChange = viewModel::onSyncBucketChanged,
-                                label = "存储桶名称 (Bucket)"
+                                label = "存储桶名称"
                             )
                             SyncInputField(
                                 value = state.syncRegion,
                                 onValueChange = viewModel::onSyncRegionChanged,
-                                label = "所在地域 (Region)"
+                                label = "所在地域"
                             )
                             SyncInputField(
                                 value = state.syncDirectory,
@@ -374,8 +369,8 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                                 enabled = state.saveStatus != SaveStatus.Saving,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(12.dp),
+                                    .height(50.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Text(
@@ -477,11 +472,11 @@ private fun SyncInputField(value: String, onValueChange: (String) -> Unit, label
                 .height(48.dp),
             singleLine = true,
             visualTransformation = if (isPassword) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(12.dp),
             textStyle = MaterialTheme.typography.bodyMedium,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.75f),
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent
             )
