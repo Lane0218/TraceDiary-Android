@@ -160,6 +160,24 @@ class ReviewViewModel(
         }
     }
 
+    fun onDeleteSummary() {
+        val year = _state.value.annual.selectedYear ?: return
+        summarySaveJob?.cancel()
+        summarySaveJob = null
+        workScope.launch {
+            annualSummaryRepository.deleteSummary(year)
+            _state.update { current ->
+                current.copy(
+                    annual = current.annual.copy(
+                        selectedYear = null,
+                        editingContent = "",
+                        editingSaveStatus = SaveStatus.Idle,
+                    ),
+                )
+            }
+        }
+    }
+
     fun onSummaryContentChanged(text: String) {
         val year = _state.value.annual.selectedYear ?: return
         _state.update { current ->

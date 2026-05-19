@@ -30,10 +30,14 @@ import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
@@ -48,6 +52,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -172,6 +177,7 @@ fun ReviewScreen(
                     onOpenSummary = viewModel::onOpenSummary,
                     onCloseSummary = viewModel::onCloseSummary,
                     onContentChanged = viewModel::onSummaryContentChanged,
+                    onDeleteSummary = viewModel::onDeleteSummary,
                 )
             }
         }
@@ -184,12 +190,13 @@ private fun AnnualSummaryContent(
     onOpenSummary: (Int) -> Unit,
     onCloseSummary: () -> Unit,
     onContentChanged: (String) -> Unit,
+    onDeleteSummary: () -> Unit,
 ) {
     val selectedYear = state.selectedYear
     if (selectedYear == null) {
         Box(modifier = Modifier.fillMaxSize()) {
             AnnualSummaryList(state = state, onOpenSummary = onOpenSummary)
-            
+
             if (state.writableYears.isNotEmpty()) {
                 FloatingActionButton(
                     onClick = { onOpenSummary(state.writableYears.first()) },
@@ -211,7 +218,8 @@ private fun AnnualSummaryContent(
             saveStatus = state.editingSaveStatus,
             onContentChanged = onContentChanged,
             onClose = onCloseSummary,
-            onSwitchYear = onOpenSummary
+            onSwitchYear = onOpenSummary,
+            onDelete = onDeleteSummary,
         )
     }
 }
@@ -237,13 +245,6 @@ private fun AnnualSummaryList(
         }
 
         if (state.summaries.isNotEmpty()) {
-            item {
-                Text(
-                    text = "我的年度总结",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-            }
             items(state.summaries, key = AnnualSummary::year) { summary ->
                 Card(
                     modifier = Modifier
@@ -256,7 +257,7 @@ private fun AnnualSummaryList(
                     ListItem(
                         headlineContent = {
                             Text(
-                                text = "${summary.year}年度总结",
+                                text = "${summary.year}年",
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.Bold
                             )
@@ -286,11 +287,14 @@ private fun AnnualSummaryEditor(
     onContentChanged: (String) -> Unit,
     onClose: () -> Unit,
     onSwitchYear: (Int) -> Unit,
+    onDelete: () -> Unit,
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val coroutineScope = rememberCoroutineScope()
     val wordCount = content.trim().length
-    
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -302,38 +306,77 @@ private fun AnnualSummaryEditor(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = "返回",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
+                IconButton(onClick = { onSwitchYear(year - 1) }, modifier = Modifier.size(32.dp)) {
                     Icon(
-                        Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "返回",
+                        Icons.Outlined.ChevronLeft,
+                        contentDescription = "上一年",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Text(
+                    text = "${year}年",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+                IconButton(onClick = { onSwitchYear(year + 1) }, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Outlined.ChevronRight,
+                        contentDescription = "下一年",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+
+            Box {
+                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.Outlined.MoreVert,
+                        contentDescription = "更多操作",
                         modifier = Modifier.size(20.dp),
                     )
                 }
-                Spacer(modifier = Modifier.size(8.dp))
-                
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { onSwitchYear(year - 1) }, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Outlined.ChevronLeft, null, tint = MaterialTheme.colorScheme.primary)
-                    }
-                    Text(
-                        text = "${year}年",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 4.dp)
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("删除该年度总结") },
+                        onClick = {
+                            menuExpanded = false
+                            showDeleteConfirm = true
+                        }
                     )
-                    IconButton(onClick = { onSwitchYear(year + 1) }, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.primary)
-                    }
                 }
             }
-            
-            Text(
-                text = "完成",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable { onClose() }
+        }
+
+        if (showDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("删除${year}年的年度总结？") },
+                text = { Text("删除将移除该年度总结的本地记录，若已启用云同步会同时尝试删除云端对象，操作不可恢复。") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showDeleteConfirm = false
+                        onDelete()
+                    }) { Text("删除") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+                }
             )
         }
 
