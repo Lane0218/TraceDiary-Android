@@ -372,6 +372,7 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
     SyncOpDialogs(state = state, viewModel = viewModel)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewModel) {
     val context = LocalContext.current
