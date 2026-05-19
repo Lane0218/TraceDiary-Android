@@ -186,6 +186,7 @@ private fun SettingsSubPageContainer(title: String, onBack: () -> Unit, content:
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .imePadding()
     ) {
         Row(
             modifier = Modifier
@@ -329,7 +330,6 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                 )
             }
 
-            item { SyncSectionLabel("存储") }
             item {
                 Card(
                     shape = RoundedCornerShape(14.dp),
@@ -360,18 +360,7 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                             value = state.syncDirectory,
                             onValueChange = viewModel::onSyncDirectoryChanged
                         )
-                    }
-                }
-            }
-
-            item { SyncSectionLabel("凭据") }
-            item {
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Column {
+                        SyncRowDivider()
                         SyncFieldRow(
                             label = "AccessKey ID",
                             value = state.syncAccessKeyId,
@@ -409,16 +398,6 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
         }
     }
     SyncOpDialogs(state = state, viewModel = viewModel)
-}
-
-@Composable
-private fun SyncSectionLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)
-    )
 }
 
 @Composable
