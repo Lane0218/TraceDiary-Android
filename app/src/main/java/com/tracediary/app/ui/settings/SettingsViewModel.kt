@@ -18,7 +18,6 @@ import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.data.sync.SyncProvider
 import com.tracediary.app.data.sync.SyncScheduler
 import com.tracediary.app.data.sync.TencentCosRemoteStorage
-import com.tracediary.app.domain.repository.SyncMetadataRepository
 import com.tracediary.app.domain.usecase.ExportDiaryDataUseCase
 import com.tracediary.app.domain.usecase.ExportFormat
 import com.tracediary.app.domain.usecase.ImportDiaryDataUseCase
@@ -31,11 +30,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.Clock
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 /**
  * 保存按钮的状态机：用于"保存并验证连接"的反馈。
@@ -107,8 +101,27 @@ data class SettingsUiState(
     val lastImportResult: ImportResult? = null,
     val syncOpStatus: SyncOpStatus = SyncOpStatus.Idle,
     val passwordRotationStatus: PasswordRotationStatus = PasswordRotationStatus.Idle,
-    val lastSyncText: String = "暂无同步记录",
 )
+
+private data class SyncConfigurationDraft(
+    val bucket: String,
+    val region: String,
+    val directory: String,
+    val displayName: String,
+    val accessKeyId: String,
+    val accessKeySecret: String,
+) {
+    companion object {
+        val Empty = SyncConfigurationDraft(
+            bucket = "",
+            region = "",
+            directory = "TraceDiary/",
+            displayName = "",
+            accessKeyId = "",
+            accessKeySecret = "",
+        )
+    }
+}
 
 class SettingsViewModel(
     private val repository: UserPreferencesRepository,
@@ -120,13 +133,11 @@ class SettingsViewModel(
     private val syncEngine: SyncEngine? = null,
     private val syncScheduler: SyncScheduler? = null,
     private val appPasswordManager: AppPasswordManager? = null,
-    private val syncMetadataRepository: SyncMetadataRepository? = null,
-    private val zoneId: ZoneId = ZoneId.systemDefault(),
-    private val clock: Clock = Clock.system(zoneId),
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+    private val syncDraftsByProvider = mutableMapOf<String, SyncConfigurationDraft>()
 
     /** 暴露同步引擎进度供 UI 直接 collect，避免在 VM 中重复维护一份镜像。 */
     val syncEngineState: StateFlow<SyncEngine.SyncEngineState>? = syncEngine?.state
@@ -148,24 +159,18 @@ class SettingsViewModel(
         viewModelScope.launch {
             repository.preferences.collect { prefs ->
                 _uiState.update { current ->
+                    val keepDraft = syncDraftsByProvider.containsKey(current.syncProvider)
                     current.copy(
                         dailyReminderEnabled = prefs.dailyReminderEnabled,
                         dailyReminderTime = prefs.dailyReminderTime,
                         savePasswordLocally = prefs.savePasswordLocally,
                         syncEnabled = prefs.syncEnabled,
                         syncProvider = prefs.syncProvider,
-                        syncBucket = prefs.syncBucket,
-                        syncRegion = prefs.syncRegion,
-                        syncDirectory = prefs.syncDirectory,
-                        syncDisplayName = prefs.syncDisplayName
+                        syncBucket = if (keepDraft) current.syncBucket else prefs.syncBucket,
+                        syncRegion = if (keepDraft) current.syncRegion else prefs.syncRegion,
+                        syncDirectory = if (keepDraft) current.syncDirectory else prefs.syncDirectory,
+                        syncDisplayName = if (keepDraft) current.syncDisplayName else prefs.syncDisplayName
                     )
-                }
-            }
-        }
-        viewModelScope.launch {
-            syncMetadataRepository?.observeLatestLastSyncedAt()?.collect { lastSyncedAt ->
-                _uiState.update { current ->
-                    current.copy(lastSyncText = formatLastSyncText(lastSyncedAt, zoneId, clock))
                 }
             }
         }
@@ -368,7 +373,24 @@ class SettingsViewModel(
     }
 
     fun onSyncProviderChanged(provider: String) {
-        // 立即写库，便于切换后下一次进入页面保留选择。
+        val current = _uiState.value
+        if (provider == current.syncProvider) return
+        syncDraftsByProvider[current.syncProvider] = current.toSyncConfigurationDraft()
+        val restoredDraft = syncDraftsByProvider[provider]
+        syncDraftsByProvider[provider] = restoredDraft ?: SyncConfigurationDraft.Empty
+        _uiState.update {
+            it.copy(
+                syncProvider = provider,
+                syncBucket = restoredDraft?.bucket.orEmpty(),
+                syncRegion = restoredDraft?.region.orEmpty(),
+                syncDirectory = restoredDraft?.directory ?: "TraceDiary/",
+                syncDisplayName = restoredDraft?.displayName.orEmpty(),
+                syncAccessKeyId = restoredDraft?.accessKeyId.orEmpty(),
+                syncAccessKeySecret = restoredDraft?.accessKeySecret.orEmpty(),
+                saveStatus = SaveStatus.Idle,
+                saveError = null,
+            )
+        }
         viewModelScope.launch { repository.setSyncProvider(provider) }
     }
 
@@ -637,25 +659,18 @@ class SettingsViewModel(
             state.passwordRotationStatus is PasswordRotationStatus.Working
     }
 
-    private fun formatLastSyncText(lastSyncedAt: Instant?, zoneId: ZoneId, clock: Clock): String {
-        lastSyncedAt ?: return "暂无同步记录"
-        val localDateTime = lastSyncedAt.atZone(zoneId).toLocalDateTime()
-        val date = localDateTime.toLocalDate()
-        val today = LocalDate.now(clock.withZone(zoneId))
-        val dateText = when {
-            date == today -> "今天"
-            date == today.minusDays(1) -> "昨天"
-            date.year == today.year -> MonthDayFormatter.format(localDateTime)
-            else -> DateFormatter.format(localDateTime)
-        }
-        return "$dateText ${TimeFormatter.format(localDateTime)}"
-    }
+    private fun SettingsUiState.toSyncConfigurationDraft(): SyncConfigurationDraft =
+        SyncConfigurationDraft(
+            bucket = syncBucket,
+            region = syncRegion,
+            directory = syncDirectory,
+            displayName = syncDisplayName,
+            accessKeyId = syncAccessKeyId,
+            accessKeySecret = syncAccessKeySecret,
+        )
 
     companion object {
         private const val DEFAULT_SAVE_DELAY_MILLIS: Long = 0L
-        private val DateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
-        private val MonthDayFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d日")
-        private val TimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
         fun factory(application: TraceDiaryApplication): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
@@ -673,7 +688,6 @@ class SettingsViewModel(
                         syncEngine = application.syncEngine,
                         syncScheduler = application.syncScheduler,
                         appPasswordManager = application.appPasswordManager,
-                        syncMetadataRepository = application.syncMetadataRepository,
                     ) as T
                 }
             }

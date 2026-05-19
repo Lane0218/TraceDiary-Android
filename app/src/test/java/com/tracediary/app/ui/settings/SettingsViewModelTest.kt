@@ -2,14 +2,11 @@ package com.tracediary.app.ui.settings
 
 import com.tracediary.app.data.settings.UserPreferences
 import com.tracediary.app.data.settings.UserPreferencesRepository
-import com.tracediary.app.domain.model.SyncMetadata
-import com.tracediary.app.domain.repository.SyncMetadataRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -23,9 +20,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneId
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
@@ -41,8 +35,7 @@ class SettingsViewModelTest {
         // saveDelayMillis = 0 以避免测试中等待真实延迟
         viewModel = SettingsViewModel(
             repository = fakeRepo,
-            saveDelayMillis = 0L,
-            syncMetadataRepository = FakeSyncMetadataRepository()
+            saveDelayMillis = 0L
         )
     }
 
@@ -62,68 +55,6 @@ class SettingsViewModelTest {
         assertEquals("aliyun", state.syncProvider)
         assertEquals("TraceDiary/", state.syncDirectory)
         assertEquals(SaveStatus.Idle, state.saveStatus)
-        assertEquals("暂无同步记录", state.lastSyncText)
-    }
-
-    @Test
-    fun lastSyncText_reflectsLatestMetadataTime() = runTest(testDispatcher) {
-        val metadataRepo = FakeSyncMetadataRepository(
-            latest = Instant.parse("2026-05-17T07:30:00Z")
-        )
-        viewModel = SettingsViewModel(
-            repository = fakeRepo,
-            saveDelayMillis = 0L,
-            syncMetadataRepository = metadataRepo,
-            zoneId = ZoneId.of("Asia/Shanghai"),
-            clock = Clock.fixed(Instant.parse("2026-05-19T02:00:00Z"), ZoneId.of("Asia/Shanghai")),
-        )
-
-        advanceUntilIdle()
-
-        assertEquals("5月17日 15:30", viewModel.uiState.value.lastSyncText)
-    }
-
-    @Test
-    fun lastSyncText_usesRelativeDateForTodayAndYesterday() = runTest(testDispatcher) {
-        val zoneId = ZoneId.of("Asia/Shanghai")
-        val metadataRepo = FakeSyncMetadataRepository(
-            latest = Instant.parse("2026-05-19T07:30:00Z")
-        )
-        viewModel = SettingsViewModel(
-            repository = fakeRepo,
-            saveDelayMillis = 0L,
-            syncMetadataRepository = metadataRepo,
-            zoneId = zoneId,
-            clock = Clock.fixed(Instant.parse("2026-05-19T10:00:00Z"), zoneId),
-        )
-
-        advanceUntilIdle()
-
-        assertEquals("今天 15:30", viewModel.uiState.value.lastSyncText)
-
-        metadataRepo.publishLatest(Instant.parse("2026-05-18T07:30:00Z"))
-        advanceUntilIdle()
-
-        assertEquals("昨天 15:30", viewModel.uiState.value.lastSyncText)
-    }
-
-    @Test
-    fun lastSyncText_keepsYearForPreviousYears() = runTest(testDispatcher) {
-        val zoneId = ZoneId.of("Asia/Shanghai")
-        val metadataRepo = FakeSyncMetadataRepository(
-            latest = Instant.parse("2025-12-31T15:30:00Z")
-        )
-        viewModel = SettingsViewModel(
-            repository = fakeRepo,
-            saveDelayMillis = 0L,
-            syncMetadataRepository = metadataRepo,
-            zoneId = zoneId,
-            clock = Clock.fixed(Instant.parse("2026-05-19T10:00:00Z"), zoneId),
-        )
-
-        advanceUntilIdle()
-
-        assertEquals("2025年12月31日 23:30", viewModel.uiState.value.lastSyncText)
     }
 
     @Test
@@ -166,6 +97,42 @@ class SettingsViewModelTest {
         viewModel.onSyncProviderChanged("tencent")
         advanceUntilIdle()
         assertEquals("tencent", fakeRepo.current().syncProvider)
+    }
+
+    @Test
+    fun onSyncProviderChanged_keepsDraftPerProvider() = runTest(testDispatcher) {
+        advanceUntilIdle()
+        viewModel.onSyncDisplayNameChanged("阿里云空间")
+        viewModel.onSyncBucketChanged("aliyun-bucket")
+        viewModel.onSyncRegionChanged("cn-hangzhou")
+        viewModel.onSyncDirectoryChanged("aliyun-dir/")
+        viewModel.onSyncAccessKeyIdChanged("aliyun-ak")
+        viewModel.onSyncAccessKeySecretChanged("aliyun-secret")
+
+        viewModel.onSyncProviderChanged("tencent")
+        advanceUntilIdle()
+
+        assertEquals("tencent", viewModel.uiState.value.syncProvider)
+        assertEquals("", viewModel.uiState.value.syncBucket)
+
+        viewModel.onSyncDisplayNameChanged("腾讯云空间")
+        viewModel.onSyncBucketChanged("tencent-bucket")
+        viewModel.onSyncRegionChanged("ap-guangzhou")
+        viewModel.onSyncDirectoryChanged("tencent-dir/")
+        viewModel.onSyncAccessKeyIdChanged("tencent-ak")
+        viewModel.onSyncAccessKeySecretChanged("tencent-secret")
+
+        viewModel.onSyncProviderChanged("aliyun")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("aliyun", state.syncProvider)
+        assertEquals("阿里云空间", state.syncDisplayName)
+        assertEquals("aliyun-bucket", state.syncBucket)
+        assertEquals("cn-hangzhou", state.syncRegion)
+        assertEquals("aliyun-dir/", state.syncDirectory)
+        assertEquals("aliyun-ak", state.syncAccessKeyId)
+        assertEquals("aliyun-secret", state.syncAccessKeySecret)
     }
 
     @Test
@@ -274,23 +241,4 @@ class SettingsViewModelTest {
         }
     }
 
-    private class FakeSyncMetadataRepository(
-        latest: Instant? = null
-    ) : SyncMetadataRepository {
-        private val latestFlow = MutableStateFlow(latest)
-
-        override fun observeMetadata(objectKey: String): Flow<SyncMetadata?> = flowOf(null)
-
-        override fun observeLatestLastSyncedAt(): Flow<Instant?> = latestFlow
-
-        fun publishLatest(value: Instant?) {
-            latestFlow.value = value
-        }
-
-        override suspend fun getMetadata(objectKey: String): SyncMetadata? = null
-
-        override suspend fun saveMetadata(metadata: SyncMetadata) = Unit
-
-        override suspend fun deleteMetadata(objectKey: String) = Unit
-    }
 }
