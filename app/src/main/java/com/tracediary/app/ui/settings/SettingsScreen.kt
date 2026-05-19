@@ -315,6 +315,7 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
             }
         }
 @Composable
+@Composable
 private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
