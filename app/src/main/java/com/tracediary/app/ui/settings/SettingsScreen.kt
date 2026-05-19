@@ -67,8 +67,7 @@ fun SettingsScreen(
                 when (page) {
                     "同步设置" -> SyncSettingsPage(state = state, viewModel = viewModel)
                     "数据加密" -> EncryptionSettingsPage(state = state, viewModel = viewModel)
-                    "导入数据", "导出备份" -> DataManagementPage(
-                        mode = page,
+                    "备份与恢复" -> DataManagementPage(
                         state = state,
                         viewModel = viewModel,
                     )
@@ -136,18 +135,9 @@ private fun MainSettingsList(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                     )
                     SettingsRow(
-                        icon = Icons.Outlined.Download, 
-                        title = "导入数据", 
-                        onClick = { onNavigate("导入数据") }
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 68.dp, end = 16.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                    )
-                    SettingsRow(
-                        icon = Icons.Outlined.Upload, 
-                        title = "导出备份", 
-                        onClick = { onNavigate("导出备份") }
+                        icon = Icons.Outlined.ImportExport,
+                        title = "备份与恢复",
+                        onClick = { onNavigate("备份与恢复") }
                     )
                 }
             }
@@ -677,147 +667,190 @@ private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewMode
 }
 
 @Composable
-private fun DataManagementPage(mode: String, state: SettingsUiState, viewModel: SettingsViewModel) {
+private fun DataManagementPage(state: SettingsUiState, viewModel: SettingsViewModel) {
     val context = LocalContext.current
-    val isImport = mode == "导入数据"
+    var selectedMode by remember { mutableStateOf("export") }
+    val isImport = selectedMode == "import"
     val isWorking = state.backupStatus is BackupStatus.Working
     var mergeStrategy by remember { mutableStateOf(MergeStrategy.KeepNewer) }
     var exportFormat by remember { mutableStateOf(ExportFormat.Json) }
+    var lastIsImport by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
-        if (uri != null) viewModel.onExport(uri, context.contentResolver, exportFormat)
+        if (uri != null) {
+            lastIsImport = false
+            viewModel.onExport(uri, context.contentResolver, exportFormat)
+        }
     }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) viewModel.onImport(uri = uri, contentResolver = context.contentResolver, options = ImportOptions(mergeStrategy = mergeStrategy))
+        if (uri != null) {
+            lastIsImport = true
+            viewModel.onImport(uri = uri, contentResolver = context.contentResolver, options = ImportOptions(mergeStrategy = mergeStrategy))
+        }
     }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 112.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
-            Text(
-                text = if (isImport) "导入 TraceDiary 备份" else "导出日记与年度总结",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                modifier = Modifier.padding(start = 4.dp)
+            BackupModeSelector(
+                selectedMode = selectedMode,
+                onModeSelected = { selectedMode = it }
             )
         }
 
-        if (!isImport) {
-            item {
-                SubPageSection(title = "文件格式") {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .fillMaxWidth()
-                                .height(40.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                .padding(4.dp)
-                        ) {
-                            val formats = listOf(
-                                ExportFormat.Json to "JSON",
-                                ExportFormat.TextZip to "TXT 压缩包",
-                                ExportFormat.MarkdownZip to "Markdown"
+        item {
+            Text(
+                text = if (isImport) "重复记录" else "文件格式",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 4.dp),
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        item {
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column {
+                    if (isImport) {
+                        val strategies = listOf(
+                            MergeStrategy.KeepNewer to "保留较新",
+                            MergeStrategy.OverwriteAll to "全部覆盖",
+                            MergeStrategy.SkipExisting to "跳过"
+                        )
+                        strategies.forEachIndexed { index, (strategy, label) ->
+                            ChoiceRow(
+                                label = label,
+                                selected = mergeStrategy == strategy,
+                                enabled = !isWorking,
+                                onClick = { mergeStrategy = strategy }
                             )
-                            formats.forEach { (format, label) ->
-                                val selected = exportFormat == format
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
-                                        .clickable(enabled = !isWorking) { exportFormat = format },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = label,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                }
-                            }
+                            if (index < strategies.lastIndex) SyncRowDivider()
+                        }
+                    } else {
+                        val formats = listOf(
+                            ExportFormat.Json to "JSON",
+                            ExportFormat.TextZip to "TXT 压缩包",
+                            ExportFormat.MarkdownZip to "Markdown"
+                        )
+                        formats.forEachIndexed { index, (format, label) ->
+                            ChoiceRow(
+                                label = label,
+                                selected = exportFormat == format,
+                                enabled = !isWorking,
+                                onClick = { exportFormat = format }
+                            )
+                            if (index < formats.lastIndex) SyncRowDivider()
                         }
                     }
                 }
             }
         }
 
-        if (isImport) {
-            item {
-                SubPageSection(title = "重复记录") {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .fillMaxWidth()
-                                .height(40.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                .padding(4.dp)
-                        ) {
-                            val strategies = listOf(
-                                MergeStrategy.KeepNewer to "保留较新",
-                                MergeStrategy.OverwriteAll to "全部覆盖",
-                                MergeStrategy.SkipExisting to "跳过"
-                            )
-                            strategies.forEach { (strategy, label) ->
-                                val selected = mergeStrategy == strategy
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
-                                        .clickable(enabled = !isWorking) { mergeStrategy = strategy },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = label,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        item { Spacer(modifier = Modifier.height(8.dp)) }
 
         item {
             Button(
-                onClick = { if (isImport) importLauncher.launch(arrayOf("*/*")) else exportLauncher.launch("TraceDiary_Backup_${java.time.LocalDate.now()}.zip") },
+                onClick = {
+                    if (isImport) {
+                        importLauncher.launch(arrayOf("*/*"))
+                    } else {
+                        exportLauncher.launch("TraceDiary_Backup_${java.time.LocalDate.now()}.zip")
+                    }
+                },
                 enabled = !isWorking,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Text(
-                    text = if (isWorking) "正在处理…" else if (isImport) "选择备份文件" else "生成备份文件",
-                    fontWeight = FontWeight.Bold
+                    text = if (isImport) "选择备份文件" else "生成备份文件",
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
+    }
 
-        item {
-            BackupStatusDialogs(state = state, viewModel = viewModel, isImport = isImport)
+    BackupStatusDialogs(state = state, viewModel = viewModel, isImport = lastIsImport)
+}
+
+@Composable
+private fun BackupModeSelector(
+    selectedMode: String,
+    onModeSelected: (String) -> Unit
+) {
+    val modes = listOf("export" to "导出", "import" to "导入")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        modes.forEach { (id, label) ->
+            val selected = selectedMode == id
+            Column(
+                modifier = Modifier
+                    .clickable { onModeSelected(id) }
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Box(
+                    modifier = Modifier
+                        .size(width = 20.dp, height = 2.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.primary
+                            else Color.Transparent
+                        )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChoiceRow(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        if (selected) {
+            Icon(
+                imageVector = Icons.Outlined.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
@@ -911,18 +944,34 @@ private fun SyncChoiceItem(title: String, desc: String, icon: ImageVector, onCli
 @Composable
 private fun BackupStatusDialogs(state: SettingsUiState, viewModel: SettingsViewModel, isImport: Boolean) {
     when (val status = state.backupStatus) {
-        BackupStatus.Idle, BackupStatus.Working -> Unit
+        BackupStatus.Idle -> Unit
+        BackupStatus.Working -> AlertDialog(
+            onDismissRequest = {},
+            title = { Text(if (isImport) "正在导入数据" else "正在导出数据") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(if (isImport) "正在解析备份并写入本机…" else "正在生成备份文件…")
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(CircleShape)
+                    )
+                }
+            },
+            confirmButton = {},
+        )
         is BackupStatus.Success -> AlertDialog(
             onDismissRequest = viewModel::resetBackupStatus,
             title = { Text(if (isImport) "导入完成" else "导出完成") },
             text = { Text(status.message) },
-            confirmButton = { TextButton(onClick = viewModel::resetBackupStatus) { Text("好的") } }
+            confirmButton = { TextButton(onClick = viewModel::resetBackupStatus) { Text("好的") } },
         )
         is BackupStatus.Failed -> AlertDialog(
             onDismissRequest = viewModel::resetBackupStatus,
             title = { Text(if (isImport) "导入失败" else "导出失败") },
             text = { Text(status.message) },
-            confirmButton = { TextButton(onClick = viewModel::resetBackupStatus) { Text("我知道了") } }
+            confirmButton = { TextButton(onClick = viewModel::resetBackupStatus) { Text("我知道了") } },
         )
     }
 }
