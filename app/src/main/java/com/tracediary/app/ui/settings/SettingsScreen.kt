@@ -208,74 +208,101 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
     val rotationWorking = state.passwordRotationStatus is PasswordRotationStatus.Working
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 112.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
             Card(
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
-                Box(modifier = Modifier.padding(16.dp)) {
-                    ToggleItem(
-                        title = "记住密码",
-                        subtitle = null,
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "记住密码",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
                         checked = state.savePasswordLocally,
-                        onCheckedChange = viewModel::onToggleSavePasswordLocally
+                        onCheckedChange = viewModel::onToggleSavePasswordLocally,
+                        colors = SwitchDefaults.colors(
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        )
                     )
                 }
             }
         }
 
+        item { Spacer(modifier = Modifier.height(4.dp)) }
+
         item {
-            SubPageSection(title = "修改密码") {
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        TraceTextField(
-                            value = state.oldSyncPassword,
-                            onValueChange = viewModel::onOldSyncPasswordChanged,
-                            label = "旧密码",
-                            isPassword = true,
-                            enabled = !rotationWorking
-                        )
-                        TraceTextField(
-                            value = state.newSyncPassword,
-                            onValueChange = viewModel::onNewSyncPasswordChanged,
-                            label = "新密码",
-                            isPassword = true,
-                            enabled = !rotationWorking
-                        )
-                        TraceTextField(
-                            value = state.confirmNewSyncPassword,
-                            onValueChange = viewModel::onConfirmNewSyncPasswordChanged,
-                            label = "确认新密码",
-                            isPassword = true,
-                            enabled = !rotationWorking
-                        )
+            Text(
+                text = "修改密码",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 4.dp),
+                fontWeight = FontWeight.Bold
+            )
+        }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Button(
-                            onClick = viewModel::onRotateSyncPassword,
-                            enabled = !rotationWorking && state.syncOpStatus !is SyncOpStatus.Working,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Text(if (rotationWorking) "正在更新…" else "更新密码", fontWeight = FontWeight.Bold)
-                        }
-                    }
+        item {
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column {
+                    SyncFieldRow(
+                        label = "旧密码",
+                        value = state.oldSyncPassword,
+                        onValueChange = viewModel::onOldSyncPasswordChanged,
+                        isPassword = true,
+                        enabled = !rotationWorking
+                    )
+                    SyncRowDivider()
+                    SyncFieldRow(
+                        label = "新密码",
+                        value = state.newSyncPassword,
+                        onValueChange = viewModel::onNewSyncPasswordChanged,
+                        isPassword = true,
+                        enabled = !rotationWorking
+                    )
+                    SyncRowDivider()
+                    SyncFieldRow(
+                        label = "确认新密码",
+                        value = state.confirmNewSyncPassword,
+                        onValueChange = viewModel::onConfirmNewSyncPasswordChanged,
+                        isPassword = true,
+                        enabled = !rotationWorking
+                    )
                 }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(8.dp)) }
+
+        item {
+            Button(
+                onClick = viewModel::onRotateSyncPassword,
+                enabled = !rotationWorking && state.syncOpStatus !is SyncOpStatus.Working,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Text(
+                    if (rotationWorking) "正在更新…" else "更新密码",
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
 
@@ -455,7 +482,8 @@ private fun SyncFieldRow(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    isPassword: Boolean = false
+    isPassword: Boolean = false,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = Modifier
@@ -474,6 +502,7 @@ private fun SyncFieldRow(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier.weight(1f),
+            enabled = enabled,
             singleLine = true,
             visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
             textStyle = MaterialTheme.typography.bodyMedium.copy(
