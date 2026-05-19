@@ -229,8 +229,9 @@ private fun AnnualSummaryList(
         if (state.summaries.isEmpty()) {
             item {
                 ReviewEmptyState(
-                    title = "尚未撰写年度总结",
-                    description = "点击右下角的“+”按钮，开启你的年度回顾与总结吧"
+                    title = “尚未撰写年度总结”,
+                    description = “点击右下角的”+”按钮，开启你的年度回顾与总结吧”,
+                    modifier = Modifier.fillParentMaxHeight(),
                 )
             }
         }
@@ -503,14 +504,16 @@ private fun SearchContent(
                 item {
                     ReviewEmptyState(
                         title = "开始回顾你的记录",
-                        description = "搜索关键词或选择条件，查找你的历史日记"
+                        description = "搜索关键词或选择条件，查找你的历史日记",
+                        modifier = Modifier.fillParentMaxHeight(),
                     )
                 }
             } else if (state.results.isEmpty()) {
                 item {
                     ReviewEmptyState(
                         title = "未找到匹配结果",
-                        description = "尝试换一个关键词搜索吧"
+                        description = "尝试换一个关键词搜索吧",
+                        modifier = Modifier.fillParentMaxHeight(),
                     )
                 }
             } else {
@@ -568,32 +571,35 @@ private fun SearchContent(
 @Composable
 private fun ReviewEmptyState(
     title: String,
-    description: String
+    description: String,
+    modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = Modifier.padding(top = 80.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            Icons.Outlined.AutoStories,
-            contentDescription = null,
-            modifier = Modifier.size(100.dp),
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = description,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 48.dp)
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Outlined.AutoStories,
+                contentDescription = null,
+                modifier = Modifier.size(100.dp),
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 48.dp)
+            )
+        }
     }
 }
 
