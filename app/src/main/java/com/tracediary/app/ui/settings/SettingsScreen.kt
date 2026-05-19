@@ -162,7 +162,7 @@ private fun MainSettingsList(
                     )
                     SettingsRow(
                         icon = Icons.Outlined.Info, 
-                        title = "关于 TraceDiary", 
+                        title = "关于",
                         onClick = { onNavigate("关于") }
                     )
                 }
@@ -1114,10 +1114,10 @@ private fun AboutPage() {
     }
 
     if (showPrivacyDialog) {
-        AlertDialog(
+        TraceInfoDialog(
             onDismissRequest = { showPrivacyDialog = false },
             title = { Text("隐私政策") },
-            text = {
+            content = {
                 Text(
                     text = "TraceDiary 是一款单机日记应用。\n\n" +
                         "1. 你的所有日记和年度总结默认仅保存在本机的加密数据库中。\n" +
@@ -1125,19 +1125,91 @@ private fun AboutPage() {
                         "3. 应用不收集任何遥测信息，不接入第三方分析或广告 SDK。\n" +
                         "4. 您可以随时通过「导出备份」导出全部数据。",
                     style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = MaterialTheme.typography.bodyMedium.lineHeight,
                 )
             },
-            confirmButton = { TextButton(onClick = { showPrivacyDialog = false }) { Text("我知道了") } }
+            confirmText = "我知道了",
+            onConfirm = { showPrivacyDialog = false }
         )
     }
 
     if (showUpdateDialog) {
-        AlertDialog(
+        TraceInfoDialog(
             onDismissRequest = { showUpdateDialog = false },
             title = { Text("检查更新") },
-            text = { Text("当前版本已是最新（v1.0）") },
-            confirmButton = { TextButton(onClick = { showUpdateDialog = false }) { Text("好的") } }
+            content = {
+                Text(
+                    text = "当前版本已是最新（v1.0）",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmText = "好的",
+            onConfirm = { showUpdateDialog = false }
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TraceInfoDialog(
+    onDismissRequest: () -> Unit,
+    title: @Composable () -> Unit,
+    content: @Composable () -> Unit,
+    confirmText: String,
+    onConfirm: () -> Unit
+) {
+    BasicAlertDialog(
+        onDismissRequest = onDismissRequest,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 28.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 16.dp)
+        ) {
+            ProvideTextStyle(
+                value = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            ) {
+                title()
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Box(
+                modifier = Modifier
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                content()
+            }
+
+            Spacer(modifier = Modifier.height(22.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(
+                    onClick = onConfirm,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text(
+                        text = confirmText,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
 }
 
