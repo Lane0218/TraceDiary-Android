@@ -99,7 +99,7 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.Cloud, 
                         title = "云同步", 
-                        iconBgColor = Color(0xFF4EAE7C),
+                        subtitle = "最近同步: 今天 15:30",
                         onClick = { onNavigate("同步设置") }
                     )
                 }
@@ -116,7 +116,6 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.Lock, 
                         title = "数据加密", 
-                        iconBgColor = Color(0xFF4EAE7C),
                         onClick = { onNavigate("数据加密") }
                     )
                     HorizontalDivider(
@@ -126,7 +125,6 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.Download, 
                         title = "导入数据", 
-                        iconBgColor = Color(0xFF4EAE7C),
                         onClick = { onNavigate("导入数据") }
                     )
                     HorizontalDivider(
@@ -136,7 +134,6 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.Upload, 
                         title = "导出备份", 
-                        iconBgColor = Color(0xFF4EAE7C),
                         onClick = { onNavigate("导出备份") }
                     )
                 }
@@ -153,7 +150,6 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.NotificationsNone, 
                         title = "通知提醒", 
-                        iconBgColor = Color(0xFF4EAE7C),
                         onClick = { onNavigate("通知提醒") }
                     )
                     HorizontalDivider(
@@ -163,7 +159,6 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.Info, 
                         title = "关于 TraceDiary", 
-                        iconBgColor = Color(0xFF4EAE7C),
                         onClick = { onNavigate("关于我们") }
                     )
                 }
@@ -874,7 +869,7 @@ private fun SettingsSection(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SettingsRow(icon: ImageVector, title: String, iconBgColor: Color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f), onClick: () -> Unit) {
+private fun SettingsRow(icon: ImageVector, title: String, subtitle: String? = null, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -882,14 +877,24 @@ private fun SettingsRow(icon: ImageVector, title: String, iconBgColor: Color = M
         Surface(
             modifier = Modifier.size(36.dp),
             shape = CircleShape,
-            color = iconBgColor
+            color = MaterialTheme.colorScheme.primaryContainer
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(icon, null, modifier = Modifier.size(20.dp), tint = Color.White)
+                Icon(icon, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
             }
         }
         Spacer(modifier = Modifier.width(16.dp))
-        Text(text = title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            if (subtitle != null) {
+                Text(
+                    text = subtitle, 
+                    style = MaterialTheme.typography.bodySmall, 
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+        }
         Icon(
             Icons.AutoMirrored.Outlined.KeyboardArrowRight,
             null,
