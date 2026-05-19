@@ -23,19 +23,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -190,13 +192,11 @@ private fun AnnualSummaryList(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 80.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (state.summaries.isEmpty() && state.writableYears.isEmpty()) {
+        if (state.summaries.isEmpty()) {
             item {
-                Text(
-                    text = "暂无年度总结",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(16.dp)
+                ReviewEmptyState(
+                    title = "尚未撰写年度总结",
+                    description = "点击右下角的“+”按钮，开启你的年度回顾与总结吧"
                 )
             }
         }
@@ -364,12 +364,13 @@ private fun SearchContent(
     onRecordedOnlyChanged: (Boolean) -> Unit,
     onJumpToToday: (LocalDate) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-            shape = CircleShape
+            shape = CircleShape,
+            modifier = Modifier.padding(top = 8.dp)
         ) {
-            OutlinedTextField(
+            TextField(
                 value = state.keyword,
                 onValueChange = onKeywordChanged,
                 modifier = Modifier.fillMaxWidth(),
@@ -388,17 +389,28 @@ private fun SearchContent(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     )
                 },
+                trailingIcon = {
+                    IconButton(onClick = { /* 弹出更多筛选 */ }) {
+                        Icon(
+                            Icons.Outlined.Tune,
+                            contentDescription = "筛选",
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
                 shape = CircleShape,
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = Color.Transparent,
+                colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedBorderColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
                 ),
+                singleLine = true
             )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
@@ -409,13 +421,11 @@ private fun SearchContent(
                 selected = state.yearFilter == null,
                 onClick = { onYearFilterChanged(null) },
                 label = { Text("全部年份") },
-                shape = CircleShape
-            )
-            FilterChip(
-                selected = state.recordedOnly,
-                onClick = { onRecordedOnlyChanged(!state.recordedOnly) },
-                label = { Text("仅有记录日期") },
-                shape = CircleShape
+                shape = CircleShape,
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.primary
+                )
             )
         }
 
@@ -428,30 +438,10 @@ private fun SearchContent(
         ) {
             if (state.results.isEmpty()) {
                 item {
-                    Column(
-                        modifier = Modifier.padding(top = 80.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            Icons.Outlined.Search,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = if (state.keyword.isBlank()) "开始回顾你的记录" else "未找到匹配结果",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        )
-                        Text(
-                            text = if (state.keyword.isBlank()) "搜索关键词或选择条件，查找你的历史日记" else "尝试换一个关键词搜索吧",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 32.dp)
-                        )
-                    }
+                    ReviewEmptyState(
+                        title = if (state.keyword.isBlank()) "开始回顾你的记录" else "未找到匹配结果",
+                        description = if (state.keyword.isBlank()) "搜索关键词或选择条件，查找你的历史日记" else "尝试换一个关键词搜索吧"
+                    )
                 }
             } else {
                 items(state.results, key = { it.date.toEpochDay() }) { entry ->
@@ -482,6 +472,38 @@ private fun SearchContent(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ReviewEmptyState(
+    title: String,
+    description: String
+) {
+    Column(
+        modifier = Modifier.padding(top = 80.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            Icons.Outlined.AutoStories,
+            contentDescription = null,
+            modifier = Modifier.size(100.dp),
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 48.dp)
+        )
     }
 }
 

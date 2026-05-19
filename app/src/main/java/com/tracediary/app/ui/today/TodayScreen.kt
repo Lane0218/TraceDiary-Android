@@ -81,6 +81,8 @@ import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
 
+import com.tracediary.app.ui.components.TraceDropdownMenu
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TodayScreen(
@@ -580,7 +582,7 @@ private fun TodayOverflowMenu(
         IconButton(onClick = { menuExpanded = true }) {
             Icon(Icons.Outlined.MoreVert, contentDescription = "更多操作")
         }
-        DropdownMenu(
+        TraceDropdownMenu(
             expanded = menuExpanded,
             onDismissRequest = { menuExpanded = false }
         ) {
