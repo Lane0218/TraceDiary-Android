@@ -79,7 +79,7 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
             Text(
@@ -90,58 +90,82 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
         }
 
         item {
-            SettingsSection(title = "安全与云端") {
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Column {
-                        SettingsRow(icon = Icons.Outlined.Lock, title = "数据加密", onClick = { onNavigate("数据加密") })
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        SettingsRow(icon = Icons.Outlined.CloudSync, title = "云同步", onClick = { onNavigate("同步设置") })
-                    }
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column {
+                    SettingsRow(
+                        icon = Icons.Outlined.CloudSync, 
+                        title = "云同步", 
+                        iconBgColor = Color(0xFF64B5F6),
+                        onClick = { onNavigate("同步设置") }
+                    )
                 }
             }
         }
 
         item {
-            SettingsSection(title = "数据管理") {
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Column {
-                        SettingsRow(icon = Icons.Outlined.Download, title = "导入数据", onClick = { onNavigate("导入数据") })
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        SettingsRow(icon = Icons.Outlined.Upload, title = "导出备份", onClick = { onNavigate("导出备份") })
-                    }
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column {
+                    SettingsRow(
+                        icon = Icons.Outlined.Lock, 
+                        title = "数据加密", 
+                        iconBgColor = Color(0xFF81C784),
+                        onClick = { onNavigate("数据加密") }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 68.dp, end = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
+                    SettingsRow(
+                        icon = Icons.Outlined.Download, 
+                        title = "导入数据", 
+                        iconBgColor = Color(0xFFFFB74D),
+                        onClick = { onNavigate("导入数据") }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 68.dp, end = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
+                    SettingsRow(
+                        icon = Icons.Outlined.Upload, 
+                        title = "导出备份", 
+                        iconBgColor = Color(0xFFE57373),
+                        onClick = { onNavigate("导出备份") }
+                    )
                 }
             }
         }
 
         item {
-            SettingsSection(title = "应用") {
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Column {
-                        SettingsRow(icon = Icons.Outlined.NotificationsNone, title = "通知提醒", onClick = { onNavigate("通知提醒") })
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        SettingsRow(icon = Icons.Outlined.Info, title = "关于 TraceDiary", onClick = { onNavigate("关于我们") })
-                    }
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column {
+                    SettingsRow(
+                        icon = Icons.Outlined.NotificationsNone, 
+                        title = "通知提醒", 
+                        iconBgColor = Color(0xFF9575CD),
+                        onClick = { onNavigate("通知提醒") }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 68.dp, end = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
+                    SettingsRow(
+                        icon = Icons.Outlined.Info, 
+                        title = "关于 TraceDiary", 
+                        iconBgColor = Color(0xFF4DD0E1),
+                        onClick = { onNavigate("关于我们") }
+                    )
                 }
             }
         }
@@ -850,7 +874,7 @@ private fun SettingsSection(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SettingsRow(icon: ImageVector, title: String, onClick: () -> Unit) {
+private fun SettingsRow(icon: ImageVector, title: String, iconBgColor: Color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f), onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -858,10 +882,10 @@ private fun SettingsRow(icon: ImageVector, title: String, onClick: () -> Unit) {
         Surface(
             modifier = Modifier.size(36.dp),
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            color = iconBgColor
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(icon, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                Icon(icon, null, modifier = Modifier.size(20.dp), tint = Color.White)
             }
         }
         Spacer(modifier = Modifier.width(16.dp))
