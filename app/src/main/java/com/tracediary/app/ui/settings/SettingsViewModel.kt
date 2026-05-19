@@ -93,7 +93,6 @@ data class SettingsUiState(
     val syncBucket: String = "",
     val syncRegion: String = "",
     val syncDirectory: String = "TraceDiary/",
-    val syncDisplayName: String = "",
     // AK/SK 与本机密码：通过 SecureCredentialStore（EncryptedSharedPreferences）持久化。
     val syncAccessKeyId: String = "",
     val syncAccessKeySecret: String = "",
@@ -114,7 +113,6 @@ private data class SyncConfigurationDraft(
     val bucket: String,
     val region: String,
     val directory: String,
-    val displayName: String,
     val accessKeyId: String,
     val accessKeySecret: String,
 ) {
@@ -123,7 +121,6 @@ private data class SyncConfigurationDraft(
             bucket = "",
             region = "",
             directory = "TraceDiary/",
-            displayName = "",
             accessKeyId = "",
             accessKeySecret = "",
         )
@@ -179,7 +176,6 @@ class SettingsViewModel(
                         syncBucket = if (keepDraft) current.syncBucket else prefs.syncBucket,
                         syncRegion = if (keepDraft) current.syncRegion else prefs.syncRegion,
                         syncDirectory = if (keepDraft) current.syncDirectory else prefs.syncDirectory,
-                        syncDisplayName = if (keepDraft) current.syncDisplayName else prefs.syncDisplayName
                     )
                 }
             }
@@ -401,7 +397,6 @@ class SettingsViewModel(
                 syncBucket = restoredDraft?.bucket.orEmpty(),
                 syncRegion = restoredDraft?.region.orEmpty(),
                 syncDirectory = restoredDraft?.directory ?: "TraceDiary/",
-                syncDisplayName = restoredDraft?.displayName.orEmpty(),
                 syncAccessKeyId = restoredDraft?.accessKeyId.orEmpty(),
                 syncAccessKeySecret = restoredDraft?.accessKeySecret.orEmpty(),
                 saveStatus = SaveStatus.Idle,
@@ -421,10 +416,6 @@ class SettingsViewModel(
 
     fun onSyncDirectoryChanged(value: String) {
         _uiState.update { it.copy(syncDirectory = value, saveStatus = SaveStatus.Idle, saveError = null) }
-    }
-
-    fun onSyncDisplayNameChanged(value: String) {
-        _uiState.update { it.copy(syncDisplayName = value, saveStatus = SaveStatus.Idle, saveError = null) }
     }
 
     /**
@@ -471,8 +462,7 @@ class SettingsViewModel(
                 provider = snapshot.syncProvider,
                 bucket = snapshot.syncBucket,
                 region = snapshot.syncRegion,
-                directory = snapshot.syncDirectory,
-                displayName = snapshot.syncDisplayName
+                directory = snapshot.syncDirectory
             )
             // 持久化凭证（已由输入回调覆盖，但保存按钮再兜底一次，应对从 init 直接进保存的场景）。
             persistCloudCredential()
@@ -681,7 +671,6 @@ class SettingsViewModel(
             bucket = syncBucket,
             region = syncRegion,
             directory = syncDirectory,
-            displayName = syncDisplayName,
             accessKeyId = syncAccessKeyId,
             accessKeySecret = syncAccessKeySecret,
         )

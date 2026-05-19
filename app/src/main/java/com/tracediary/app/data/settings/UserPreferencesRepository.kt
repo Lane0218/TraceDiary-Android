@@ -24,8 +24,7 @@ data class UserPreferences(
     val syncProvider: String = "aliyun",
     val syncBucket: String = "",
     val syncRegion: String = "",
-    val syncDirectory: String = "TraceDiary/",
-    val syncDisplayName: String = ""
+    val syncDirectory: String = "TraceDiary/"
 )
 
 /**
@@ -42,7 +41,6 @@ interface UserPreferencesRepository {
     suspend fun setSyncBucket(value: String)
     suspend fun setSyncRegion(value: String)
     suspend fun setSyncDirectory(value: String)
-    suspend fun setSyncDisplayName(value: String)
 
     /**
      * 一次性写入云同步相关的非敏感配置。
@@ -51,8 +49,7 @@ interface UserPreferencesRepository {
         provider: String,
         bucket: String,
         region: String,
-        directory: String,
-        displayName: String
+        directory: String
     )
 }
 
@@ -78,8 +75,7 @@ class DataStoreUserPreferencesRepository(
             syncProvider = prefs[KEY_SYNC_PROVIDER] ?: "aliyun",
             syncBucket = prefs[KEY_SYNC_BUCKET].orEmpty(),
             syncRegion = prefs[KEY_SYNC_REGION].orEmpty(),
-            syncDirectory = prefs[KEY_SYNC_DIRECTORY] ?: "TraceDiary/",
-            syncDisplayName = prefs[KEY_SYNC_DISPLAY_NAME].orEmpty()
+            syncDirectory = prefs[KEY_SYNC_DIRECTORY] ?: "TraceDiary/"
         )
     }
 
@@ -115,23 +111,17 @@ class DataStoreUserPreferencesRepository(
         dataStore.edit { it[KEY_SYNC_DIRECTORY] = value }
     }
 
-    override suspend fun setSyncDisplayName(value: String) {
-        dataStore.edit { it[KEY_SYNC_DISPLAY_NAME] = value }
-    }
-
     override suspend fun saveSyncConfiguration(
         provider: String,
         bucket: String,
         region: String,
-        directory: String,
-        displayName: String
+        directory: String
     ) {
         dataStore.edit { prefs ->
             prefs[KEY_SYNC_PROVIDER] = provider
             prefs[KEY_SYNC_BUCKET] = bucket
             prefs[KEY_SYNC_REGION] = region
             prefs[KEY_SYNC_DIRECTORY] = directory
-            prefs[KEY_SYNC_DISPLAY_NAME] = displayName
         }
     }
 
@@ -144,6 +134,5 @@ class DataStoreUserPreferencesRepository(
         val KEY_SYNC_BUCKET = stringPreferencesKey("sync_bucket")
         val KEY_SYNC_REGION = stringPreferencesKey("sync_region")
         val KEY_SYNC_DIRECTORY = stringPreferencesKey("sync_directory")
-        val KEY_SYNC_DISPLAY_NAME = stringPreferencesKey("sync_display_name")
     }
 }

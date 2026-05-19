@@ -356,12 +356,6 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                 ) {
                     Column {
                         SyncFieldRow(
-                            label = "空间名称",
-                            value = state.syncDisplayName,
-                            onValueChange = viewModel::onSyncDisplayNameChanged
-                        )
-                        SyncRowDivider()
-                        SyncFieldRow(
                             label = "存储桶",
                             value = state.syncBucket,
                             onValueChange = viewModel::onSyncBucketChanged
