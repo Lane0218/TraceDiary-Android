@@ -99,7 +99,7 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.Cloud, 
                         title = "云同步", 
-                        iconBgColor = Color(0xFF81C784),
+                        iconBgColor = Color(0xFF4EAE7C),
                         onClick = { onNavigate("同步设置") }
                     )
                 }
@@ -116,7 +116,7 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.Lock, 
                         title = "数据加密", 
-                        iconBgColor = Color(0xFF81C784),
+                        iconBgColor = Color(0xFF4EAE7C),
                         onClick = { onNavigate("数据加密") }
                     )
                     HorizontalDivider(
@@ -126,7 +126,7 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.Download, 
                         title = "导入数据", 
-                        iconBgColor = Color(0xFF81C784),
+                        iconBgColor = Color(0xFF4EAE7C),
                         onClick = { onNavigate("导入数据") }
                     )
                     HorizontalDivider(
@@ -136,7 +136,7 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.Upload, 
                         title = "导出备份", 
-                        iconBgColor = Color(0xFF81C784),
+                        iconBgColor = Color(0xFF4EAE7C),
                         onClick = { onNavigate("导出备份") }
                     )
                 }
@@ -153,7 +153,7 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.NotificationsNone, 
                         title = "通知提醒", 
-                        iconBgColor = Color(0xFF81C784),
+                        iconBgColor = Color(0xFF4EAE7C),
                         onClick = { onNavigate("通知提醒") }
                     )
                     HorizontalDivider(
@@ -163,7 +163,7 @@ private fun MainSettingsList(modifier: Modifier = Modifier, onNavigate: (String)
                     SettingsRow(
                         icon = Icons.Outlined.Info, 
                         title = "关于 TraceDiary", 
-                        iconBgColor = Color(0xFF81C784),
+                        iconBgColor = Color(0xFF4EAE7C),
                         onClick = { onNavigate("关于我们") }
                     )
                 }
