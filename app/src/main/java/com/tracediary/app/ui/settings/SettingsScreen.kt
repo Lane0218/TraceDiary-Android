@@ -671,7 +671,7 @@ private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewMode
 @Composable
 private fun DataManagementPage(state: SettingsUiState, viewModel: SettingsViewModel) {
     val context = LocalContext.current
-    var selectedMode by remember { mutableStateOf("export") }
+    var selectedMode by remember { mutableStateOf("import") }
     val isImport = selectedMode == "import"
     val isWorking = state.backupStatus is BackupStatus.Working
     var mergeStrategy by remember { mutableStateOf(MergeStrategy.KeepNewer) }
@@ -799,9 +799,13 @@ private fun BackupModeSelector(
     ) {
         modes.forEach { (id, label) ->
             val selected = selectedMode == id
+            val interactionSource = remember { MutableInteractionSource() }
             Column(
                 modifier = Modifier
-                    .clickable { onModeSelected(id) }
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null
+                    ) { onModeSelected(id) }
                     .padding(horizontal = 4.dp, vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
