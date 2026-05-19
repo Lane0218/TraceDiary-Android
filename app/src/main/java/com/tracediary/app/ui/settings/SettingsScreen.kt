@@ -537,25 +537,35 @@ private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewMode
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
-            SubPageSection(title = "每日提醒") {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Box(modifier = Modifier.padding(16.dp)) {
-                        ToggleItem(
-                            title = "开启通知",
-                            subtitle = "每天 ${state.dailyReminderTime}",
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 56.dp)
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "开启通知",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
                             checked = state.dailyReminderEnabled,
                             onCheckedChange = { value ->
                                 if (!value) {
                                     viewModel.onToggleReminder(false)
-                                    return@ToggleItem
+                                    return@Switch
                                 }
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                     val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -563,40 +573,31 @@ private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewMode
                                 } else {
                                     viewModel.onToggleReminder(true)
                                 }
-                            }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = MaterialTheme.colorScheme.primary
+                            )
                         )
                     }
-                }
-            }
-        }
 
-        item {
-            SubPageSection(title = "设置时间") {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    modifier = Modifier.clickable(enabled = state.dailyReminderEnabled) { showTimePicker = true }
-                ) {
+                    SyncRowDivider()
+
                     Row(
                         modifier = Modifier
-                            .padding(16.dp)
-                            .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                            .fillMaxWidth()
+                            .heightIn(min = 56.dp)
+                            .clickable(enabled = state.dailyReminderEnabled) { showTimePicker = true }
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Outlined.AccessTime,
-                                null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text("提醒时间", style = MaterialTheme.typography.bodyLarge)
-                        }
                         Text(
-                            state.dailyReminderTime,
+                            text = "提醒时间",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (state.dailyReminderEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = state.dailyReminderTime,
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.Bold,
                             color = if (state.dailyReminderEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
