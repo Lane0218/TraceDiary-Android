@@ -188,7 +188,7 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                     Icon(Icons.Outlined.Security, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        "应用密码用于解锁、保护本地数据库与加密云端备份，请务必牢记。",
+                        "应用密码用于保护本地及云端数据。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -274,12 +274,16 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
         if (state.syncEnabled) {
             item {
                 SubPageSection(title = "存储提供商") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
                         TraceChoiceChip(
                             selected = state.syncProvider == "aliyun",
                             onClick = { viewModel.onSyncProviderChanged("aliyun") },
                             label = "阿里云 OSS"
                         )
+                        Spacer(modifier = Modifier.width(12.dp))
                         TraceChoiceChip(
                             selected = state.syncProvider == "tencent",
                             onClick = { viewModel.onSyncProviderChanged("tencent") },
@@ -445,14 +449,25 @@ private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewMode
     }
 
     if (showTimePicker) {
-        val pickerState = rememberTimePickerState(initialHour = initialHour, initialMinute = initialMinute, is24Hour = true)
+        var selectedHour by remember { mutableStateOf(initialHour) }
+        var selectedMinute by remember { mutableStateOf(initialMinute) }
+
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
-            title = { Text("选择提醒时间") },
-            text = { TimePicker(state = pickerState) },
+            title = { Text("选择提醒时间", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
+            text = { 
+                WheelTimePicker(
+                    initialHour = initialHour,
+                    initialMinute = initialMinute,
+                    onTimeChanged = { h, m ->
+                        selectedHour = h
+                        selectedMinute = m
+                    }
+                ) 
+            },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.onReminderTimeChanged("%02d:%02d".format(pickerState.hour, pickerState.minute))
+                    viewModel.onReminderTimeChanged("%02d:%02d".format(selectedHour, selectedMinute))
                     showTimePicker = false
                 }) { Text("确定") }
             },
@@ -559,13 +574,7 @@ private fun SubPageSection(title: String, content: @Composable () -> Unit) {
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
             fontWeight = FontWeight.Bold
         )
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) { content() }
-        }
+        content()
     }
 }
 
@@ -862,5 +871,84 @@ private fun SettingsRow(icon: ImageVector, title: String, onClick: () -> Unit) {
             null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
         )
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun WheelTimePicker(
+    initialHour: Int,
+    initialMinute: Int,
+    onTimeChanged: (Int, Int) -> Unit
+) {
+    var hour by remember { mutableStateOf(initialHour) }
+    var minute by remember { mutableStateOf(initialMinute) }
+    
+    Row(
+        modifier = Modifier.fillMaxWidth().height(160.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        WheelColumn(
+            count = 24,
+            initialIndex = hour,
+            onIndexChanged = { h -> 
+                hour = h
+                onTimeChanged(hour, minute)
+            }
+        )
+        Text(":", style = MaterialTheme.typography.displaySmall, modifier = Modifier.padding(horizontal = 16.dp))
+        WheelColumn(
+            count = 60,
+            initialIndex = minute,
+            onIndexChanged = { m -> 
+                minute = m
+                onTimeChanged(hour, minute)
+            }
+        )
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun WheelColumn(
+    count: Int,
+    initialIndex: Int,
+    onIndexChanged: (Int) -> Unit
+) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
+    
+    LaunchedEffect(listState) {
+        androidx.compose.runtime.snapshotFlow { listState.firstVisibleItemScrollOffset to listState.firstVisibleItemIndex }
+            .collect { (offset, index) ->
+                val selected = if (offset > 20) index + 1 else index
+                onIndexChanged(selected.coerceIn(0, count - 1))
+            }
+    }
+    
+    androidx.compose.foundation.lazy.LazyColumn(
+        state = listState,
+        modifier = Modifier.width(60.dp).height(120.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(lazyListState = listState)
+    ) {
+        item { Spacer(modifier = Modifier.height(40.dp)) }
+        items(count) { index ->
+            val isSelected = remember(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
+                val offset = listState.firstVisibleItemScrollOffset
+                val visibleIndex = listState.firstVisibleItemIndex
+                val centerIndex = if (offset > 20) visibleIndex + 1 else visibleIndex
+                index == centerIndex
+            }
+            Box(modifier = Modifier.height(40.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "%02d".format(index),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+        }
+        item { Spacer(modifier = Modifier.height(40.dp)) }
     }
 }

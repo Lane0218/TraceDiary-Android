@@ -95,30 +95,37 @@ fun ReviewScreen(
                 modifier = Modifier.padding(bottom = 12.dp),
             )
 
-            SingleChoiceSegmentedButtonRow(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(44.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    .padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 val tabs = listOf(
                     ReviewTab.Search to "搜索",
                     ReviewTab.AnnualSummary to "年度总结",
                 )
-                tabs.forEachIndexed { index, (tab, label) ->
-                    SegmentedButton(
-                        selected = state.selectedTab == tab,
-                        onClick = { viewModel.onSelectTab(tab) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = tabs.size),
-                        icon = {},
-                        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
-                        colors = SegmentedButtonDefaults.colors(
-                            activeContainerColor = MaterialTheme.colorScheme.surface,
-                            activeContentColor = MaterialTheme.colorScheme.primary,
-                            inactiveContainerColor = Color.Transparent,
-                            inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                    )
+                tabs.forEach { (tab, label) ->
+                    val selected = state.selectedTab == tab
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                            .clickable { viewModel.onSelectTab(tab) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
                 }
             }
         }
@@ -365,50 +372,44 @@ private fun SearchContent(
     onJumpToToday: (LocalDate) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-            shape = CircleShape,
-            modifier = Modifier.padding(top = 8.dp)
-        ) {
-            TextField(
-                value = state.keyword,
-                onValueChange = onKeywordChanged,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = {
-                    Text(
-                        "搜索日记内容、关键词...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    )
-                },
-                leadingIcon = {
+        TextField(
+            value = state.keyword,
+            onValueChange = onKeywordChanged,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            placeholder = {
+                Text(
+                    "搜索日记内容、关键词...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    Icons.Outlined.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                )
+            },
+            trailingIcon = {
+                IconButton(onClick = { /* 弹出更多筛选 */ }) {
                     Icon(
-                        Icons.Outlined.Search,
-                        contentDescription = null,
+                        Icons.Outlined.Tune,
+                        contentDescription = "筛选",
                         modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                },
-                trailingIcon = {
-                    IconButton(onClick = { /* 弹出更多筛选 */ }) {
-                        Icon(
-                            Icons.Outlined.Tune,
-                            contentDescription = "筛选",
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                },
-                shape = CircleShape,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                ),
-                singleLine = true
-            )
-        }
+                }
+            },
+            shape = CircleShape,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+            ),
+            singleLine = true
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 
