@@ -4,7 +4,6 @@ import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.model.wordCount
 import java.time.LocalDate
 import java.time.YearMonth
-import kotlin.math.ceil
 
 data class DiaryStatistics(
     val totalEntries: Int,
@@ -87,32 +86,18 @@ class DiaryStatisticsUseCase {
         val entriesByDate = entries.latestRecordedEntries()
             .filter { entry -> entry.date.year == year }
             .associateBy(DiaryEntry::date)
-        val maxWordCount = entriesByDate.values.maxOfOrNull(DiaryEntry::wordCount).orZero()
         val start = LocalDate.of(year, 1, 1)
         val daysInYear = if (start.isLeapYear) 366 else 365
 
         return (0 until daysInYear).map { dayOffset ->
             val date = start.plusDays(dayOffset.toLong())
-            val wordCount = entriesByDate[date]?.wordCount().orZero()
+            val hasRecord = entriesByDate.containsKey(date)
             HeatmapDay(
                 date = date,
-                wordCount = wordCount,
-                hasRecord = wordCount > 0,
-                intensity = calculateHeatmapIntensity(wordCount, maxWordCount),
+                wordCount = 0,
+                hasRecord = hasRecord,
+                intensity = if (hasRecord) 1 else 0,
             )
         }
-    }
-
-    private fun calculateHeatmapIntensity(wordCount: Int, maxWordCount: Int): Int {
-        if (wordCount <= 0 || maxWordCount <= 0) return 0
-        return ceil(wordCount.toDouble() / maxWordCount.toDouble() * MaxHeatmapIntensity)
-            .toInt()
-            .coerceIn(1, MaxHeatmapIntensity)
-    }
-
-    private fun Int?.orZero(): Int = this ?: 0
-
-    private companion object {
-        const val MaxHeatmapIntensity = 4
     }
 }

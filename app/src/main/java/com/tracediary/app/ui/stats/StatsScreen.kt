@@ -332,16 +332,9 @@ private fun MiniMonthGrid(
 
 @Composable
 private fun HeatmapDay?.toCellColor(): Color {
-    val intensity = this?.intensity ?: 0
     val primary = MaterialTheme.colorScheme.primary
     val empty = MaterialTheme.colorScheme.surfaceVariant
-    return when (intensity) {
-        0 -> empty
-        1 -> primary.copy(alpha = 0.25f)
-        2 -> primary.copy(alpha = 0.5f)
-        3 -> primary.copy(alpha = 0.75f)
-        else -> primary
-    }
+    return if (this?.hasRecord == true) primary else empty
 }
 
 private data class StatsData(val label: String, val value: String, val unit: String, val icon: ImageVector)

@@ -55,7 +55,7 @@ class DiaryStatisticsUseCaseTest {
     }
 
     @Test
-    fun calculateYearlyHeatmap_includesLeapDayAndIntensity() {
+    fun calculateYearlyHeatmap_includesLeapDayAndBinaryIntensity() {
         val entries = listOf(
             entry("2024-02-29", "闰年记录"),
             entry("2024-03-01", "长长长长长长长长"),
@@ -67,7 +67,7 @@ class DiaryStatisticsUseCaseTest {
 
         assertEquals(366, heatmap.size)
         assertTrue(leapDay.hasRecord)
-        assertTrue(leapDay.intensity in 1..4)
+        assertEquals(1, leapDay.intensity)
         assertFalse(emptyDay.hasRecord)
         assertEquals(0, emptyDay.intensity)
     }
