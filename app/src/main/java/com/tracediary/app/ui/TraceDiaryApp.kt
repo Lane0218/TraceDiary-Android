@@ -1,6 +1,7 @@
 package com.tracediary.app.ui
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -99,7 +100,8 @@ fun TraceDiaryApp() {
         Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding),
             color = MaterialTheme.colorScheme.background
         ) {
             when (selectedTabIndex) {
