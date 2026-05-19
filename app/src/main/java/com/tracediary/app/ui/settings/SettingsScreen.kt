@@ -653,7 +653,7 @@ private fun BackupStatusDialogs(state: SettingsUiState, viewModel: SettingsViewM
         )
         is BackupStatus.Failed -> AlertDialog(
             onDismissRequest = viewModel::resetBackupStatus,
-            title = { Text(if (isImport) "操作失败") },
+            title = { Text(if (isImport) "导入失败" else "导出失败") },
             text = { Text(status.message) },
             confirmButton = { TextButton(onClick = viewModel::resetBackupStatus) { Text("我知道了") } }
         )
