@@ -176,6 +176,7 @@ private fun SettingsSubPageContainer(title: String, onBack: () -> Unit, content:
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .imePadding()
     ) {
         Row(
             modifier = Modifier
