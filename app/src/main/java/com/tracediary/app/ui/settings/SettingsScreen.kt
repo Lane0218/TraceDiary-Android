@@ -393,11 +393,6 @@ private fun SyncProviderSelector(
     onProviderSelected: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = "云服务商",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
