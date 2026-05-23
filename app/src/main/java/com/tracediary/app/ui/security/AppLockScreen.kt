@@ -73,14 +73,14 @@ fun AppLockScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .imePadding(),
-        contentAlignment = Alignment.TopCenter,
+        contentAlignment = Alignment.Center,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 420.dp)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 40.dp),
+                .padding(horizontal = 20.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -171,11 +171,6 @@ fun AppLockScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("在本机记住密码", style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    "关闭后每次冷启动都需要输入密码",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
                             }
                             Switch(checked = rememberPassword, onCheckedChange = onRememberChanged)
                         }
