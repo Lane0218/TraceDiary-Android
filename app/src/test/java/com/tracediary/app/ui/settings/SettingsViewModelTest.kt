@@ -17,6 +17,10 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import com.tracediary.app.data.sync.RemoteResult
+import com.tracediary.app.data.sync.RemoteStorage
+import com.tracediary.app.data.sync.RemoteObject
+import com.tracediary.app.data.sync.ErrorCode
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -238,6 +242,87 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun onSaveSyncConfiguration_successSetsSavedStatus() = runTest(testDispatcher) {
+        val storage = FakeRemoteStorage(pingResult = RemoteResult.Ok(Unit))
+        viewModel = SettingsViewModel(
+            repository = fakeRepo,
+            saveDelayMillis = 0L,
+            syncMetadataRepository = FakeSyncMetadataRepository(),
+            remoteStorageFactory = { storage },
+        )
+        advanceUntilIdle()
+
+        viewModel.onSyncBucketChanged("my-bucket")
+        viewModel.onSyncRegionChanged("cn-hangzhou")
+        viewModel.onSyncDirectoryChanged("diary/")
+        viewModel.onSyncDisplayNameChanged("我的日记")
+        viewModel.onSyncAccessKeyIdChanged("AKID123")
+        viewModel.onSyncAccessKeySecretChanged("secret456")
+
+        viewModel.onSaveSyncConfiguration()
+        advanceUntilIdle()
+
+        assertEquals(SaveStatus.Saved, viewModel.uiState.value.saveStatus)
+        assertEquals(null, viewModel.uiState.value.saveError)
+    }
+
+    @Test
+    fun onSaveSyncConfiguration_failureSetsFailedStatusAndMessage() = runTest(testDispatcher) {
+        val storage = FakeRemoteStorage(
+            pingResult = RemoteResult.Err(ErrorCode.AUTH, "AK/SK 无效")
+        )
+        viewModel = SettingsViewModel(
+            repository = fakeRepo,
+            saveDelayMillis = 0L,
+            syncMetadataRepository = FakeSyncMetadataRepository(),
+            remoteStorageFactory = { storage },
+        )
+        advanceUntilIdle()
+
+        viewModel.onSyncBucketChanged("my-bucket")
+        viewModel.onSyncRegionChanged("cn-hangzhou")
+        viewModel.onSyncDirectoryChanged("diary/")
+        viewModel.onSyncDisplayNameChanged("我的日记")
+        viewModel.onSyncAccessKeyIdChanged("AKID123")
+        viewModel.onSyncAccessKeySecretChanged("secret456")
+
+        viewModel.onSaveSyncConfiguration()
+        advanceUntilIdle()
+
+        assertEquals(SaveStatus.Failed, viewModel.uiState.value.saveStatus)
+        assertEquals("AK/SK 无效", viewModel.uiState.value.saveError)
+    }
+
+    @Test
+    fun editingSyncFields_resetsSaveStatusToIdle() = runTest(testDispatcher) {
+        val storage = FakeRemoteStorage(pingResult = RemoteResult.Ok(Unit))
+        viewModel = SettingsViewModel(
+            repository = fakeRepo,
+            saveDelayMillis = 0L,
+            syncMetadataRepository = FakeSyncMetadataRepository(),
+            remoteStorageFactory = { storage },
+        )
+        advanceUntilIdle()
+
+        viewModel.onSyncBucketChanged("my-bucket")
+        viewModel.onSyncRegionChanged("cn-hangzhou")
+        viewModel.onSyncDirectoryChanged("diary/")
+        viewModel.onSyncDisplayNameChanged("我的日记")
+        viewModel.onSyncAccessKeyIdChanged("AKID123")
+        viewModel.onSyncAccessKeySecretChanged("secret456")
+        viewModel.onSaveSyncConfiguration()
+        advanceUntilIdle()
+
+        assertEquals(SaveStatus.Saved, viewModel.uiState.value.saveStatus)
+
+        viewModel.onSyncBucketChanged("new-bucket")
+        advanceUntilIdle()
+
+        assertEquals(SaveStatus.Idle, viewModel.uiState.value.saveStatus)
+        assertEquals(null, viewModel.uiState.value.saveError)
+    }
+
+    @Test
     fun sensitiveFields_notPersistedToRepository() = runTest(testDispatcher) {
         advanceUntilIdle()
         viewModel.onSyncAccessKeyIdChanged("AKID123")
@@ -365,6 +450,27 @@ class SettingsViewModelTest {
         override suspend fun saveMetadata(metadata: SyncMetadata) = Unit
 
         override suspend fun deleteMetadata(objectKey: String) = Unit
+    }
+
+    private class FakeRemoteStorage(
+        private val pingResult: RemoteResult<Unit>,
+    ) : RemoteStorage {
+        override suspend fun put(
+            key: String,
+            body: ByteArray,
+            contentType: String,
+            ifMatchEtag: String?,
+        ): RemoteResult<RemoteObject> = error("not used")
+
+        override suspend fun get(key: String): RemoteResult<ByteArray> = error("not used")
+
+        override suspend fun head(key: String): RemoteResult<RemoteObject> = error("not used")
+
+        override suspend fun list(prefix: String): RemoteResult<List<RemoteObject>> = error("not used")
+
+        override suspend fun delete(key: String): RemoteResult<Unit> = error("not used")
+
+        override suspend fun ping(): RemoteResult<Unit> = pingResult
     }
 
 }

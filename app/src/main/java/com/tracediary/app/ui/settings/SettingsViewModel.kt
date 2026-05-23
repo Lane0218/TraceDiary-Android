@@ -146,6 +146,7 @@ class SettingsViewModel(
     private val syncScheduler: SyncScheduler? = null,
     private val appPasswordManager: AppPasswordManager? = null,
     private val syncMetadataRepository: SyncMetadataRepository? = null,
+    private val remoteStorageFactory: ((SettingsUiState) -> RemoteStorage?)? = null,
     private val zoneId: ZoneId = ZoneId.systemDefault(),
     private val clock: Clock = Clock.system(zoneId),
 ) : ViewModel() {
@@ -433,15 +434,15 @@ class SettingsViewModel(
     }
 
     fun onSyncBucketChanged(value: String) {
-        _uiState.update { it.copy(syncBucket = value, saveStatus = SaveStatus.Idle, saveError = null) }
+        updateSyncField { it.copy(syncBucket = value, saveStatus = SaveStatus.Idle, saveError = null) }
     }
 
     fun onSyncRegionChanged(value: String) {
-        _uiState.update { it.copy(syncRegion = value, saveStatus = SaveStatus.Idle, saveError = null) }
+        updateSyncField { it.copy(syncRegion = value, saveStatus = SaveStatus.Idle, saveError = null) }
     }
 
     fun onSyncDirectoryChanged(value: String) {
-        _uiState.update { it.copy(syncDirectory = value, saveStatus = SaveStatus.Idle, saveError = null) }
+        updateSyncField { it.copy(syncDirectory = value, saveStatus = SaveStatus.Idle, saveError = null) }
     }
 
     fun onSameDayEntrySortOrderChanged(value: SameDayEntrySortOrder) {
@@ -454,17 +455,19 @@ class SettingsViewModel(
      * 任一字段被清空时调用 [SecureCredentialStore.clearCloudCredential]，避免半截状态被保留。
      */
     fun onSyncAccessKeyIdChanged(value: String) {
-        _uiState.update {
-            it.copy(syncAccessKeyId = value, saveStatus = SaveStatus.Idle, saveError = null)
-        }
+        updateSyncField { it.copy(syncAccessKeyId = value, saveStatus = SaveStatus.Idle, saveError = null) }
         persistCloudCredential()
     }
 
     fun onSyncAccessKeySecretChanged(value: String) {
-        _uiState.update {
-            it.copy(syncAccessKeySecret = value, saveStatus = SaveStatus.Idle, saveError = null)
-        }
+        updateSyncField { it.copy(syncAccessKeySecret = value, saveStatus = SaveStatus.Idle, saveError = null) }
         persistCloudCredential()
+    }
+
+    private fun updateSyncField(transform: (SettingsUiState) -> SettingsUiState) {
+        val current = _uiState.value
+        syncDraftsByProvider[current.syncProvider] = current.toSyncConfigurationDraft()
+        _uiState.update(transform)
     }
 
     private fun persistCloudCredential() {
@@ -525,13 +528,21 @@ class SettingsViewModel(
                 message = "请填写 AccessKey ID 与 Secret",
             )
         }
-        val provider = when (snapshot.syncProvider.lowercase()) {
-            "aliyun", "oss", "aliyun_oss" -> SyncProvider.ALIYUN_OSS
-            "tencent", "cos", "tencent_cos" -> SyncProvider.TENCENT_COS
-            else -> return RemoteResult.Err(
+        val storage = remoteStorageFactory?.invoke(snapshot) ?: buildRemoteStorage(snapshot)
+        if (storage == null) {
+            return RemoteResult.Err(
                 code = com.tracediary.app.data.sync.ErrorCode.UNKNOWN,
                 message = "未知的云服务商：${snapshot.syncProvider}",
             )
+        }
+        return storage.ping()
+    }
+
+    private fun buildRemoteStorage(snapshot: SettingsUiState): RemoteStorage? {
+        val provider = when (snapshot.syncProvider.lowercase()) {
+            "aliyun", "oss", "aliyun_oss" -> SyncProvider.ALIYUN_OSS
+            "tencent", "cos", "tencent_cos" -> SyncProvider.TENCENT_COS
+            else -> return null
         }
         val credential = RemoteCredential(
             provider = provider,
@@ -541,11 +552,10 @@ class SettingsViewModel(
             accessKeySecret = snapshot.syncAccessKeySecret,
             pathPrefix = snapshot.syncDirectory.trim('/'),
         )
-        val storage: RemoteStorage = when (provider) {
+        return when (provider) {
             SyncProvider.ALIYUN_OSS -> AliyunOssRemoteStorage(credential)
             SyncProvider.TENCENT_COS -> TencentCosRemoteStorage(credential)
         }
-        return storage.ping()
     }
 
     // ---------- 三个一次性同步入口 ----------
@@ -745,8 +755,29 @@ class SettingsViewModel(
                         syncScheduler = application.syncScheduler,
                         appPasswordManager = application.appPasswordManager,
                         syncMetadataRepository = application.syncMetadataRepository,
+                        remoteStorageFactory = { snapshot -> createRemoteStorage(snapshot) },
                     ) as T
                 }
             }
+
+        private fun createRemoteStorage(snapshot: SettingsUiState): RemoteStorage? {
+            val provider = when (snapshot.syncProvider.lowercase()) {
+                "aliyun", "oss", "aliyun_oss" -> SyncProvider.ALIYUN_OSS
+                "tencent", "cos", "tencent_cos" -> SyncProvider.TENCENT_COS
+                else -> return null
+            }
+            val credential = RemoteCredential(
+                provider = provider,
+                region = snapshot.syncRegion,
+                bucket = snapshot.syncBucket,
+                accessKeyId = snapshot.syncAccessKeyId,
+                accessKeySecret = snapshot.syncAccessKeySecret,
+                pathPrefix = snapshot.syncDirectory.trim('/'),
+            )
+            return when (provider) {
+                SyncProvider.ALIYUN_OSS -> AliyunOssRemoteStorage(credential)
+                SyncProvider.TENCENT_COS -> TencentCosRemoteStorage(credential)
+            }
+        }
     }
 }
