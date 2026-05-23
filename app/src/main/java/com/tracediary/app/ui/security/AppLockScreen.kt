@@ -31,10 +31,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.tracediary.app.data.security.AppLockState
+import androidx.compose.foundation.text.KeyboardOptions
 
 /**
  * 应用解锁 / 首次设置密码屏。
@@ -109,7 +109,7 @@ fun AppLockScreen(
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
-                    autoCorrect = false,
+                    autoCorrectEnabled = false,
                     imeAction = if (state == AppLockState.NeedSetup) ImeAction.Next else ImeAction.Done,
                 ),
             )
@@ -124,7 +124,7 @@ fun AppLockScreen(
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Password,
-                        autoCorrect = false,
+                        autoCorrectEnabled = false,
                         imeAction = ImeAction.Done,
                     ),
                 )
