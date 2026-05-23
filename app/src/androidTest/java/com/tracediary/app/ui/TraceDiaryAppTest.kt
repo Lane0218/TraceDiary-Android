@@ -43,8 +43,9 @@ class TraceDiaryAppTest {
 
         composeTestRule.onNodeWithText("设置").performClick()
         composeTestRule.onNodeWithText("偏好设置").performClick()
-        composeTestRule.onNodeWithText("从晚到早").assertIsDisplayed()
-        composeTestRule.onNodeWithText("从早到晚").assertIsDisplayed()
+        composeTestRule.onNodeWithText("往年今日").assertIsDisplayed()
+        composeTestRule.onNodeWithText("晚到早").assertIsDisplayed()
+        composeTestRule.onNodeWithText("早到晚").assertIsDisplayed()
     }
 
     @Test

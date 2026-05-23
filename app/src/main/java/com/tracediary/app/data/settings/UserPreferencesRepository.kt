@@ -31,7 +31,7 @@ data class UserPreferences(
 
 enum class SameDayEntrySortOrder(val storageValue: String) {
     LatestFirst("latest_first"),
-    EarliestFirst("earliest_first"),
+    EarliestFirst("earliest_first");
 
     companion object {
         fun fromStorageValue(value: String?): SameDayEntrySortOrder = when (value) {

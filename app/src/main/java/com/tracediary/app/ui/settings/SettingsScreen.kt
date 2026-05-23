@@ -28,11 +28,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.input.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -115,16 +112,6 @@ private fun MainSettingsList(
             ) {
                 Column {
                     SettingsRow(
-                        icon = Icons.Outlined.Tune,
-                        title = "偏好设置",
-                        subtitle = "往年今日排序",
-                        onClick = { onNavigate("偏好设置") }
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 68.dp, end = 16.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                    )
-                    SettingsRow(
                         icon = Icons.Outlined.Cloud, 
                         title = "云同步", 
                         subtitle = "最近同步: ${state.lastSyncText}",
@@ -176,6 +163,15 @@ private fun MainSettingsList(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                     )
                     SettingsRow(
+                        icon = Icons.Outlined.Tune,
+                        title = "偏好设置",
+                        onClick = { onNavigate("偏好设置") }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 68.dp, end = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
+                    SettingsRow(
                         icon = Icons.Outlined.Info, 
                         title = "关于",
                         onClick = { onNavigate("关于") }
@@ -211,16 +207,14 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
             ) {
                 Column {
                     ChoiceRow(
-                        label = "从晚到早",
-                        subtitle = "先显示最近年份，再显示更早年份",
+                        label = "晚到早",
                         selected = state.sameDayEntrySortOrder == SameDayEntrySortOrder.LatestFirst,
                         enabled = true,
                         onClick = { viewModel.onSameDayEntrySortOrderChanged(SameDayEntrySortOrder.LatestFirst) }
                     )
                     SyncRowDivider()
                     ChoiceRow(
-                        label = "从早到晚",
-                        subtitle = "按年份从旧到新显示",
+                        label = "早到晚",
                         selected = state.sameDayEntrySortOrder == SameDayEntrySortOrder.EarliestFirst,
                         enabled = true,
                         onClick = { viewModel.onSameDayEntrySortOrderChanged(SameDayEntrySortOrder.EarliestFirst) }
@@ -554,10 +548,6 @@ private fun SyncFieldRow(
             enabled = enabled,
             singleLine = true,
             visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Text,
-                imeAction = ImeAction.Done,
-            ),
             textStyle = MaterialTheme.typography.bodyMedium.copy(
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.End
@@ -964,10 +954,6 @@ private fun TraceTextField(
         singleLine = true,
         enabled = enabled,
         visualTransformation = if (isPassword) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-        keyboardOptions = KeyboardOptions(
-            keyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Text,
-            imeAction = ImeAction.Done,
-        ),
         shape = RoundedCornerShape(16.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = MaterialTheme.colorScheme.primary,
