@@ -296,7 +296,7 @@ class SettingsViewModelTest {
             bucket: String,
             region: String,
             directory: String,
-            displayName: String
+            displayName: String,
         ) {
             _prefs.update {
                 it.copy(

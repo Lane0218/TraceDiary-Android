@@ -22,6 +22,7 @@ data class UserPreferences(
     val savePasswordLocally: Boolean = true,
     val syncEnabled: Boolean = false,
     val syncProvider: String = "aliyun",
+    val syncDisplayName: String = "",
     val syncBucket: String = "",
     val syncRegion: String = "",
     val syncDirectory: String = "TraceDiary/"
@@ -38,6 +39,7 @@ interface UserPreferencesRepository {
     suspend fun setSavePasswordLocally(value: Boolean)
     suspend fun setSyncEnabled(value: Boolean)
     suspend fun setSyncProvider(value: String)
+    suspend fun setSyncDisplayName(value: String)
     suspend fun setSyncBucket(value: String)
     suspend fun setSyncRegion(value: String)
     suspend fun setSyncDirectory(value: String)
@@ -49,7 +51,8 @@ interface UserPreferencesRepository {
         provider: String,
         bucket: String,
         region: String,
-        directory: String
+        directory: String,
+        displayName: String
     )
 }
 
@@ -73,6 +76,7 @@ class DataStoreUserPreferencesRepository(
             savePasswordLocally = prefs[KEY_SAVE_PASSWORD_LOCALLY] ?: true,
             syncEnabled = prefs[KEY_SYNC_ENABLED] ?: false,
             syncProvider = prefs[KEY_SYNC_PROVIDER] ?: "aliyun",
+            syncDisplayName = prefs[KEY_SYNC_DISPLAY_NAME].orEmpty(),
             syncBucket = prefs[KEY_SYNC_BUCKET].orEmpty(),
             syncRegion = prefs[KEY_SYNC_REGION].orEmpty(),
             syncDirectory = prefs[KEY_SYNC_DIRECTORY] ?: "TraceDiary/"
@@ -99,6 +103,10 @@ class DataStoreUserPreferencesRepository(
         dataStore.edit { it[KEY_SYNC_PROVIDER] = value }
     }
 
+    override suspend fun setSyncDisplayName(value: String) {
+        dataStore.edit { it[KEY_SYNC_DISPLAY_NAME] = value }
+    }
+
     override suspend fun setSyncBucket(value: String) {
         dataStore.edit { it[KEY_SYNC_BUCKET] = value }
     }
@@ -115,10 +123,12 @@ class DataStoreUserPreferencesRepository(
         provider: String,
         bucket: String,
         region: String,
-        directory: String
+        directory: String,
+        displayName: String
     ) {
         dataStore.edit { prefs ->
             prefs[KEY_SYNC_PROVIDER] = provider
+            prefs[KEY_SYNC_DISPLAY_NAME] = displayName
             prefs[KEY_SYNC_BUCKET] = bucket
             prefs[KEY_SYNC_REGION] = region
             prefs[KEY_SYNC_DIRECTORY] = directory
@@ -131,6 +141,7 @@ class DataStoreUserPreferencesRepository(
         val KEY_SAVE_PASSWORD_LOCALLY = booleanPreferencesKey("save_password_locally")
         val KEY_SYNC_ENABLED = booleanPreferencesKey("sync_enabled")
         val KEY_SYNC_PROVIDER = stringPreferencesKey("sync_provider")
+        val KEY_SYNC_DISPLAY_NAME = stringPreferencesKey("sync_display_name")
         val KEY_SYNC_BUCKET = stringPreferencesKey("sync_bucket")
         val KEY_SYNC_REGION = stringPreferencesKey("sync_region")
         val KEY_SYNC_DIRECTORY = stringPreferencesKey("sync_directory")

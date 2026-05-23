@@ -90,6 +90,7 @@ data class SettingsUiState(
     val savePasswordLocally: Boolean = true,
     val syncEnabled: Boolean = false,
     val syncProvider: String = "aliyun",
+    val syncDisplayName: String = "",
     val syncBucket: String = "",
     val syncRegion: String = "",
     val syncDirectory: String = "TraceDiary/",
@@ -110,6 +111,7 @@ data class SettingsUiState(
 )
 
 private data class SyncConfigurationDraft(
+    val displayName: String,
     val bucket: String,
     val region: String,
     val directory: String,
@@ -118,6 +120,7 @@ private data class SyncConfigurationDraft(
 ) {
     companion object {
         val Empty = SyncConfigurationDraft(
+            displayName = "",
             bucket = "",
             region = "",
             directory = "TraceDiary/",
@@ -173,6 +176,7 @@ class SettingsViewModel(
                         savePasswordLocally = prefs.savePasswordLocally,
                         syncEnabled = prefs.syncEnabled,
                         syncProvider = prefs.syncProvider,
+                        syncDisplayName = prefs.syncDisplayName,
                         syncBucket = if (keepDraft) current.syncBucket else prefs.syncBucket,
                         syncRegion = if (keepDraft) current.syncRegion else prefs.syncRegion,
                         syncDirectory = if (keepDraft) current.syncDirectory else prefs.syncDirectory,
@@ -394,6 +398,7 @@ class SettingsViewModel(
         _uiState.update {
             it.copy(
                 syncProvider = provider,
+                syncDisplayName = restoredDraft?.displayName.orEmpty(),
                 syncBucket = restoredDraft?.bucket.orEmpty(),
                 syncRegion = restoredDraft?.region.orEmpty(),
                 syncDirectory = restoredDraft?.directory ?: "TraceDiary/",
@@ -404,6 +409,13 @@ class SettingsViewModel(
             )
         }
         viewModelScope.launch { repository.setSyncProvider(provider) }
+    }
+
+    fun onSyncDisplayNameChanged(value: String) {
+        val current = _uiState.value
+        syncDraftsByProvider[current.syncProvider] = current.toSyncConfigurationDraft()
+        _uiState.update { it.copy(syncDisplayName = value, saveStatus = SaveStatus.Idle, saveError = null) }
+        viewModelScope.launch { repository.setSyncDisplayName(value) }
     }
 
     fun onSyncBucketChanged(value: String) {
@@ -460,9 +472,10 @@ class SettingsViewModel(
             _uiState.update { it.copy(saveStatus = SaveStatus.Saving, saveError = null) }
             repository.saveSyncConfiguration(
                 provider = snapshot.syncProvider,
+                displayName = snapshot.syncDisplayName,
                 bucket = snapshot.syncBucket,
                 region = snapshot.syncRegion,
-                directory = snapshot.syncDirectory
+                directory = snapshot.syncDirectory,
             )
             // 持久化凭证（已由输入回调覆盖，但保存按钮再兜底一次，应对从 init 直接进保存的场景）。
             persistCloudCredential()
@@ -668,6 +681,7 @@ class SettingsViewModel(
 
     private fun SettingsUiState.toSyncConfigurationDraft(): SyncConfigurationDraft =
         SyncConfigurationDraft(
+            displayName = syncDisplayName,
             bucket = syncBucket,
             region = syncRegion,
             directory = syncDirectory,

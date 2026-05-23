@@ -12,6 +12,7 @@ import com.tracediary.app.data.settings.UserPreferencesRepository
 import com.tracediary.app.data.sync.RemoteResult
 import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.domain.model.DiaryEntry
+import com.tracediary.app.domain.model.isRecorded
 import com.tracediary.app.domain.model.SyncState
 import com.tracediary.app.domain.model.plainTextWordCount
 import com.tracediary.app.domain.repository.DiaryRepository
@@ -22,12 +23,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,6 +52,7 @@ enum class SaveStatus {
 data class TodayUiState(
     val selectedDate: LocalDate,
     val weekDates: List<LocalDate>,
+    val weekDays: List<CalendarDay>,
     val displayMonth: YearMonth,
     val monthGrid: List<CalendarDay>,
     val isMonthExpanded: Boolean,
@@ -90,6 +94,7 @@ class TodayViewModel(
         TodayUiState(
             selectedDate = initialDate,
             weekDates = calendarUseCase.weekDates(initialDate),
+            weekDays = buildWeekDays(calendarUseCase.weekDates(initialDate), emptySet()),
             displayMonth = YearMonth.from(initialDate),
             monthGrid = emptyList(),
             isMonthExpanded = false,
@@ -106,16 +111,19 @@ class TodayViewModel(
 
     private val displayMonthFlow: MutableStateFlow<YearMonth> =
         MutableStateFlow(YearMonth.from(initialDate))
+    private var recordedDates: Set<LocalDate> = emptySet()
 
     /** 当前正文最后一次入库时的快照，用来判断是否需要 flush。 */
     private var lastPersistedContent: String = ""
     private var autoSaveJob: Job? = null
     private var autoSyncJob: Job? = null
     private var syncStateJob: Job? = null
+    private var recordedDatesJob: Job? = null
 
     init {
         loadEntry(initialDate)
         observeSyncState(initialDate)
+        observeRecordedDates()
         observeMonthEntries()
     }
 
@@ -124,12 +132,13 @@ class TodayViewModel(
         viewModelScope.launch {
             flushPendingSave()
             _uiState.update { current ->
-                current.copy(
-                    selectedDate = date,
-                    weekDates = calendarUseCase.weekDates(date),
-                    displayMonth = YearMonth.from(date),
-                    displayMonthLabel = formatMonthLabel(date),
-                    entryTitle = formatEntryTitle(date),
+            current.copy(
+                selectedDate = date,
+                weekDates = calendarUseCase.weekDates(date),
+                weekDays = buildWeekDays(calendarUseCase.weekDates(date), recordedDates),
+                displayMonth = YearMonth.from(date),
+                displayMonthLabel = formatMonthLabel(date),
+                entryTitle = formatEntryTitle(date),
                     saveStatus = SaveStatus.Idle,
                     deleteErrorMessage = null,
                 )
@@ -236,8 +245,10 @@ class TodayViewModel(
         _uiState.update { current ->
             val pivot = current.weekDates.firstOrNull() ?: current.selectedDate
             val newPivot = pivot.plusDays(deltaDays)
+            val newWeekDates = calendarUseCase.weekDates(newPivot)
             current.copy(
-                weekDates = calendarUseCase.weekDates(newPivot),
+                weekDates = newWeekDates,
+                weekDays = buildWeekDays(newWeekDates, recordedDates),
                 displayMonthLabel = formatMonthLabel(newPivot),
             )
         }
@@ -257,6 +268,22 @@ class TodayViewModel(
     private fun loadEntry(date: LocalDate) {
         viewModelScope.launch {
             loadEntryInternal(date)
+        }
+    }
+
+    private fun observeRecordedDates() {
+        recordedDatesJob?.cancel()
+        recordedDatesJob = viewModelScope.launch {
+            diaryRepository.observeAllEntries()
+                .map { entries -> entries.filter(DiaryEntry::isRecorded).map(DiaryEntry::date).toSet() }
+                .collect { dates ->
+                    recordedDates = dates
+                    _uiState.update { current ->
+                        current.copy(
+                            weekDays = buildWeekDays(current.weekDates, recordedDates),
+                        )
+                    }
+                }
         }
     }
 
@@ -398,6 +425,17 @@ class TodayViewModel(
     private fun formatEntryTitle(date: LocalDate): String {
         val weekday = date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.CHINESE)
         return "${date.monthValue}月${date.dayOfMonth}日 $weekday"
+    }
+
+    private fun buildWeekDays(
+        weekDates: List<LocalDate>,
+        recordedDates: Set<LocalDate>,
+    ): List<CalendarDay> = weekDates.map { date ->
+        CalendarDay(
+            date = date,
+            isInCurrentMonth = true,
+            hasRecord = date in recordedDates,
+        )
     }
 
     companion object {
