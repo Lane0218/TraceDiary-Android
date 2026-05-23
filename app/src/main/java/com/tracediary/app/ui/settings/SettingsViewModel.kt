@@ -9,6 +9,7 @@ import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.notifications.DailyReminderScheduler
 import com.tracediary.app.data.security.AppPasswordManager
 import com.tracediary.app.data.security.SecureCredentialStore
+import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.data.settings.UserPreferencesRepository
 import com.tracediary.app.data.sync.AliyunOssRemoteStorage
 import com.tracediary.app.data.sync.RemoteCredential
@@ -94,6 +95,7 @@ data class SettingsUiState(
     val syncBucket: String = "",
     val syncRegion: String = "",
     val syncDirectory: String = "TraceDiary/",
+    val sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.LatestFirst,
     // AK/SK 与本机密码：通过 SecureCredentialStore（EncryptedSharedPreferences）持久化。
     val syncAccessKeyId: String = "",
     val syncAccessKeySecret: String = "",
@@ -180,6 +182,7 @@ class SettingsViewModel(
                         syncBucket = if (keepDraft) current.syncBucket else prefs.syncBucket,
                         syncRegion = if (keepDraft) current.syncRegion else prefs.syncRegion,
                         syncDirectory = if (keepDraft) current.syncDirectory else prefs.syncDirectory,
+                        sameDayEntrySortOrder = prefs.sameDayEntrySortOrder,
                     )
                 }
             }
@@ -428,6 +431,11 @@ class SettingsViewModel(
 
     fun onSyncDirectoryChanged(value: String) {
         _uiState.update { it.copy(syncDirectory = value, saveStatus = SaveStatus.Idle, saveError = null) }
+    }
+
+    fun onSameDayEntrySortOrderChanged(value: SameDayEntrySortOrder) {
+        _uiState.update { it.copy(sameDayEntrySortOrder = value) }
+        viewModelScope.launch { repository.setSameDayEntrySortOrder(value) }
     }
 
     /**

@@ -108,6 +108,7 @@ fun TraceDiaryApp() {
                 0 -> TodayScreen(
                     pendingDate = pendingTodayDate,
                     onPendingDateConsumed = { pendingTodayEpochDay = Long.MIN_VALUE },
+                    onOpenSettings = { selectedTabIndex = 3 },
                 )
                 1 -> ReviewScreen(
                     onJumpToToday = { date ->

@@ -34,6 +34,20 @@ class TraceDiaryAppTest {
     }
 
     @Test
+    fun settingsScreen_opensPreferencePage() {
+        composeTestRule.setContent {
+            TraceDiaryTheme {
+                TraceDiaryApp()
+            }
+        }
+
+        composeTestRule.onNodeWithText("设置").performClick()
+        composeTestRule.onNodeWithText("偏好设置").performClick()
+        composeTestRule.onNodeWithText("从晚到早").assertIsDisplayed()
+        composeTestRule.onNodeWithText("从早到晚").assertIsDisplayed()
+    }
+
+    @Test
     fun reviewScreen_switchesBetweenSecondarySections() {
         composeTestRule.setContent {
             TraceDiaryTheme {

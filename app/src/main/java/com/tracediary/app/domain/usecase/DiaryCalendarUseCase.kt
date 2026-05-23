@@ -70,6 +70,24 @@ class DiaryCalendarUseCase {
             .sortedByDescending(DiaryEntry::date)
             .toList()
 
+    fun sameDayEntries(entries: List<DiaryEntry>, date: LocalDate): List<DiaryEntry> =
+        entries.latestRecordedEntries()
+            .asSequence()
+            .filter { entry -> entry.date != date }
+            .filter { entry -> entry.date.month == date.month && entry.date.dayOfMonth == date.dayOfMonth }
+            .sortedByDescending(DiaryEntry::date)
+            .toList()
+
+    fun sortSameDayEntries(
+        entries: List<DiaryEntry>,
+        latestFirst: Boolean,
+    ): List<DiaryEntry> =
+        if (latestFirst) {
+            entries.sortedByDescending(DiaryEntry::date)
+        } else {
+            entries.sortedBy(DiaryEntry::date)
+        }
+
     private companion object {
         const val DaysPerWeek = 7
     }

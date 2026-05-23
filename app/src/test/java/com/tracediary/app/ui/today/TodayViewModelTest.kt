@@ -1,6 +1,7 @@
 package com.tracediary.app.ui.today
 
 import com.tracediary.app.data.security.CloudCipherCredentialStore
+import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.data.settings.UserPreferences
 import com.tracediary.app.data.settings.UserPreferencesRepository
 import com.tracediary.app.data.sync.ErrorCode
@@ -224,6 +225,7 @@ class TodayViewModelTest {
     fun `previousYearsOnThisDay loaded from repository on init`() = runTest(dispatcher) {
         repository.upsert(LocalDate.of(2025, 5, 15), "去年今天")
         repository.upsert(LocalDate.of(2024, 5, 15), "前年今天")
+        repository.upsert(LocalDate.of(2026, 5, 15), "今年今天")
         repository.upsert(LocalDate.of(2024, 5, 16), "不是同月日，应被忽略")
 
         val viewModel = createViewModel()
@@ -231,8 +233,46 @@ class TodayViewModelTest {
 
         val previous = viewModel.uiState.value.previousYearsOnThisDay
         assertEquals(2, previous.size)
-        assertEquals(LocalDate.of(2025, 5, 15), previous[0].date)
-        assertEquals(LocalDate.of(2024, 5, 15), previous[1].date)
+        assertEquals(listOf(LocalDate.of(2025, 5, 15), LocalDate.of(2024, 5, 15)), previous.map(DiaryEntry::date))
+    }
+
+    @Test
+    fun `same day entries follow preference order and exclude current date`() = runTest(dispatcher) {
+        repository.upsert(LocalDate.of(2024, 5, 15), "前年今天")
+        repository.upsert(LocalDate.of(2025, 5, 15), "去年今天")
+        repository.upsert(LocalDate.of(fixedToday.year, fixedToday.month, fixedToday.dayOfMonth), "今年今天")
+
+        val preferences = FakeUserPreferencesRepository(syncEnabled = false)
+        val viewModel = createViewModel(userPreferencesRepository = preferences)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(LocalDate.of(2025, 5, 15), LocalDate.of(2024, 5, 15)),
+            viewModel.uiState.value.previousYearsOnThisDay.map(DiaryEntry::date),
+        )
+
+        preferences.setSameDayEntrySortOrder(SameDayEntrySortOrder.EarliestFirst)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(LocalDate.of(2024, 5, 15), LocalDate.of(2025, 5, 15)),
+            viewModel.uiState.value.previousYearsOnThisDay.map(DiaryEntry::date),
+        )
+        assertFalse(viewModel.uiState.value.previousYearsOnThisDay.any { it.date == fixedToday })
+    }
+
+    @Test
+    fun `onJumpToToday returns to initial date`() = runTest(dispatcher) {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onSelectDate(LocalDate.of(2024, 5, 15))
+        advanceUntilIdle()
+
+        viewModel.onJumpToToday()
+        advanceUntilIdle()
+
+        assertEquals(fixedToday, viewModel.uiState.value.selectedDate)
     }
 
     @Test
@@ -269,6 +309,7 @@ class TodayViewModelTest {
         syncEnabled: Boolean = false,
         localPassword: String? = null,
         remoteStorage: FakeRemoteStorage = FakeRemoteStorage(),
+        userPreferencesRepository: FakeUserPreferencesRepository = FakeUserPreferencesRepository(syncEnabled),
     ): TodayViewModel {
         val credentialStore = FakeCredentialStore(localPassword)
         val syncEngine = SyncEngine(
@@ -282,7 +323,7 @@ class TodayViewModelTest {
         return TodayViewModel(
             diaryRepository = repository,
             calendarUseCase = DiaryCalendarUseCase(),
-            userPreferencesRepository = FakeUserPreferencesRepository(syncEnabled),
+            userPreferencesRepository = userPreferencesRepository,
             secureCredentialStore = credentialStore,
             syncEngine = syncEngine,
             clock = fixedClock,
@@ -383,6 +424,10 @@ private class FakeUserPreferencesRepository(syncEnabled: Boolean) : UserPreferen
     private val prefs = MutableStateFlow(UserPreferences(syncEnabled = syncEnabled))
     override val preferences: Flow<UserPreferences> = prefs
 
+    fun setSameDayEntrySortOrder(value: SameDayEntrySortOrder) {
+        prefs.update { it.copy(sameDayEntrySortOrder = value) }
+    }
+
     override suspend fun setReminderEnabled(value: Boolean) {
         prefs.update { it.copy(dailyReminderEnabled = value) }
     }
@@ -413,6 +458,10 @@ private class FakeUserPreferencesRepository(syncEnabled: Boolean) : UserPreferen
 
     override suspend fun setSyncDirectory(value: String) {
         prefs.update { it.copy(syncDirectory = value) }
+    }
+
+    override suspend fun setSameDayEntrySortOrder(value: SameDayEntrySortOrder) {
+        prefs.update { it.copy(sameDayEntrySortOrder = value) }
     }
 
     override suspend fun setSyncDisplayName(value: String) {

@@ -3,6 +3,7 @@ package com.tracediary.app.ui.today
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -154,6 +155,29 @@ class TodayScreenTest {
         ).performTextReplacement("一二三四五")
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("5 字").assertIsDisplayed()
+    }
+
+    @Test
+    fun todayTitleIsClickable() {
+        val repository = InMemoryDiaryRepository()
+        val viewModel = TodayViewModel(
+            diaryRepository = repository,
+            calendarUseCase = DiaryCalendarUseCase(),
+            clock = fixedClock,
+            ioDispatcher = Dispatchers.Main,
+        )
+
+        composeTestRule.setContent {
+            TraceDiaryTheme {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    TodayScreen(viewModel = viewModel)
+                }
+            }
+        }
+
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("今天", useUnmergedTree = true)
+            .assert(hasClickAction())
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.onNodeWithContentDescriptionSafe(

@@ -89,13 +89,10 @@ class DefaultDiaryRepository(
     }
 
     override suspend fun getSameMonthDayEntries(date: LocalDate): List<DiaryEntry> {
-        val endEpochDay = date.minusDays(1).toEpochDay()
-        if (endEpochDay < Long.MIN_VALUE) {
-            return emptyList()
-        }
-        return diaryEntryDao.getBetween(Long.MIN_VALUE, endEpochDay)
+        return diaryEntryDao.getBetween(Long.MIN_VALUE, Long.MAX_VALUE)
             .asSequence()
             .map(DiaryEntryEntity::toDomain)
+            .filter { it.date != date }
             .filter { it.date.month == date.month && it.date.dayOfMonth == date.dayOfMonth }
             .sortedByDescending { it.date }
             .toList()

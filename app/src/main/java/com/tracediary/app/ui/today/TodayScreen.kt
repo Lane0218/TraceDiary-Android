@@ -34,6 +34,7 @@ import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -83,6 +84,7 @@ fun TodayScreen(
     modifier: Modifier = Modifier,
     pendingDate: LocalDate? = null,
     onPendingDateConsumed: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     viewModel: TodayViewModel = viewModel(
         factory = TodayViewModel.factory(
             LocalContext.current.applicationContext as TraceDiaryApplication
@@ -113,11 +115,20 @@ fun TodayScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "今天", style = MaterialTheme.typography.displayLarge)
+                Text(
+                    text = "今天",
+                    style = MaterialTheme.typography.displayLarge,
+                    modifier = Modifier
+                        .clip(MaterialTheme.shapes.small)
+                        .clickable { viewModel.onJumpToToday() }
+                        .padding(vertical = 4.dp, horizontal = 2.dp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
                 TodayOverflowMenu(
                     displayMonth = state.displayMonth,
                     onJumpToMonth = viewModel::onJumpToMonth,
                     onClearContent = viewModel::onDeleteCurrentEntry,
+                    onOpenSettings = onOpenSettings,
                 )
             }
         }
@@ -585,6 +596,7 @@ private fun TodayOverflowMenu(
     displayMonth: YearMonth,
     onJumpToMonth: (YearMonth) -> Unit,
     onClearContent: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var showMonthPicker by remember { mutableStateOf(false) }
@@ -610,6 +622,13 @@ private fun TodayOverflowMenu(
                 onClick = {
                     menuExpanded = false
                     showClearConfirm = true
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("偏好设置") },
+                onClick = {
+                    menuExpanded = false
+                    onOpenSettings()
                 }
             )
         }

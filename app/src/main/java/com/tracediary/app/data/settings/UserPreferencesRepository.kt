@@ -25,8 +25,22 @@ data class UserPreferences(
     val syncDisplayName: String = "",
     val syncBucket: String = "",
     val syncRegion: String = "",
-    val syncDirectory: String = "TraceDiary/"
+    val syncDirectory: String = "TraceDiary/",
+    val sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.LatestFirst,
 )
+
+enum class SameDayEntrySortOrder(val storageValue: String) {
+    LatestFirst("latest_first"),
+    EarliestFirst("earliest_first"),
+
+    companion object {
+        fun fromStorageValue(value: String?): SameDayEntrySortOrder = when (value) {
+            EarliestFirst.storageValue -> EarliestFirst
+            LatestFirst.storageValue -> LatestFirst
+            else -> LatestFirst
+        }
+    }
+}
 
 /**
  * 抽象出仓库接口，方便 ViewModel 注入与测试时使用 fake 实现。
@@ -43,6 +57,8 @@ interface UserPreferencesRepository {
     suspend fun setSyncBucket(value: String)
     suspend fun setSyncRegion(value: String)
     suspend fun setSyncDirectory(value: String)
+
+    suspend fun setSameDayEntrySortOrder(value: SameDayEntrySortOrder)
 
     /**
      * 一次性写入云同步相关的非敏感配置。
@@ -79,7 +95,8 @@ class DataStoreUserPreferencesRepository(
             syncDisplayName = prefs[KEY_SYNC_DISPLAY_NAME].orEmpty(),
             syncBucket = prefs[KEY_SYNC_BUCKET].orEmpty(),
             syncRegion = prefs[KEY_SYNC_REGION].orEmpty(),
-            syncDirectory = prefs[KEY_SYNC_DIRECTORY] ?: "TraceDiary/"
+            syncDirectory = prefs[KEY_SYNC_DIRECTORY] ?: "TraceDiary/",
+            sameDayEntrySortOrder = SameDayEntrySortOrder.fromStorageValue(prefs[KEY_SAME_DAY_ENTRY_SORT_ORDER]),
         )
     }
 
@@ -119,6 +136,10 @@ class DataStoreUserPreferencesRepository(
         dataStore.edit { it[KEY_SYNC_DIRECTORY] = value }
     }
 
+    override suspend fun setSameDayEntrySortOrder(value: SameDayEntrySortOrder) {
+        dataStore.edit { it[KEY_SAME_DAY_ENTRY_SORT_ORDER] = value.storageValue }
+    }
+
     override suspend fun saveSyncConfiguration(
         provider: String,
         bucket: String,
@@ -145,5 +166,6 @@ class DataStoreUserPreferencesRepository(
         val KEY_SYNC_BUCKET = stringPreferencesKey("sync_bucket")
         val KEY_SYNC_REGION = stringPreferencesKey("sync_region")
         val KEY_SYNC_DIRECTORY = stringPreferencesKey("sync_directory")
+        val KEY_SAME_DAY_ENTRY_SORT_ORDER = stringPreferencesKey("same_day_entry_sort_order")
     }
 }

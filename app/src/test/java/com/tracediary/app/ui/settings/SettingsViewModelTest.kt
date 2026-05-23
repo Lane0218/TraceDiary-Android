@@ -1,6 +1,7 @@
 package com.tracediary.app.ui.settings
 
 import com.tracediary.app.data.settings.UserPreferences
+import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.data.settings.UserPreferencesRepository
 import com.tracediary.app.domain.model.SyncMetadata
 import com.tracediary.app.domain.repository.SyncMetadataRepository
@@ -169,6 +170,16 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun onSameDayEntrySortOrderChanged_persistsPreference() = runTest(testDispatcher) {
+        advanceUntilIdle()
+        viewModel.onSameDayEntrySortOrderChanged(SameDayEntrySortOrder.EarliestFirst)
+        advanceUntilIdle()
+
+        assertEquals(SameDayEntrySortOrder.EarliestFirst, fakeRepo.current().sameDayEntrySortOrder)
+        assertEquals(SameDayEntrySortOrder.EarliestFirst, viewModel.uiState.value.sameDayEntrySortOrder)
+    }
+
+    @Test
     fun onSyncProviderChanged_keepsDraftPerProvider() = runTest(testDispatcher) {
         advanceUntilIdle()
         viewModel.onSyncDisplayNameChanged("阿里云空间")
@@ -285,6 +296,10 @@ class SettingsViewModelTest {
 
         override suspend fun setSyncDirectory(value: String) {
             _prefs.update { it.copy(syncDirectory = value) }
+        }
+
+        override suspend fun setSameDayEntrySortOrder(value: SameDayEntrySortOrder) {
+            _prefs.update { it.copy(sameDayEntrySortOrder = value) }
         }
 
         override suspend fun setSyncDisplayName(value: String) {

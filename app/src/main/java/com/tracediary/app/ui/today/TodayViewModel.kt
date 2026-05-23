@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.security.AppPasswordManager
 import com.tracediary.app.data.security.CloudCipherCredentialStore
+import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.data.settings.UserPreferencesRepository
 import com.tracediary.app.data.sync.RemoteResult
 import com.tracediary.app.data.sync.SyncEngine
@@ -112,6 +113,8 @@ class TodayViewModel(
     private val displayMonthFlow: MutableStateFlow<YearMonth> =
         MutableStateFlow(YearMonth.from(initialDate))
     private var recordedDates: Set<LocalDate> = emptySet()
+    private var allEntriesSnapshot: List<DiaryEntry> = emptyList()
+    private var sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.LatestFirst
 
     /** 当前正文最后一次入库时的快照，用来判断是否需要 flush。 */
     private var lastPersistedContent: String = ""
@@ -119,11 +122,13 @@ class TodayViewModel(
     private var autoSyncJob: Job? = null
     private var syncStateJob: Job? = null
     private var recordedDatesJob: Job? = null
+    private var preferencesJob: Job? = null
 
     init {
         loadEntry(initialDate)
         observeSyncState(initialDate)
         observeRecordedDates()
+        observePreferences()
         observeMonthEntries()
     }
 
@@ -167,6 +172,10 @@ class TodayViewModel(
 
     fun onNextMonth() {
         shiftMonth(1)
+    }
+
+    fun onJumpToToday() {
+        onSelectDate(initialDate)
     }
 
     fun onJumpToMonth(target: YearMonth) {
@@ -275,21 +284,36 @@ class TodayViewModel(
         recordedDatesJob?.cancel()
         recordedDatesJob = viewModelScope.launch {
             diaryRepository.observeAllEntries()
-                .map { entries -> entries.filter(DiaryEntry::isRecorded).map(DiaryEntry::date).toSet() }
-                .collect { dates ->
+                .collect { entries ->
+                    allEntriesSnapshot = entries
+                    val dates = entries.filter(DiaryEntry::isRecorded).map(DiaryEntry::date).toSet()
                     recordedDates = dates
                     _uiState.update { current ->
                         current.copy(
                             weekDays = buildWeekDays(current.weekDates, recordedDates),
                         )
                     }
+                    refreshSameDayEntries(_uiState.value.selectedDate)
                 }
+        }
+    }
+
+    private fun observePreferences() {
+        val preferencesRepository = userPreferencesRepository ?: return
+        preferencesJob?.cancel()
+        preferencesJob = viewModelScope.launch {
+            preferencesRepository.preferences.collect { prefs ->
+                sameDayEntrySortOrder = prefs.sameDayEntrySortOrder
+                refreshSameDayEntries(_uiState.value.selectedDate)
+            }
         }
     }
 
     private suspend fun loadEntryInternal(date: LocalDate) {
         val entry = withContext(ioDispatcher) { diaryRepository.getEntry(date) }
-        val previous = withContext(ioDispatcher) { diaryRepository.getSameMonthDayEntries(date) }
+        val entries = withContext(ioDispatcher) { diaryRepository.observeAllEntries().first() }
+        allEntriesSnapshot = entries
+        val previous = buildSameDayEntries(entries, date)
         val content = entry?.content.orEmpty()
         lastPersistedContent = content
         _uiState.update { current ->
@@ -302,6 +326,23 @@ class TodayViewModel(
                 saveStatus = if (entry != null && entry.content.isNotEmpty()) SaveStatus.Saved else SaveStatus.Idle,
             )
         }
+    }
+
+    private fun refreshSameDayEntries(date: LocalDate) {
+        val entries = buildSameDayEntries(allEntriesSnapshot, date)
+        _uiState.update { current ->
+            if (current.selectedDate == date) {
+                current.copy(previousYearsOnThisDay = entries)
+            } else current
+        }
+    }
+
+    private fun buildSameDayEntries(entries: List<DiaryEntry>, date: LocalDate): List<DiaryEntry> {
+        val sameDayEntries = calendarUseCase.sameDayEntries(entries, date)
+        return calendarUseCase.sortSameDayEntries(
+            sameDayEntries,
+            latestFirst = sameDayEntrySortOrder == SameDayEntrySortOrder.LatestFirst,
+        )
     }
 
     private fun observeSyncState(date: LocalDate) {

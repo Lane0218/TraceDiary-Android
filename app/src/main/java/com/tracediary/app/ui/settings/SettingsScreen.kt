@@ -42,6 +42,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.ui.settings.SettingsViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracediary.app.TraceDiaryApplication
+import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.domain.usecase.ExportFormat
 import com.tracediary.app.domain.usecase.ImportOptions
@@ -69,6 +70,7 @@ fun SettingsScreen(
         } else {
             SettingsSubPageContainer(title = page, onBack = { activeSubPage = null }) {
                 when (page) {
+                    "偏好设置" -> PreferenceSettingsPage(state = state, viewModel = viewModel)
                     "同步设置" -> SyncSettingsPage(state = state, viewModel = viewModel)
                     "数据加密" -> EncryptionSettingsPage(state = state, viewModel = viewModel)
                     "备份与恢复" -> DataManagementPage(
@@ -112,6 +114,16 @@ private fun MainSettingsList(
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Column {
+                    SettingsRow(
+                        icon = Icons.Outlined.Tune,
+                        title = "偏好设置",
+                        subtitle = "往年今日排序",
+                        onClick = { onNavigate("偏好设置") }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 68.dp, end = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
                     SettingsRow(
                         icon = Icons.Outlined.Cloud, 
                         title = "云同步", 
@@ -167,6 +179,51 @@ private fun MainSettingsList(
                         icon = Icons.Outlined.Info, 
                         title = "关于",
                         onClick = { onNavigate("关于") }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Text(
+                text = "往年今日",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 4.dp),
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        item {
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column {
+                    ChoiceRow(
+                        label = "从晚到早",
+                        subtitle = "先显示最近年份，再显示更早年份",
+                        selected = state.sameDayEntrySortOrder == SameDayEntrySortOrder.LatestFirst,
+                        enabled = true,
+                        onClick = { viewModel.onSameDayEntrySortOrderChanged(SameDayEntrySortOrder.LatestFirst) }
+                    )
+                    SyncRowDivider()
+                    ChoiceRow(
+                        label = "从早到晚",
+                        subtitle = "按年份从旧到新显示",
+                        selected = state.sameDayEntrySortOrder == SameDayEntrySortOrder.EarliestFirst,
+                        enabled = true,
+                        onClick = { viewModel.onSameDayEntrySortOrderChanged(SameDayEntrySortOrder.EarliestFirst) }
                     )
                 }
             }
