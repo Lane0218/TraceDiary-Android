@@ -54,6 +54,7 @@ enum class SaveStatus {
 /** 今天页 UI 状态。 */
 data class TodayUiState(
     val selectedDate: LocalDate,
+    val calendarAnchorDate: LocalDate,
     val weekDates: List<LocalDate>,
     val weekDays: List<CalendarDay>,
     val displayMonth: YearMonth,
@@ -95,6 +96,7 @@ class TodayViewModel(
     private val _uiState = MutableStateFlow(
         TodayUiState(
             selectedDate = initialDate,
+            calendarAnchorDate = initialDate,
             weekDates = calendarUseCase.weekDates(initialDate),
             weekDays = buildWeekDays(calendarUseCase.weekDates(initialDate), emptySet()),
             displayMonth = YearMonth.from(initialDate),
@@ -134,22 +136,25 @@ class TodayViewModel(
     }
 
     fun onSelectDate(date: LocalDate) {
-        if (date == _uiState.value.selectedDate) return
+        val current = _uiState.value
+        if (date == current.selectedDate && date == current.calendarAnchorDate) return
         viewModelScope.launch {
             flushPendingSave()
+            displayMonthFlow.value = YearMonth.from(date)
+            val weekDates = calendarUseCase.weekDates(date)
             _uiState.update { current ->
-            current.copy(
-                selectedDate = date,
-                weekDates = calendarUseCase.weekDates(date),
-                weekDays = buildWeekDays(calendarUseCase.weekDates(date), recordedDates),
-                displayMonth = YearMonth.from(date),
-                displayMonthLabel = formatMonthLabel(date),
-                entryTitle = formatEntryTitle(date),
+                current.copy(
+                    selectedDate = date,
+                    calendarAnchorDate = date,
+                    weekDates = weekDates,
+                    weekDays = buildWeekDays(weekDates, recordedDates),
+                    displayMonth = YearMonth.from(date),
+                    displayMonthLabel = formatMonthLabel(date),
+                    entryTitle = formatEntryTitle(date),
                     saveStatus = SaveStatus.Idle,
                     deleteErrorMessage = null,
                 )
             }
-            displayMonthFlow.value = YearMonth.from(date)
             loadEntryInternal(date)
             observeSyncState(date)
         }
@@ -164,7 +169,15 @@ class TodayViewModel(
     }
 
     fun onToggleMonthExpand() {
-        _uiState.update { it.copy(isMonthExpanded = !it.isMonthExpanded) }
+        val anchor = _uiState.value.calendarAnchorDate
+        displayMonthFlow.value = YearMonth.from(anchor)
+        _uiState.update {
+            it.copy(
+                displayMonth = YearMonth.from(anchor),
+                displayMonthLabel = formatMonthLabel(anchor),
+                isMonthExpanded = !it.isMonthExpanded,
+            )
+        }
     }
 
     fun onPreviousMonth() {
@@ -180,9 +193,14 @@ class TodayViewModel(
     }
 
     fun onJumpToMonth(target: YearMonth) {
+        val anchor = anchorDateInMonth(_uiState.value.calendarAnchorDate, target)
+        val weekDates = calendarUseCase.weekDates(anchor)
         displayMonthFlow.value = target
         _uiState.update { current ->
             current.copy(
+                calendarAnchorDate = anchor,
+                weekDates = weekDates,
+                weekDays = buildWeekDays(weekDates, recordedDates),
                 displayMonth = target,
                 displayMonthLabel = "${target.year}年${target.monthValue}月",
                 isMonthExpanded = true,
@@ -252,23 +270,30 @@ class TodayViewModel(
     }
 
     private fun shiftWeek(deltaDays: Long) {
+        val anchor = _uiState.value.calendarAnchorDate.plusDays(deltaDays)
+        val newWeekDates = calendarUseCase.weekDates(anchor)
+        displayMonthFlow.value = YearMonth.from(anchor)
         _uiState.update { current ->
-            val pivot = current.weekDates.firstOrNull() ?: current.selectedDate
-            val newPivot = pivot.plusDays(deltaDays)
-            val newWeekDates = calendarUseCase.weekDates(newPivot)
             current.copy(
+                calendarAnchorDate = anchor,
                 weekDates = newWeekDates,
                 weekDays = buildWeekDays(newWeekDates, recordedDates),
-                displayMonthLabel = formatMonthLabel(newPivot),
+                displayMonth = YearMonth.from(anchor),
+                displayMonthLabel = formatMonthLabel(anchor),
             )
         }
     }
 
     private fun shiftMonth(deltaMonths: Long) {
         val target = displayMonthFlow.value.plusMonths(deltaMonths)
+        val anchor = anchorDateInMonth(_uiState.value.calendarAnchorDate, target)
+        val weekDates = calendarUseCase.weekDates(anchor)
         displayMonthFlow.value = target
         _uiState.update { current ->
             current.copy(
+                calendarAnchorDate = anchor,
+                weekDates = weekDates,
+                weekDays = buildWeekDays(weekDates, recordedDates),
                 displayMonth = target,
                 displayMonthLabel = "${target.year}年${target.monthValue}月",
             )
@@ -467,6 +492,11 @@ class TodayViewModel(
     private fun formatEntryTitle(date: LocalDate): String {
         val weekday = date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.CHINESE)
         return "${date.monthValue}月${date.dayOfMonth}日 $weekday"
+    }
+
+    private fun anchorDateInMonth(anchor: LocalDate, target: YearMonth): LocalDate {
+        val day = anchor.dayOfMonth.coerceAtMost(target.lengthOfMonth())
+        return target.atDay(day)
     }
 
     private fun buildWeekDays(

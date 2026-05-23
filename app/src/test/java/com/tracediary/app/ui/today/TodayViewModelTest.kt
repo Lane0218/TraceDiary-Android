@@ -34,6 +34,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -81,6 +82,7 @@ class TodayViewModelTest {
         assertEquals(existing.content.length, state.wordCount)
         // 已落库的条目，加载后应展示“已保存”，让用户离开后回来仍能确认保存状态。
         assertEquals(SaveStatus.Saved, state.saveStatus)
+        assertEquals(fixedToday, state.calendarAnchorDate)
         assertEquals(7, state.weekDates.size)
         assertTrue(state.weekDates.contains(fixedToday))
         assertEquals("2026年5月", state.displayMonthLabel)
@@ -323,7 +325,58 @@ class TodayViewModelTest {
 
         val state = viewModel.uiState.value
         assertEquals(originalSelected, state.selectedDate)
+        assertEquals(originalSelected.minusDays(7), state.calendarAnchorDate)
         assertEquals(originalFirst.minusDays(7), state.weekDates.first())
+    }
+
+    @Test
+    fun `month navigation anchors collapsed week to browsed month without changing selectedDate`() = runTest(dispatcher) {
+        val initialDate = LocalDate.of(2026, 5, 23)
+        val viewModel = createViewModel(initialDate = initialDate)
+        advanceUntilIdle()
+
+        viewModel.onToggleMonthExpand()
+        viewModel.onPreviousMonth()
+        advanceUntilIdle()
+
+        var state = viewModel.uiState.value
+        assertTrue(state.isMonthExpanded)
+        assertEquals(initialDate, state.selectedDate)
+        assertEquals(LocalDate.of(2026, 4, 23), state.calendarAnchorDate)
+        assertEquals("2026年4月", state.displayMonthLabel)
+        assertEquals(LocalDate.of(2026, 4, 19), state.weekDates.first())
+        assertEquals(LocalDate.of(2026, 4, 25), state.weekDates.last())
+
+        viewModel.onToggleMonthExpand()
+        advanceUntilIdle()
+
+        state = viewModel.uiState.value
+        assertFalse(state.isMonthExpanded)
+        assertEquals(initialDate, state.selectedDate)
+        assertEquals(LocalDate.of(2026, 4, 23), state.calendarAnchorDate)
+        assertEquals("2026年4月", state.displayMonthLabel)
+        assertEquals(LocalDate.of(2026, 4, 19), state.weekDates.first())
+        assertEquals(LocalDate.of(2026, 4, 25), state.weekDates.last())
+    }
+
+    @Test
+    fun `select date syncs selectedDate and calendar anchor`() = runTest(dispatcher) {
+        val viewModel = createViewModel(initialDate = LocalDate.of(2026, 5, 23))
+        advanceUntilIdle()
+
+        viewModel.onToggleMonthExpand()
+        viewModel.onPreviousMonth()
+        advanceUntilIdle()
+
+        val targetDate = LocalDate.of(2026, 4, 21)
+        viewModel.onSelectDate(targetDate)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(targetDate, state.selectedDate)
+        assertEquals(targetDate, state.calendarAnchorDate)
+        assertEquals("2026年4月", state.displayMonthLabel)
+        assertTrue(state.weekDates.contains(targetDate))
     }
 
     private fun TestScope.createViewModel(
@@ -331,6 +384,7 @@ class TodayViewModelTest {
         localPassword: String? = null,
         remoteStorage: FakeRemoteStorage = FakeRemoteStorage(),
         userPreferencesRepository: FakeUserPreferencesRepository = FakeUserPreferencesRepository(syncEnabled),
+        initialDate: LocalDate = fixedToday,
     ): TodayViewModel {
         val credentialStore = FakeCredentialStore(localPassword)
         val syncEngine = SyncEngine(
@@ -348,6 +402,7 @@ class TodayViewModelTest {
             secureCredentialStore = credentialStore,
             syncEngine = syncEngine,
             clock = fixedClock,
+            initialDate = initialDate,
             ioDispatcher = dispatcher,
         )
     }
