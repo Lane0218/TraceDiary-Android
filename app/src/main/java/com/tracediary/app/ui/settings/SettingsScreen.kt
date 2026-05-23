@@ -531,6 +531,7 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
     var showSaveErrorDialog by rememberSaveable { mutableStateOf(false) }
