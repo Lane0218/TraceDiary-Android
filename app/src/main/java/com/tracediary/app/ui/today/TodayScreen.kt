@@ -277,22 +277,26 @@ private fun WeekRow(
     selectedDate: LocalDate,
     onSelectDate: (LocalDate) -> Unit,
 ) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        weekDays.forEach { day ->
+    Column(modifier = Modifier.fillMaxWidth()) {
+        WeekHeaderRow()
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(modifier = Modifier.fillMaxWidth()) {
+            weekDays.forEach { day ->
                 CalendarDayCell(
                     day = day,
                     isSelected = day.date == selectedDate,
                     modifier = Modifier.weight(1f),
                     onClick = { onSelectDate(day.date) },
-                    showWeekdayLabel = true,
+                    showWeekdayLabel = false,
                     cellShape = MaterialTheme.shapes.medium,
-                    cellPadding = PaddingValues(vertical = 8.dp),
+                    cellPadding = PaddingValues(top = 8.dp, bottom = 6.dp),
                     dayTextStyle = MaterialTheme.typography.titleMedium,
                     unselectedTextColor = MaterialTheme.colorScheme.onSurface,
                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                     selectedTextColor = MaterialTheme.colorScheme.primary,
                     showInCurrentMonthIndicator = true,
                 )
+            }
         }
     }
 }
@@ -303,19 +307,8 @@ private fun MonthGrid(
     selectedDate: LocalDate,
     onSelectDate: (LocalDate) -> Unit,
 ) {
-    val weekHeaders = listOf("日", "一", "二", "三", "四", "五", "六")
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            weekHeaders.forEach { day ->
-                Text(
-                    text = day,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                )
-            }
-        }
+        WeekHeaderRow()
         Spacer(modifier = Modifier.height(4.dp))
         monthGrid.chunked(7).forEach { week ->
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
@@ -346,6 +339,22 @@ private fun MonthGrid(
         }
         if (monthGrid.isNotEmpty()) {
             Spacer(modifier = Modifier.height(4.dp))
+        }
+    }
+}
+
+@Composable
+private fun WeekHeaderRow() {
+    val weekHeaders = listOf("日", "一", "二", "三", "四", "五", "六")
+    Row(modifier = Modifier.fillMaxWidth()) {
+        weekHeaders.forEach { day ->
+            Text(
+                text = day,
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            )
         }
     }
 }
