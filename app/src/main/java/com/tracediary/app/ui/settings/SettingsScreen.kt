@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.Image
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
@@ -28,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
@@ -43,6 +45,7 @@ import com.tracediary.app.ui.settings.SettingsViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
+import com.tracediary.app.R
 import com.tracediary.app.data.settings.parseBoundaryTime
 import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.domain.usecase.ExportFormat
@@ -466,6 +469,11 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
 
 @Composable
 private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
+    var showSaveErrorDialog by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.saveStatus) {
+        showSaveErrorDialog = state.saveStatus == SaveStatus.Failed && !state.saveError.isNullOrBlank()
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
@@ -560,17 +568,81 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                         .fillMaxWidth()
                         .height(48.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    colors = syncSaveButtonColors(state.saveStatus)
                 ) {
                     Text(
-                        if (state.saveStatus == SaveStatus.Saving) "验证中…" else "保存并检查",
+                        text = syncSaveButtonLabel(state.saveStatus),
                         fontWeight = FontWeight.Medium
                     )
                 }
             }
+
+            item {
+                SyncSaveStatusMessage(status = state.saveStatus)
+            }
         }
     }
+
+    if (showSaveErrorDialog && state.saveStatus == SaveStatus.Failed && !state.saveError.isNullOrBlank()) {
+        AlertDialog(
+            onDismissRequest = { showSaveErrorDialog = false },
+            title = { Text("连接验证失败") },
+            text = { Text(state.saveError.orEmpty()) },
+            confirmButton = {
+                TextButton(onClick = { showSaveErrorDialog = false }) {
+                    Text("我知道了")
+                }
+            },
+        )
+    }
+
     SyncOpDialogs(state = state, viewModel = viewModel)
+}
+
+@Composable
+private fun SyncSaveStatusMessage(status: SaveStatus) {
+    val (message, color) = when (status) {
+        SaveStatus.Idle -> null to null
+        SaveStatus.Saving -> "正在验证连接…" to MaterialTheme.colorScheme.onSurfaceVariant
+        SaveStatus.Saved -> "已保存，连接正常" to MaterialTheme.colorScheme.primary
+        SaveStatus.Failed -> "已保存，连接失败" to MaterialTheme.colorScheme.error
+    }
+    if (message != null && color != null) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = color,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+        )
+    }
+}
+
+@Composable
+private fun syncSaveButtonLabel(status: SaveStatus): String = when (status) {
+    SaveStatus.Idle -> "保存并检查"
+    SaveStatus.Saving -> "验证中…"
+    SaveStatus.Saved -> "已保存，连接正常"
+    SaveStatus.Failed -> "已保存，连接失败"
+}
+
+@Composable
+private fun syncSaveButtonColors(status: SaveStatus): ButtonColors {
+    return when (status) {
+        SaveStatus.Idle, SaveStatus.Saving -> ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+            disabledContentColor = MaterialTheme.colorScheme.onPrimary,
+        )
+        SaveStatus.Saved -> ButtonDefaults.buttonColors(
+            containerColor = Color(0xFF167A45),
+            contentColor = Color.White,
+        )
+        SaveStatus.Failed -> ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError,
+        )
+    }
 }
 
 @Composable
@@ -1258,11 +1330,10 @@ private fun AboutPage() {
     ) {
         Spacer(modifier = Modifier.height(32.dp))
         // Logo Section
-        Icon(
-            imageVector = Icons.Outlined.AutoStories,
+        Image(
+            painter = painterResource(id = R.drawable.tracediary_logo),
             contentDescription = "Logo",
-            modifier = Modifier.size(56.dp),
-            tint = MaterialTheme.colorScheme.primary
+            modifier = Modifier.size(88.dp)
         )
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = "TraceDiary", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
