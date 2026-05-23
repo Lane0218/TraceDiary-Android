@@ -10,6 +10,8 @@ import com.tracediary.app.data.security.AppPasswordManager
 import com.tracediary.app.data.security.CloudCipherCredentialStore
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.data.settings.UserPreferencesRepository
+import com.tracediary.app.data.settings.parseBoundaryTime
+import com.tracediary.app.data.settings.resolveAppDate
 import com.tracediary.app.data.sync.RemoteResult
 import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.domain.model.DiaryEntry
@@ -84,12 +86,11 @@ class TodayViewModel(
     private val syncEngine: SyncEngine? = null,
     private val appPasswordManager: AppPasswordManager? = null,
     private val clock: Clock = Clock.systemDefaultZone(),
+    private val initialDate: LocalDate = LocalDate.now(clock),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val autoSaveDebounceMillis: Long = DEFAULT_AUTO_SAVE_DEBOUNCE_MILLIS,
     private val autoSyncDebounceMillis: Long = DEFAULT_AUTO_SYNC_DEBOUNCE_MILLIS,
 ) : ViewModel() {
-
-    private val initialDate: LocalDate = LocalDate.now(clock)
 
     private val _uiState = MutableStateFlow(
         TodayUiState(
@@ -493,8 +494,9 @@ class TodayViewModel(
                         secureCredentialStore = application.secureCredentialStore,
                         syncEngine = application.syncEngine,
                         appPasswordManager = application.appPasswordManager,
+                        initialDate = application.currentAppDate(),
                     )
                 }
             }
-    }
+}
 }

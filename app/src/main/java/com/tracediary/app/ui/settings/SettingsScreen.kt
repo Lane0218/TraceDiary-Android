@@ -43,10 +43,12 @@ import com.tracediary.app.ui.settings.SettingsViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
+import com.tracediary.app.data.settings.parseBoundaryTime
 import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.domain.usecase.ExportFormat
 import com.tracediary.app.domain.usecase.ImportOptions
 import com.tracediary.app.domain.usecase.MergeStrategy
+import java.time.LocalTime
 
 @Composable
 fun SettingsScreen(
@@ -185,8 +187,13 @@ private fun MainSettingsList(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
+    var showBoundaryTimePicker by remember { mutableStateOf(false) }
+    val (boundaryHour, boundaryMinute) = remember(state.dayBoundaryTime) {
+        parseHourMinute(state.dayBoundaryTime, maxHour = 5)
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
@@ -222,6 +229,103 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                         enabled = true,
                         onClick = { viewModel.onSameDayEntrySortOrderChanged(SameDayEntrySortOrder.EarliestFirst) }
                     )
+                }
+            }
+        }
+
+        item {
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 56.dp)
+                            .clickable { showBoundaryTimePicker = true }
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "次日切换时间",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = state.dayBoundaryTime,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 68.dp, end = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
+                    Text(
+                        text = "00:00 到 05:59 之间任意时间",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    if (showBoundaryTimePicker) {
+        var selectedHour by remember { mutableStateOf(boundaryHour.coerceIn(0, 5)) }
+        var selectedMinute by remember { mutableStateOf(boundaryMinute) }
+
+        BasicAlertDialog(
+            onDismissRequest = { showBoundaryTimePicker = false },
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .width(300.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "选择次日切换时间",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 20.dp)
+                )
+
+                WheelTimePicker(
+                    initialHour = selectedHour,
+                    initialMinute = selectedMinute,
+                    hourRange = 0..5,
+                    onTimeChanged = { h, m ->
+                        selectedHour = h
+                        selectedMinute = m
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = { showBoundaryTimePicker = false }) {
+                        Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(onClick = {
+                        viewModel.onDayBoundaryTimeChanged(
+                            "%02d:%02d".format(selectedHour.coerceIn(0, 5), selectedMinute)
+                        )
+                        showBoundaryTimePicker = false
+                    }) {
+                        Text("确定", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -586,7 +690,7 @@ private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewMode
     val context = LocalContext.current
     var showTimePicker by remember { mutableStateOf(false) }
     val (initialHour, initialMinute) = remember(state.dailyReminderTime) {
-        parseHourMinute(state.dailyReminderTime)
+        parseHourMinute(state.dailyReminderTime, maxHour = 23)
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -694,6 +798,7 @@ private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewMode
                 WheelTimePicker(
                     initialHour = selectedHour,
                     initialMinute = selectedMinute,
+                    hourRange = 0..23,
                     onTimeChanged = { h, m ->
                         selectedHour = h
                         selectedMinute = m
@@ -1134,9 +1239,9 @@ private fun formatSummary(summary: SyncEngine.SyncSummary): String = buildString
     if (summary.conflicts > 0) append("，冲突 ").append(summary.conflicts).append(" 项")
 }
 
-private fun parseHourMinute(time: String): Pair<Int, Int> {
+private fun parseHourMinute(time: String, maxHour: Int): Pair<Int, Int> {
     val parts = time.split(":")
-    val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 21
+    val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, maxHour) ?: 0
     val minute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
     return hour to minute
 }
@@ -1377,9 +1482,10 @@ private fun SettingsRow(icon: ImageVector, title: String, subtitle: String? = nu
 private fun WheelTimePicker(
     initialHour: Int,
     initialMinute: Int,
+    hourRange: IntRange,
     onTimeChanged: (Int, Int) -> Unit
 ) {
-    var hour by remember { mutableStateOf(initialHour) }
+    var hour by remember { mutableStateOf(initialHour.coerceIn(hourRange)) }
     var minute by remember { mutableStateOf(initialMinute) }
     
     Row(
@@ -1388,10 +1494,10 @@ private fun WheelTimePicker(
         verticalAlignment = Alignment.CenterVertically
     ) {
         WheelColumn(
-            count = 24,
-            initialIndex = hour,
+            count = hourRange.last - hourRange.first + 1,
+            initialIndex = hour - hourRange.first,
             onIndexChanged = { h -> 
-                hour = h
+                hour = (h + hourRange.first).coerceIn(hourRange)
                 onTimeChanged(hour, minute)
             }
         )

@@ -276,6 +276,27 @@ class TodayViewModelTest {
     }
 
     @Test
+    fun `initial date follows application day boundary before 2am`() = runTest(dispatcher) {
+        val boundaryClock = Clock.fixed(
+            LocalDate.of(2026, 5, 17).atTime(1, 30).toInstant(ZoneOffset.UTC),
+            ZoneOffset.UTC,
+        )
+        val preferences = FakeUserPreferencesRepository(syncEnabled = false, dayBoundaryTime = "02:00")
+        val viewModel = TodayViewModel(
+            diaryRepository = repository,
+            calendarUseCase = DiaryCalendarUseCase(),
+            userPreferencesRepository = preferences,
+            clock = boundaryClock,
+            initialDate = LocalDate.of(2026, 5, 16),
+            ioDispatcher = dispatcher,
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(LocalDate.of(2026, 5, 16), viewModel.uiState.value.selectedDate)
+    }
+
+    @Test
     fun `sync state updates when repository entry changes`() = runTest(dispatcher) {
         repository.upsert(fixedToday, "今天内容", syncState = SyncState.Failed)
         val viewModel = createViewModel()
@@ -420,8 +441,16 @@ private class FakeDiaryRepository(private val clock: Clock) : DiaryRepository {
             .sortedByDescending(DiaryEntry::date)
 }
 
-private class FakeUserPreferencesRepository(syncEnabled: Boolean) : UserPreferencesRepository {
-    private val prefs = MutableStateFlow(UserPreferences(syncEnabled = syncEnabled))
+private class FakeUserPreferencesRepository(
+    syncEnabled: Boolean,
+    dayBoundaryTime: String = "00:00",
+) : UserPreferencesRepository {
+    private val prefs = MutableStateFlow(
+        UserPreferences(
+            syncEnabled = syncEnabled,
+            dayBoundaryTime = dayBoundaryTime,
+        )
+    )
     override val preferences: Flow<UserPreferences> = prefs
 
     fun setSameDayEntrySortOrder(value: SameDayEntrySortOrder) {
@@ -434,6 +463,10 @@ private class FakeUserPreferencesRepository(syncEnabled: Boolean) : UserPreferen
 
     override suspend fun setReminderTime(time: String) {
         prefs.update { it.copy(dailyReminderTime = time) }
+    }
+
+    override suspend fun setDayBoundaryTime(time: String) {
+        prefs.update { it.copy(dayBoundaryTime = time) }
     }
 
     override suspend fun setSavePasswordLocally(value: Boolean) {

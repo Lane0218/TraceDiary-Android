@@ -39,6 +39,7 @@ class ReviewViewModel(
     @Suppress("UNUSED_PARAMETER") calendarUseCase: DiaryCalendarUseCase,
     private val searchUseCase: SearchDiaryEntriesUseCase,
     private val clock: Clock = Clock.systemDefaultZone(),
+    private val initialDate: LocalDate = LocalDate.now(clock),
     private val scope: CoroutineScope? = null,
 ) : ViewModel() {
 
@@ -86,7 +87,7 @@ class ReviewViewModel(
             annualSummaryRepository.observeSummaries().collectLatest { summaries ->
                 val ordered = summaries.sortedByDescending(AnnualSummary::year)
                 val existingYears = ordered.map(AnnualSummary::year).toSet()
-                val currentYear = LocalDate.now(clock).year
+                val currentYear = initialDate.year
                 val writableYears = (0 until WRITABLE_YEAR_WINDOW)
                     .map { offset -> currentYear - offset }
                     .filter { year -> year !in existingYears }
@@ -262,10 +263,11 @@ class ReviewViewModel(
                         annualSummaryRepository = application.annualSummaryRepository,
                         calendarUseCase = application.calendarUseCase,
                         searchUseCase = application.searchUseCase,
+                        initialDate = application.currentAppDate(),
                     )
                 }
             }
-    }
+}
 }
 
 /**

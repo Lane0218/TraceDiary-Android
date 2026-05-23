@@ -41,9 +41,10 @@ class StatsViewModel(
     private val diaryRepository: DiaryRepository,
     private val statisticsUseCase: DiaryStatisticsUseCase,
     private val clock: Clock = Clock.systemDefaultZone(),
+    private val initialDate: LocalDate = LocalDate.now(clock),
 ) : ViewModel() {
 
-    private val today: LocalDate = LocalDate.now(clock)
+    private val today: LocalDate = initialDate
 
     private val selectedYearFlow = MutableStateFlow(today.year)
     private val selectedTrendYearFlow = MutableStateFlow(today.year)
@@ -126,8 +127,9 @@ class StatsViewModel(
                     StatsViewModel(
                         diaryRepository = application.diaryRepository,
                         statisticsUseCase = application.statisticsUseCase,
+                        initialDate = application.currentAppDate(),
                     )
                 }
             }
-    }
+}
 }

@@ -58,6 +58,7 @@ class SettingsViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.dailyReminderEnabled)
         assertEquals("21:00", state.dailyReminderTime)
+        assertEquals("00:00", state.dayBoundaryTime)
         assertTrue(state.savePasswordLocally)
         assertFalse(state.syncEnabled)
         assertEquals("aliyun", state.syncProvider)
@@ -258,6 +259,23 @@ class SettingsViewModelTest {
         assertFalse(current.toString().contains("secret456"))
     }
 
+    @Test
+    fun dayBoundaryTime_change_isPersistedAndNormalized() = runTest(testDispatcher) {
+        advanceUntilIdle()
+
+        viewModel.onDayBoundaryTimeChanged("02:18")
+        advanceUntilIdle()
+
+        assertEquals("02:18", fakeRepo.current().dayBoundaryTime)
+        assertEquals("02:18", viewModel.uiState.value.dayBoundaryTime)
+
+        viewModel.onDayBoundaryTimeChanged("08:45")
+        advanceUntilIdle()
+
+        assertEquals("05:45", fakeRepo.current().dayBoundaryTime)
+        assertEquals("05:45", viewModel.uiState.value.dayBoundaryTime)
+    }
+
     // ---- Fake 实现 ----
 
     private class FakeUserPreferencesRepository : UserPreferencesRepository {
@@ -272,6 +290,10 @@ class SettingsViewModelTest {
 
         override suspend fun setReminderTime(time: String) {
             _prefs.update { it.copy(dailyReminderTime = time) }
+        }
+
+        override suspend fun setDayBoundaryTime(time: String) {
+            _prefs.update { it.copy(dayBoundaryTime = time) }
         }
 
         override suspend fun setSavePasswordLocally(value: Boolean) {

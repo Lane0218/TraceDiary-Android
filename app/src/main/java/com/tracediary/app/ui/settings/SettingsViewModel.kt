@@ -9,7 +9,9 @@ import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.notifications.DailyReminderScheduler
 import com.tracediary.app.data.security.AppPasswordManager
 import com.tracediary.app.data.security.SecureCredentialStore
+import com.tracediary.app.data.settings.formatBoundaryTime
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
+import com.tracediary.app.data.settings.parseBoundaryTime
 import com.tracediary.app.data.settings.UserPreferencesRepository
 import com.tracediary.app.data.sync.AliyunOssRemoteStorage
 import com.tracediary.app.data.sync.RemoteCredential
@@ -88,6 +90,7 @@ sealed interface PasswordRotationStatus {
 data class SettingsUiState(
     val dailyReminderEnabled: Boolean = false,
     val dailyReminderTime: String = "21:00",
+    val dayBoundaryTime: String = "00:00",
     val savePasswordLocally: Boolean = true,
     val syncEnabled: Boolean = false,
     val syncProvider: String = "aliyun",
@@ -172,10 +175,11 @@ class SettingsViewModel(
             repository.preferences.collect { prefs ->
                 _uiState.update { current ->
                     val keepDraft = syncDraftsByProvider.containsKey(current.syncProvider)
-                    current.copy(
-                        dailyReminderEnabled = prefs.dailyReminderEnabled,
-                        dailyReminderTime = prefs.dailyReminderTime,
-                        savePasswordLocally = prefs.savePasswordLocally,
+                current.copy(
+                    dailyReminderEnabled = prefs.dailyReminderEnabled,
+                    dailyReminderTime = prefs.dailyReminderTime,
+                    dayBoundaryTime = prefs.dayBoundaryTime,
+                    savePasswordLocally = prefs.savePasswordLocally,
                         syncEnabled = prefs.syncEnabled,
                         syncProvider = prefs.syncProvider,
                         syncDisplayName = prefs.syncDisplayName,
@@ -220,6 +224,13 @@ class SettingsViewModel(
                     reminderScheduler?.schedule(DailyReminderScheduler.parseTime(time))
                 }
             }
+        }
+    }
+
+    fun onDayBoundaryTimeChanged(time: String) {
+        viewModelScope.launch {
+            val normalized = formatBoundaryTime(parseBoundaryTime(time))
+            repository.setDayBoundaryTime(normalized)
         }
     }
 

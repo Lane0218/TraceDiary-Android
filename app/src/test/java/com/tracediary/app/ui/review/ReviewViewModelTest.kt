@@ -7,6 +7,9 @@ import com.tracediary.app.domain.repository.AnnualSummaryRepository
 import com.tracediary.app.domain.repository.DiaryRepository
 import com.tracediary.app.domain.usecase.DiaryCalendarUseCase
 import com.tracediary.app.domain.usecase.SearchDiaryEntriesUseCase
+import com.tracediary.app.data.settings.SameDayEntrySortOrder
+import com.tracediary.app.data.settings.UserPreferences
+import com.tracediary.app.data.settings.UserPreferencesRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -179,6 +182,26 @@ class ReviewViewModelTest {
         viewModelJob.cancel()
     }
 
+    @Test
+    fun `writable years follow application year`() = runTest(dispatcher) {
+        val repo = FakeDiaryRepository()
+        val annualRepo = FakeAnnualSummaryRepository()
+        val viewModel = ReviewViewModel(
+            diaryRepository = repo,
+            annualSummaryRepository = annualRepo,
+            calendarUseCase = DiaryCalendarUseCase(),
+            searchUseCase = SearchDiaryEntriesUseCase(),
+            clock = fixedClock,
+            initialDate = LocalDate.of(2025, 12, 31),
+            scope = CoroutineScope(coroutineContext + viewModelJob),
+        )
+
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.annual.writableYears.first() <= 2025)
+        viewModelJob.cancel()
+    }
+
     private fun TestScope.createViewModel(
         diaryRepository: DiaryRepository,
         annualSummaryRepository: AnnualSummaryRepository,
@@ -284,5 +307,72 @@ class ReviewViewModelTest {
         }
 
         fun peek(year: Int): String? = summaries.value.firstOrNull { it.year == year }?.content
+    }
+
+    private class FakeUserPreferencesRepository : UserPreferencesRepository {
+        private val prefs = MutableStateFlow(UserPreferences())
+        override val preferences: Flow<UserPreferences> = prefs
+
+        override suspend fun setReminderEnabled(value: Boolean) {
+            prefs.update { it.copy(dailyReminderEnabled = value) }
+        }
+
+        override suspend fun setReminderTime(time: String) {
+            prefs.update { it.copy(dailyReminderTime = time) }
+        }
+
+        override suspend fun setDayBoundaryTime(time: String) {
+            prefs.update { it.copy(dayBoundaryTime = time) }
+        }
+
+        override suspend fun setSavePasswordLocally(value: Boolean) {
+            prefs.update { it.copy(savePasswordLocally = value) }
+        }
+
+        override suspend fun setSyncEnabled(value: Boolean) {
+            prefs.update { it.copy(syncEnabled = value) }
+        }
+
+        override suspend fun setSyncProvider(value: String) {
+            prefs.update { it.copy(syncProvider = value) }
+        }
+
+        override suspend fun setSyncDisplayName(value: String) {
+            prefs.update { it.copy(syncDisplayName = value) }
+        }
+
+        override suspend fun setSyncBucket(value: String) {
+            prefs.update { it.copy(syncBucket = value) }
+        }
+
+        override suspend fun setSyncRegion(value: String) {
+            prefs.update { it.copy(syncRegion = value) }
+        }
+
+        override suspend fun setSyncDirectory(value: String) {
+            prefs.update { it.copy(syncDirectory = value) }
+        }
+
+        override suspend fun setSameDayEntrySortOrder(value: SameDayEntrySortOrder) {
+            prefs.update { it.copy(sameDayEntrySortOrder = value) }
+        }
+
+        override suspend fun saveSyncConfiguration(
+            provider: String,
+            bucket: String,
+            region: String,
+            directory: String,
+            displayName: String,
+        ) {
+            prefs.update {
+                it.copy(
+                    syncProvider = provider,
+                    syncBucket = bucket,
+                    syncRegion = region,
+                    syncDirectory = directory,
+                    syncDisplayName = displayName,
+                )
+            }
+        }
     }
 }

@@ -15,6 +15,8 @@ import com.tracediary.app.data.security.SecureCredentialStore
 import com.tracediary.app.data.settings.DataStoreUserPreferencesRepository
 import com.tracediary.app.data.settings.UserPreferences
 import com.tracediary.app.data.settings.UserPreferencesRepository
+import com.tracediary.app.data.settings.parseBoundaryTime
+import com.tracediary.app.data.settings.resolveAppDate
 import com.tracediary.app.data.sync.AliyunOssRemoteStorage
 import com.tracediary.app.data.sync.RemoteCredential
 import com.tracediary.app.data.sync.RemoteStorage
@@ -36,7 +38,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.Clock
 
 class TraceDiaryApplication : Application() {
@@ -100,6 +106,9 @@ class TraceDiaryApplication : Application() {
     @Volatile
     private var latestPreferences: UserPreferences? = null
 
+    @Volatile
+    private var cachedAppDate: LocalDate? = null
+
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
@@ -133,6 +142,15 @@ class TraceDiaryApplication : Application() {
             clock = Clock.systemDefaultZone(),
         )
 
+        runBlocking(Dispatchers.IO) {
+            val prefs = userPreferencesRepository.preferences.first()
+            latestPreferences = prefs
+            cachedAppDate = resolveAppDate(
+                LocalDateTime.now(),
+                parseBoundaryTime(prefs.dayBoundaryTime),
+            )
+        }
+
         // 持续缓存 preferences 最新值，供 storageProvider 同步读取。
         applicationScope.launch {
             userPreferencesRepository.preferences.collect { latestPreferences = it }
@@ -143,6 +161,19 @@ class TraceDiaryApplication : Application() {
 
         // 周期同步调度器：仅实例化，由用户在设置页切换开关时显式 schedule / cancel。
         syncScheduler = SyncScheduler(applicationContext)
+    }
+
+    fun resolveCurrentAppDate(now: LocalDateTime = LocalDateTime.now()): LocalDate {
+        val prefs = latestPreferences
+        return if (prefs != null) {
+            resolveAppDate(now, parseBoundaryTime(prefs.dayBoundaryTime))
+        } else {
+            resolveAppDate(now, parseBoundaryTime("00:00"))
+        }
+    }
+
+    fun currentAppDate(): LocalDate {
+        return cachedAppDate ?: resolveCurrentAppDate()
     }
 
     /**
