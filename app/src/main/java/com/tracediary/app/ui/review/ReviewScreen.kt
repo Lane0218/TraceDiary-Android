@@ -78,6 +78,7 @@ import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.AnnualSummary
 import com.tracediary.app.ui.components.TraceDropdownMenu
 import com.tracediary.app.ui.theme.DiaryContentTextStyle
+import com.tracediary.app.ui.theme.DiaryEditorTextStyle
 import com.tracediary.app.ui.theme.DiaryExcerptTextStyle
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -405,11 +406,11 @@ private fun AnnualSummaryEditor(
             placeholder = {
                 Text(
                     text = "记下这一年的收获、成长与思考……",
-                    style = DiaryContentTextStyle,
+                    style = DiaryEditorTextStyle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                 )
             },
-            textStyle = DiaryContentTextStyle,
+            textStyle = DiaryEditorTextStyle,
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,

@@ -96,6 +96,15 @@ val DiaryContentTextStyle = TextStyle(
     textAlign = TextAlign.Justify
 )
 
+val DiaryEditorTextStyle = TextStyle(
+    fontFamily = FontFamily.Default,
+    fontWeight = FontWeight.Normal,
+    fontSize = 15.sp,
+    lineHeight = 26.sp,
+    letterSpacing = 0.sp,
+    textAlign = TextAlign.Start
+)
+
 val DiaryExcerptTextStyle = TextStyle(
     fontFamily = FontFamily.Default,
     fontWeight = FontWeight.Normal,
