@@ -27,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -164,7 +165,6 @@ private fun MainSettingsList(
                     SettingsRow(
                         icon = Icons.Outlined.Tune,
                         title = "偏好设置",
-                        subtitle = "日记偏好与提醒",
                         onClick = { onNavigate("偏好设置") }
                     )
                     HorizontalDivider(
@@ -264,7 +264,7 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f)
                         )
-                        Switch(
+                        TraceSwitch(
                             checked = state.dailyReminderEnabled,
                             onCheckedChange = { value ->
                                 if (!value) {
@@ -278,7 +278,6 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                                     viewModel.onToggleReminder(true)
                                 }
                             },
-                            colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
                         )
                     }
                     SyncRowDivider()
@@ -449,12 +448,9 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)
                     )
-                    Switch(
+                    TraceSwitch(
                         checked = state.savePasswordLocally,
                         onCheckedChange = viewModel::onToggleSavePasswordLocally,
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = MaterialTheme.colorScheme.primary
-                        )
                     )
                 }
             }
@@ -563,12 +559,9 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)
                     )
-                    Switch(
+                    TraceSwitch(
                         checked = state.syncEnabled,
                         onCheckedChange = viewModel::onToggleSync,
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = MaterialTheme.colorScheme.primary
-                        )
                     )
                 }
             }
@@ -863,7 +856,7 @@ private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewMode
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f)
                         )
-                        Switch(
+                        TraceSwitch(
                             checked = state.dailyReminderEnabled,
                             onCheckedChange = { value ->
                                 if (!value) {
@@ -877,9 +870,6 @@ private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewMode
                                     viewModel.onToggleReminder(true)
                                 }
                             },
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary
-                            )
                         )
                     }
 
@@ -1604,12 +1594,27 @@ private fun ToggleItem(title: String, subtitle: String?, checked: Boolean, onChe
                 Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Switch(
+        TraceSwitch(
             checked = checked, 
             onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
         )
     }
+}
+
+@Composable
+private fun TraceSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        enabled = enabled,
+        modifier = modifier.scale(0.86f),
+        colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary),
+    )
 }
 
 @Composable
