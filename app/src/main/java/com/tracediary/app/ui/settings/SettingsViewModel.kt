@@ -179,7 +179,7 @@ class SettingsViewModel(
                 current.copy(
                     dailyReminderEnabled = prefs.dailyReminderEnabled,
                     dailyReminderTime = prefs.dailyReminderTime,
-                    dayBoundaryTime = prefs.dayBoundaryTime,
+                    dayBoundaryTime = formatBoundaryTime(parseBoundaryTime(prefs.dayBoundaryTime)),
                     savePasswordLocally = prefs.savePasswordLocally,
                         syncEnabled = prefs.syncEnabled,
                         syncProvider = prefs.syncProvider,

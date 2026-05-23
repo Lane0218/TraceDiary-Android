@@ -351,14 +351,14 @@ class SettingsViewModelTest {
         viewModel.onDayBoundaryTimeChanged("02:18")
         advanceUntilIdle()
 
-        assertEquals("02:18", fakeRepo.current().dayBoundaryTime)
-        assertEquals("02:18", viewModel.uiState.value.dayBoundaryTime)
+        assertEquals("02:00", fakeRepo.current().dayBoundaryTime)
+        assertEquals("02:00", viewModel.uiState.value.dayBoundaryTime)
 
         viewModel.onDayBoundaryTimeChanged("08:45")
         advanceUntilIdle()
 
-        assertEquals("05:45", fakeRepo.current().dayBoundaryTime)
-        assertEquals("05:45", viewModel.uiState.value.dayBoundaryTime)
+        assertEquals("05:00", fakeRepo.current().dayBoundaryTime)
+        assertEquals("05:00", viewModel.uiState.value.dayBoundaryTime)
     }
 
     // ---- Fake 实现 ----

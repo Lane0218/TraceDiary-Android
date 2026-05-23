@@ -83,7 +83,6 @@ fun SettingsScreen(
                         state = state,
                         viewModel = viewModel,
                     )
-                    "通知提醒" -> NotificationPage(state = state, viewModel = viewModel)
                     "关于" -> AboutPage()
                     else -> Text("开发中...")
                 }
@@ -163,17 +162,9 @@ private fun MainSettingsList(
             ) {
                 Column {
                     SettingsRow(
-                        icon = Icons.Outlined.NotificationsNone, 
-                        title = "通知提醒", 
-                        onClick = { onNavigate("通知提醒") }
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 68.dp, end = 16.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                    )
-                    SettingsRow(
                         icon = Icons.Outlined.Tune,
                         title = "偏好设置",
+                        subtitle = "日记偏好与提醒",
                         onClick = { onNavigate("偏好设置") }
                     )
                     HorizontalDivider(
@@ -194,23 +185,29 @@ private fun MainSettingsList(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
+    val context = LocalContext.current
     var showBoundaryTimePicker by remember { mutableStateOf(false) }
-    val (boundaryHour, boundaryMinute) = remember(state.dayBoundaryTime) {
+    var showReminderTimePicker by remember { mutableStateOf(false) }
+    val (boundaryHour, _) = remember(state.dayBoundaryTime) {
         parseHourMinute(state.dayBoundaryTime, maxHour = 5)
     }
+    val (reminderHour, reminderMinute) = remember(state.dailyReminderTime) {
+        parseHourMinute(state.dailyReminderTime, maxHour = 23)
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        viewModel.onNotificationPermissionGranted(granted)
+        if (granted) viewModel.onToggleReminder(true)
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Text(
-                text = "往年今日记录排序",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 4.dp),
-                fontWeight = FontWeight.Bold
-            )
+            SettingsSectionHeader("日记偏好")
         }
 
         item {
@@ -220,21 +217,34 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Column {
-                    ChoiceRow(
-                        label = "按年份从晚到早显示",
-                        selected = state.sameDayEntrySortOrder == SameDayEntrySortOrder.LatestFirst,
-                        enabled = true,
-                        onClick = { viewModel.onSameDayEntrySortOrderChanged(SameDayEntrySortOrder.LatestFirst) }
+                    SettingsValueRow(
+                        title = "往年今日排序",
+                        value = if (state.sameDayEntrySortOrder == SameDayEntrySortOrder.LatestFirst) {
+                            "从晚到早"
+                        } else {
+                            "从早到晚"
+                        },
+                        onClick = {
+                            val next = if (state.sameDayEntrySortOrder == SameDayEntrySortOrder.LatestFirst) {
+                                SameDayEntrySortOrder.EarliestFirst
+                            } else {
+                                SameDayEntrySortOrder.LatestFirst
+                            }
+                            viewModel.onSameDayEntrySortOrderChanged(next)
+                        }
                     )
                     SyncRowDivider()
-                    ChoiceRow(
-                        label = "按年份从早到晚显示",
-                        selected = state.sameDayEntrySortOrder == SameDayEntrySortOrder.EarliestFirst,
-                        enabled = true,
-                        onClick = { viewModel.onSameDayEntrySortOrderChanged(SameDayEntrySortOrder.EarliestFirst) }
+                    SettingsValueRow(
+                        title = "次日切换时间",
+                        value = state.dayBoundaryTime,
+                        onClick = { showBoundaryTimePicker = true }
                     )
                 }
             }
+        }
+
+        item {
+            SettingsSectionHeader("提醒")
         }
 
         item {
@@ -245,35 +255,38 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
             ) {
                 Column {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 56.dp)
-                            .clickable { showBoundaryTimePicker = true }
-                            .padding(horizontal = 20.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 20.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "次日切换时间",
+                            text = "开启通知",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f)
                         )
-                        Text(
-                            text = state.dayBoundaryTime,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
+                        Switch(
+                            checked = state.dailyReminderEnabled,
+                            onCheckedChange = { value ->
+                                if (!value) {
+                                    viewModel.onToggleReminder(false)
+                                    return@Switch
+                                }
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                                    if (granted) viewModel.onToggleReminder(true) else permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    viewModel.onToggleReminder(true)
+                                }
+                            },
+                            colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
                         )
                     }
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 68.dp, end = 16.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                    )
-                    Text(
-                        text = "00:00 到 05:59 之间任意时间",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+                    SyncRowDivider()
+                    SettingsValueRow(
+                        title = "提醒时间",
+                        value = state.dailyReminderTime,
+                        enabled = state.dailyReminderEnabled,
+                        onClick = { showReminderTimePicker = true }
                     )
                 }
             }
@@ -282,7 +295,6 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
 
     if (showBoundaryTimePicker) {
         var selectedHour by remember { mutableStateOf(boundaryHour.coerceIn(0, 5)) }
-        var selectedMinute by remember { mutableStateOf(boundaryMinute) }
 
         BasicAlertDialog(
             onDismissRequest = { showBoundaryTimePicker = false },
@@ -299,17 +311,18 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                     text = "选择次日切换时间",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 20.dp)
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Text(
+                    text = "应用会在所选整点后进入新的一天",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                WheelTimePicker(
+                BoundaryHourPicker(
                     initialHour = selectedHour,
-                    initialMinute = selectedMinute,
-                    hourRange = 0..5,
-                    onTimeChanged = { h, m ->
-                        selectedHour = h
-                        selectedMinute = m
-                    }
+                    onHourChanged = { selectedHour = it }
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -324,9 +337,59 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                     Spacer(modifier = Modifier.width(8.dp))
                     TextButton(onClick = {
                         viewModel.onDayBoundaryTimeChanged(
-                            "%02d:%02d".format(selectedHour.coerceIn(0, 5), selectedMinute)
+                            "%02d:00".format(selectedHour.coerceIn(0, 5))
                         )
                         showBoundaryTimePicker = false
+                    }) {
+                        Text("确定", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showReminderTimePicker) {
+        var selectedHour by remember { mutableStateOf(reminderHour) }
+        var selectedMinute by remember { mutableStateOf(reminderMinute) }
+
+        BasicAlertDialog(
+            onDismissRequest = { showReminderTimePicker = false },
+            modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface).width(300.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "选择提醒时间",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 20.dp)
+                )
+
+                WheelTimePicker(
+                    initialHour = selectedHour,
+                    initialMinute = selectedMinute,
+                    hourRange = 0..23,
+                    onTimeChanged = { h, m ->
+                        selectedHour = h
+                        selectedMinute = m
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = { showReminderTimePicker = false }) {
+                        Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(onClick = {
+                        viewModel.onReminderTimeChanged("%02d:%02d".format(selectedHour, selectedMinute))
+                        showReminderTimePicker = false
                     }) {
                         Text("确定", fontWeight = FontWeight.Bold)
                     }
@@ -577,45 +640,46 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                     )
                 }
             }
-
-            item {
-                SyncSaveStatusMessage(status = state.saveStatus)
-            }
         }
     }
 
     if (showSaveErrorDialog && state.saveStatus == SaveStatus.Failed && !state.saveError.isNullOrBlank()) {
-        AlertDialog(
+        BasicAlertDialog(
             onDismissRequest = { showSaveErrorDialog = false },
-            title = { Text("连接验证失败") },
-            text = { Text(state.saveError.orEmpty()) },
-            confirmButton = {
-                TextButton(onClick = { showSaveErrorDialog = false }) {
-                    Text("我知道了")
+            modifier = Modifier
+                .widthIn(max = 320.dp)
+                .fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "连接验证失败",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = state.saveError.orEmpty(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = { showSaveErrorDialog = false }) {
+                        Text("我知道了")
+                    }
                 }
-            },
-        )
+            }
+        }
     }
 
     SyncOpDialogs(state = state, viewModel = viewModel)
-}
-
-@Composable
-private fun SyncSaveStatusMessage(status: SaveStatus) {
-    val (message, color) = when (status) {
-        SaveStatus.Idle -> null to null
-        SaveStatus.Saving -> "正在验证连接…" to MaterialTheme.colorScheme.onSurfaceVariant
-        SaveStatus.Saved -> "已保存，连接正常" to MaterialTheme.colorScheme.primary
-        SaveStatus.Failed -> "已保存，连接失败" to MaterialTheme.colorScheme.error
-    }
-    if (message != null && color != null) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodySmall,
-            color = color,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-        )
-    }
 }
 
 @Composable
@@ -961,7 +1025,7 @@ private fun DataManagementPage(state: SettingsUiState, viewModel: SettingsViewMo
                             Triple(MergeStrategy.SkipExisting, "跳过", "保留本机原有记录，忽略导入文件中的重复项")
                         )
                         strategies.forEachIndexed { index, (strategy, label, desc) ->
-                            ChoiceRow(
+                            SettingsChoiceRow(
                                 label = label,
                                 subtitle = desc,
                                 selected = mergeStrategy == strategy,
@@ -977,7 +1041,7 @@ private fun DataManagementPage(state: SettingsUiState, viewModel: SettingsViewMo
                             ExportFormat.MarkdownZip to "Markdown"
                         )
                         formats.forEachIndexed { index, (format, label) ->
-                            ChoiceRow(
+                            SettingsChoiceRow(
                                 label = label,
                                 selected = exportFormat == format,
                                 enabled = !isWorking,
@@ -1065,7 +1129,18 @@ private fun BackupModeSelector(
 }
 
 @Composable
-private fun ChoiceRow(
+private fun SettingsSectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
+        fontWeight = FontWeight.Bold
+    )
+}
+
+@Composable
+private fun SettingsChoiceRow(
     label: String,
     selected: Boolean,
     enabled: Boolean,
@@ -1195,6 +1270,42 @@ private fun SyncChoiceItem(title: String, desc: String, icon: ImageVector, onCli
                 Text(desc, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsValueRow(
+    title: String,
+    value: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Bold,
+            color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
+        Icon(
+            Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+            contentDescription = null,
+            tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
+            modifier = Modifier.padding(start = 4.dp).size(20.dp)
+        )
     }
 }
 
@@ -1546,6 +1657,72 @@ private fun SettingsRow(icon: ImageVector, title: String, subtitle: String? = nu
             null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
         )
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun BoundaryHourPicker(
+    initialHour: Int,
+    onHourChanged: (Int) -> Unit,
+) {
+    var hour by remember { mutableStateOf(initialHour.coerceIn(0, 5)) }
+
+    Row(
+        modifier = Modifier.fillMaxWidth().height(160.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HourColumn(
+            initialHour = hour,
+            onHourChanged = {
+                hour = it.coerceIn(0, 5)
+                onHourChanged(hour)
+            }
+        )
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun HourColumn(
+    initialHour: Int,
+    onHourChanged: (Int) -> Unit,
+) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = initialHour.coerceIn(0, 5))
+
+    LaunchedEffect(listState) {
+        androidx.compose.runtime.snapshotFlow { listState.firstVisibleItemScrollOffset to listState.firstVisibleItemIndex }
+            .collect { (offset, index) ->
+                val selected = if (offset > 20) index + 1 else index
+                onHourChanged(selected.coerceIn(0, 5))
+            }
+    }
+
+    androidx.compose.foundation.lazy.LazyColumn(
+        state = listState,
+        modifier = Modifier.width(84.dp).height(120.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(lazyListState = listState),
+    ) {
+        item { Spacer(modifier = Modifier.height(40.dp)) }
+        items(6) { index ->
+            val isSelected = remember(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
+                val offset = listState.firstVisibleItemScrollOffset
+                val visibleIndex = listState.firstVisibleItemIndex
+                val centerIndex = if (offset > 20) visibleIndex + 1 else visibleIndex
+                index == centerIndex
+            }
+            Box(modifier = Modifier.height(40.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "%02d:00".format(index),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+        }
+        item { Spacer(modifier = Modifier.height(40.dp)) }
     }
 }
 

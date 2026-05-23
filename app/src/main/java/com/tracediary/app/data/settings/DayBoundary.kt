@@ -15,9 +15,8 @@ fun resolveAppDate(now: LocalDateTime, boundaryTime: LocalTime): LocalDate {
 fun parseBoundaryTime(text: String): LocalTime {
     val parts = text.split(":")
     val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 5) ?: 0
-    val minute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
-    return LocalTime.of(hour, minute)
+    return LocalTime.of(hour, 0)
 }
 
 fun formatBoundaryTime(time: LocalTime): String =
-    "%02d:%02d".format(time.hour.coerceIn(0, 5), time.minute.coerceIn(0, 59))
+    "%02d:00".format(time.hour.coerceIn(0, 5))
