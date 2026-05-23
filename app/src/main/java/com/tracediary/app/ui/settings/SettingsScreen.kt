@@ -699,6 +699,7 @@ private fun ManualSyncSection(state: SettingsUiState, viewModel: SettingsViewMod
                 val strategies = listOf(
                     Triple(MergeStrategy.KeepNewer, "保留较新", "本机和云端都有时，保留更新时间较新的内容"),
                     Triple(MergeStrategy.OverwriteAll, "本机优先", "本机内容覆盖云端；云端独有内容仍会下载"),
+                    Triple(MergeStrategy.PreferRemote, "云端优先", "云端内容覆盖本机；本机独有内容仍会上传"),
                     Triple(MergeStrategy.SkipExisting, "跳过冲突", "两边都有时不覆盖，只同步单边缺失的内容"),
                 )
                 strategies.forEachIndexed { index, (strategy, label, desc) ->

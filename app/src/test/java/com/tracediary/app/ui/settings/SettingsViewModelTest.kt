@@ -232,18 +232,18 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun onMergeAll_usesSelectedManualStrategy() = runTest(testDispatcher) {
+    fun onMergeAll_usesSelectedPreferRemoteStrategy() = runTest(testDispatcher) {
         val date = LocalDate.of(2026, 5, 20)
         val localEntry = DiaryEntry(
             date = date,
             content = "本机内容",
             createdAt = Instant.parse("2026-05-20T00:00:00Z"),
-            updatedAt = Instant.parse("2026-05-20T01:00:00Z"),
+            updatedAt = Instant.parse("2026-05-20T02:00:00Z"),
             syncState = SyncState.LocalOnly,
         )
         val remoteEntry = localEntry.copy(
             content = "云端内容",
-            updatedAt = Instant.parse("2026-05-20T02:00:00Z"),
+            updatedAt = Instant.parse("2026-05-20T01:00:00Z"),
         )
         val key = CryptoBox.deriveKey("password", "salt-123456789012".toByteArray())
         val storage = FakeRemoteStorage()
@@ -269,14 +269,15 @@ class SettingsViewModelTest {
         )
         advanceUntilIdle()
 
-        viewModel.onManualSyncStrategyChanged(MergeStrategy.OverwriteAll)
+        viewModel.onManualSyncStrategyChanged(MergeStrategy.PreferRemote)
         viewModel.onMergeAll()
         advanceUntilIdle()
 
         val status = viewModel.uiState.value.syncOpStatus
         assertTrue(status is SyncOpStatus.Done)
-        assertEquals(1, (status as SyncOpStatus.Done).summary.uploaded)
-        assertEquals("本机内容", decodeDiary(storage.objects[SyncObjectKeys.diaryObjectKey(date)]!!.body, key).content)
+        assertEquals(1, (status as SyncOpStatus.Done).summary.downloaded)
+        assertEquals("云端内容", diaryRepo.store[date]?.content)
+        assertEquals("云端内容", decodeDiary(storage.objects[SyncObjectKeys.diaryObjectKey(date)]!!.body, key).content)
     }
 
     @Test

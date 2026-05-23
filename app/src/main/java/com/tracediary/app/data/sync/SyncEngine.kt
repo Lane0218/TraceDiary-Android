@@ -567,14 +567,15 @@ class SyncEngine(
         date: LocalDate,
         local: DiaryEntry?,
         remote: RemoteObject,
+        force: Boolean = false,
     ): DownloadOutcome {
-        if (local != null && remote.lastModified != null && !remote.lastModified.isAfter(local.updatedAt)) {
+        if (!force && local != null && remote.lastModified != null && !remote.lastModified.isAfter(local.updatedAt)) {
             return DownloadOutcome.Skipped
         }
         return when (val payloadResult = loadRemoteDiary(storage, key, date, remote)) {
             is RemoteResult.Ok -> {
                 val decoded = payloadResult.value.entry
-                if (local != null && !decoded.updatedAt.isAfter(local.updatedAt)) {
+                if (!force && local != null && !decoded.updatedAt.isAfter(local.updatedAt)) {
                     return DownloadOutcome.Skipped
                 }
                 diaryRepository.saveEntry(decoded.date, decoded.content)
@@ -612,6 +613,9 @@ class SyncEngine(
             local != null && remote != null -> {
                 if (strategy == MergeStrategy.OverwriteAll) {
                     return uploadDiaryInternal(storage, key, local, force = true).toMergeOutcome()
+                }
+                if (strategy == MergeStrategy.PreferRemote) {
+                    return downloadDiaryInternal(storage, key, date, local, remote, force = true).toMergeOutcome()
                 }
                 if (strategy == MergeStrategy.SkipExisting) {
                     return MergeOutcome.Skipped
@@ -690,14 +694,15 @@ class SyncEngine(
         year: Int,
         local: AnnualSummary?,
         remote: RemoteObject,
+        force: Boolean = false,
     ): DownloadOutcome {
-        if (local != null && remote.lastModified != null && !remote.lastModified.isAfter(local.updatedAt)) {
+        if (!force && local != null && remote.lastModified != null && !remote.lastModified.isAfter(local.updatedAt)) {
             return DownloadOutcome.Skipped
         }
         return when (val payloadResult = loadRemoteAnnual(storage, key, year, remote)) {
             is RemoteResult.Ok -> {
                 val decoded = payloadResult.value.summary
-                if (local != null && !decoded.updatedAt.isAfter(local.updatedAt)) {
+                if (!force && local != null && !decoded.updatedAt.isAfter(local.updatedAt)) {
                     return DownloadOutcome.Skipped
                 }
                 annualSummaryRepository.saveSummary(decoded.year, decoded.content)
@@ -735,6 +740,9 @@ class SyncEngine(
             local != null && remote != null -> {
                 if (strategy == MergeStrategy.OverwriteAll) {
                     return uploadAnnualInternal(storage, key, local, force = true).toMergeOutcome()
+                }
+                if (strategy == MergeStrategy.PreferRemote) {
+                    return downloadAnnualInternal(storage, key, year, local, remote, force = true).toMergeOutcome()
                 }
                 if (strategy == MergeStrategy.SkipExisting) {
                     return MergeOutcome.Skipped

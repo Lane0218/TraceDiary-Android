@@ -17,13 +17,16 @@ import java.util.zip.ZipInputStream
 /** 解析备份 JSON / ZIP 时使用，确保对 ViewModel 暴露统一的中文错误。 */
 class BackupParseException(message: String, cause: Throwable? = null) : IllegalArgumentException(message, cause)
 
-/** 备份合并策略。 */
+/** 数据合并策略。备份导入页仅暴露 KeepNewer / OverwriteAll / SkipExisting。 */
 enum class MergeStrategy {
     /** 仅在备份中的 updatedAt 比本地新时才覆盖；时间相同或更早保留本地。 */
     KeepNewer,
 
     /** 备份中所有条目无条件覆盖本地。 */
     OverwriteAll,
+
+    /** 云同步专用：两端都有时以远端为准；备份导入页不暴露该策略。 */
+    PreferRemote,
 
     /** 已存在的日期/年度跳过，仅写入本地缺失的条目。 */
     SkipExisting,
@@ -233,6 +236,7 @@ class ImportDiaryDataUseCase(
         if (existing == null) return true
         return when (strategy) {
             MergeStrategy.OverwriteAll -> true
+            MergeStrategy.PreferRemote -> false
             MergeStrategy.SkipExisting -> false
             MergeStrategy.KeepNewer -> backupUpdatedAt.isAfter(existing.updatedAt)
         }
@@ -246,6 +250,7 @@ class ImportDiaryDataUseCase(
         if (existing == null) return true
         return when (strategy) {
             MergeStrategy.OverwriteAll -> true
+            MergeStrategy.PreferRemote -> false
             MergeStrategy.SkipExisting -> false
             MergeStrategy.KeepNewer -> backupUpdatedAt.isAfter(existing.updatedAt)
         }

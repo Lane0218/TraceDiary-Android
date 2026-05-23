@@ -398,6 +398,40 @@ class SyncEngineTest {
     }
 
     @Test
+    fun mergeAll_preferRemote_remoteWinsForDiaryAndAnnualEvenWhenLocalNewer() = runTest {
+        val date = LocalDate.of(2025, 5, 18)
+        val localEntry = newEntry(date, content = "本地日记", updatedAt = baseInstant)
+        val remoteEntry = newEntry(date, content = "远端日记", updatedAt = baseInstant.minusSeconds(600))
+        val localSummary = newSummary(2025, content = "本地年度", updatedAt = baseInstant)
+        val remoteSummary = newSummary(2025, content = "远端年度", updatedAt = baseInstant.minusSeconds(600))
+        val diaryRepo = FakeDiaryRepository(listOf(localEntry))
+        val annualRepo = FakeAnnualSummaryRepository(listOf(localSummary))
+        val metaRepo = FakeSyncMetadataRepository()
+        val storage = FakeRemoteStorage()
+        storage.seed(
+            key = SyncObjectKeys.diaryObjectKey(date),
+            body = encodeDiary(remoteEntry, testKey),
+            lastModified = remoteEntry.updatedAt,
+        )
+        storage.seed(
+            key = SyncObjectKeys.annualObjectKey(2025),
+            body = encodeAnnual(remoteSummary, testKey),
+            lastModified = remoteSummary.updatedAt,
+        )
+        val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo)
+
+        val result = engine.mergeAll(MergeStrategy.PreferRemote)
+
+        assertTrue(result is RemoteResult.Ok)
+        val summary = (result as RemoteResult.Ok).value
+        assertEquals(2, summary.downloaded)
+        assertEquals("远端日记", diaryRepo.store[date]?.content)
+        assertEquals("远端年度", annualRepo.store[2025]?.content)
+        assertEquals(SyncState.Synced, diaryRepo.syncStates[date])
+        assertEquals(SyncState.Synced, annualRepo.syncStates[2025])
+    }
+
+    @Test
     fun mergeAll_skipExisting_skipsConflictsButSyncsMissingItems() = runTest {
         val localOnlyDate = LocalDate.of(2025, 5, 1)
         val remoteOnlyDate = LocalDate.of(2025, 5, 2)
