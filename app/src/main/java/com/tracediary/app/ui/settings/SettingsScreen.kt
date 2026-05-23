@@ -648,39 +648,13 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
     }
 
     if (showSaveErrorDialog && state.saveStatus == SaveStatus.Failed && !state.saveError.isNullOrBlank()) {
-        BasicAlertDialog(
+        TraceStatusDialog(
+            title = "连接验证失败",
+            message = state.saveError.orEmpty(),
+            confirmText = "我知道了",
             onDismissRequest = { showSaveErrorDialog = false },
-            modifier = Modifier
-                .widthIn(max = 320.dp)
-                .fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    text = "连接验证失败",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = state.saveError.orEmpty(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = { showSaveErrorDialog = false }) {
-                        Text("我知道了")
-                    }
-                }
-            }
-        }
+            onConfirm = { showSaveErrorDialog = false },
+        )
     }
 
     SyncOpDialogs(state = state, viewModel = viewModel)
@@ -1397,46 +1371,128 @@ private fun BackupStatusDialogs(state: SettingsUiState, viewModel: SettingsViewM
 }
 
 // 补齐缺少的辅助函数和 Dialogs
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SyncOpDialogs(state: SettingsUiState, viewModel: SettingsViewModel) {
-    // 复用之前的对话框逻辑，但可以做视觉微调
     when (val status = state.syncOpStatus) {
         SyncOpStatus.Idle -> Unit
         is SyncOpStatus.Working -> {
             val engineState = viewModel.syncEngineState?.collectAsStateWithLifecycle()?.value
-            AlertDialog(
+            BasicAlertDialog(
                 onDismissRequest = {},
-                title = { Text(status.operation.workingTitle()) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                modifier = Modifier
+                    .widthIn(max = 320.dp)
+                    .fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = status.operation.workingTitle(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         val stageText = engineState?.stage?.let { stageLabel(it) } ?: "正在准备…"
-                        Text(stageText)
+                        Text(
+                            text = stageText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         if (engineState != null && engineState.total > 0) {
                             LinearProgressIndicator(
                                 progress = { (engineState.progress.toFloat() / engineState.total).coerceIn(0f, 1f) },
-                                modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(CircleShape),
                             )
-                            Text(text = "${engineState.progress} / ${engineState.total}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = "${engineState.progress} / ${engineState.total}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         } else {
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape))
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(CircleShape)
+                            )
                         }
                     }
-                },
-                confirmButton = {},
-            )
+                }
+            }
         }
-        is SyncOpStatus.Done -> AlertDialog(
+        is SyncOpStatus.Done -> TraceStatusDialog(
+            title = if (status.summary.failed > 0) {
+                "${status.operation.title()}未完成"
+            } else {
+                "${status.operation.title()}完成"
+            },
+            message = formatSummary(status.summary),
+            confirmText = "好的",
             onDismissRequest = viewModel::resetSyncOpStatus,
-            title = { Text("${status.operation.title()}完成") },
-            text = { Text(formatSummary(status.summary)) },
-            confirmButton = { TextButton(onClick = viewModel::resetSyncOpStatus) { Text("好的") } },
+            onConfirm = viewModel::resetSyncOpStatus,
         )
-        is SyncOpStatus.Failed -> AlertDialog(
+        is SyncOpStatus.Failed -> TraceStatusDialog(
+            title = "${status.operation.title()}失败",
+            message = status.message,
+            confirmText = "我知道了",
             onDismissRequest = viewModel::resetSyncOpStatus,
-            title = { Text("${status.operation.title()}失败") },
-            text = { Text(status.message) },
-            confirmButton = { TextButton(onClick = viewModel::resetSyncOpStatus) { Text("我知道了") } },
+            onConfirm = viewModel::resetSyncOpStatus,
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TraceStatusDialog(
+    title: String,
+    message: String,
+    confirmText: String,
+    onDismissRequest: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    BasicAlertDialog(
+        onDismissRequest = onDismissRequest,
+        modifier = Modifier
+            .widthIn(max = 320.dp)
+            .fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .heightIn(max = 220.dp)
+                    .verticalScroll(rememberScrollState())
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onConfirm) {
+                    Text(confirmText)
+                }
+            }
+        }
     }
 }
 
@@ -1470,7 +1526,18 @@ private fun formatSummary(summary: SyncEngine.SyncSummary): String = buildString
     if (summary.deleted > 0) append("，删除 ").append(summary.deleted).append(" 项")
     if (summary.failed > 0) append("，失败 ").append(summary.failed).append(" 项")
     if (summary.conflicts > 0) append("，冲突 ").append(summary.conflicts).append(" 项")
+    if (summary.errors.isNotEmpty()) {
+        append("\n\n失败原因：")
+        summary.errors.take(MAX_SYNC_ERROR_LINES).forEach { error ->
+            append("\n").append(error)
+        }
+        if (summary.errors.size > MAX_SYNC_ERROR_LINES) {
+            append("\n还有 ").append(summary.errors.size - MAX_SYNC_ERROR_LINES).append(" 项未显示")
+        }
+    }
 }
+
+private const val MAX_SYNC_ERROR_LINES = 5
 
 private fun parseHourMinute(time: String, maxHour: Int): Pair<Int, Int> {
     val parts = time.split(":")
