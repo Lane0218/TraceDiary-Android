@@ -634,6 +634,16 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                     )
                 }
             }
+
+            item { Spacer(modifier = Modifier.height(12.dp)) }
+
+            item {
+                SettingsSectionHeader("手动同步")
+            }
+
+            item {
+                ManualSyncSection(state = state, viewModel = viewModel)
+            }
         }
     }
 
@@ -674,6 +684,53 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
     }
 
     SyncOpDialogs(state = state, viewModel = viewModel)
+}
+
+@Composable
+private fun ManualSyncSection(state: SettingsUiState, viewModel: SettingsViewModel) {
+    val syncWorking = state.syncOpStatus is SyncOpStatus.Working
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Card(
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Column {
+                val strategies = listOf(
+                    Triple(MergeStrategy.KeepNewer, "保留较新", "本机和云端都有时，保留更新时间较新的内容"),
+                    Triple(MergeStrategy.OverwriteAll, "本机优先", "本机内容覆盖云端；云端独有内容仍会下载"),
+                    Triple(MergeStrategy.SkipExisting, "跳过冲突", "两边都有时不覆盖，只同步单边缺失的内容"),
+                )
+                strategies.forEachIndexed { index, (strategy, label, desc) ->
+                    SettingsChoiceRow(
+                        label = label,
+                        subtitle = desc,
+                        selected = state.manualSyncStrategy == strategy,
+                        enabled = !syncWorking,
+                        onClick = { viewModel.onManualSyncStrategyChanged(strategy) }
+                    )
+                    if (index < strategies.lastIndex) SyncRowDivider()
+                }
+            }
+        }
+
+        Button(
+            onClick = viewModel::onMergeAll,
+            enabled = !syncWorking,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = RoundedCornerShape(12.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Sync,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("立即同步", fontWeight = FontWeight.Medium)
+        }
+    }
 }
 
 @Composable
@@ -1385,13 +1442,13 @@ private fun SyncOpDialogs(state: SettingsUiState, viewModel: SettingsViewModel) 
 private fun SyncOperation.title(): String = when (this) {
     SyncOperation.Upload -> "上传"
     SyncOperation.Download -> "恢复"
-    SyncOperation.Merge -> "合并"
+    SyncOperation.Merge -> "同步"
 }
 
 private fun SyncOperation.workingTitle(): String = when (this) {
     SyncOperation.Upload -> "正在上传到云端"
     SyncOperation.Download -> "正在从云端恢复"
-    SyncOperation.Merge -> "正在合并本机与云端"
+    SyncOperation.Merge -> "正在同步本机与云端"
 }
 
 private fun stageLabel(stage: SyncEngine.SyncStage): String = when (stage) {

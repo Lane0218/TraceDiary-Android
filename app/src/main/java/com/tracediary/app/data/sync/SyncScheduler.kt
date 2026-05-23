@@ -16,11 +16,16 @@ import java.util.concurrent.TimeUnit
  * - 使用 [ExistingPeriodicWorkPolicy.KEEP]：用户重复打开开关时保留已有任务，不重置
  *   下一次触发时间，避免反复调度时 6 小时被无限推迟。
  */
-class SyncScheduler(context: Context) {
+interface SyncWorkScheduler {
+    fun schedule()
+    fun cancel()
+}
+
+class SyncScheduler(context: Context) : SyncWorkScheduler {
 
     private val appContext = context.applicationContext
 
-    fun schedule() {
+    override fun schedule() {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
@@ -37,7 +42,7 @@ class SyncScheduler(context: Context) {
         )
     }
 
-    fun cancel() {
+    override fun cancel() {
         WorkManager.getInstance(appContext).cancelUniqueWork(UNIQUE_WORK_NAME)
     }
 

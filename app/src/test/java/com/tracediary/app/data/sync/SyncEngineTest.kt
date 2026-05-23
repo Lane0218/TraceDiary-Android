@@ -11,6 +11,7 @@ import com.tracediary.app.domain.repository.DiaryRepository
 import com.tracediary.app.domain.repository.PendingSyncDeletion
 import com.tracediary.app.domain.repository.PendingSyncDeletionRepository
 import com.tracediary.app.domain.repository.SyncMetadataRepository
+import com.tracediary.app.domain.usecase.MergeStrategy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -339,6 +340,107 @@ class SyncEngineTest {
         assertEquals(1, (result as RemoteResult.Ok).value.downloaded)
         assertEquals("新远端", diaryRepo.store[date]?.content)
         assertEquals(SyncState.Synced, diaryRepo.syncStates[date])
+    }
+
+    @Test
+    fun mergeAll_keepNewer_remoteNewerAnnualOverwritesLocal() = runTest {
+        val localSummary = newSummary(2025, content = "旧本地年度", updatedAt = baseInstant.minusSeconds(600))
+        val remoteSummary = newSummary(2025, content = "新远端年度", updatedAt = baseInstant)
+        val diaryRepo = FakeDiaryRepository()
+        val annualRepo = FakeAnnualSummaryRepository(listOf(localSummary))
+        val metaRepo = FakeSyncMetadataRepository()
+        val storage = FakeRemoteStorage()
+        storage.seed(
+            key = SyncObjectKeys.annualObjectKey(2025),
+            body = encodeAnnual(remoteSummary, testKey),
+            lastModified = baseInstant,
+        )
+        val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo)
+
+        val result = engine.mergeAll(MergeStrategy.KeepNewer)
+
+        assertTrue(result is RemoteResult.Ok)
+        assertEquals(1, (result as RemoteResult.Ok).value.downloaded)
+        assertEquals("新远端年度", annualRepo.store[2025]?.content)
+        assertEquals(SyncState.Synced, annualRepo.syncStates[2025])
+    }
+
+    @Test
+    fun mergeAll_overwriteAll_localWinsForDiaryAndAnnualEvenWhenRemoteNewer() = runTest {
+        val date = LocalDate.of(2025, 5, 18)
+        val localEntry = newEntry(date, content = "本地日记", updatedAt = baseInstant.minusSeconds(600))
+        val remoteEntry = newEntry(date, content = "远端日记", updatedAt = baseInstant)
+        val localSummary = newSummary(2025, content = "本地年度", updatedAt = baseInstant.minusSeconds(600))
+        val remoteSummary = newSummary(2025, content = "远端年度", updatedAt = baseInstant)
+        val diaryRepo = FakeDiaryRepository(listOf(localEntry))
+        val annualRepo = FakeAnnualSummaryRepository(listOf(localSummary))
+        val metaRepo = FakeSyncMetadataRepository()
+        val storage = FakeRemoteStorage()
+        storage.seed(
+            key = SyncObjectKeys.diaryObjectKey(date),
+            body = encodeDiary(remoteEntry, testKey),
+            lastModified = baseInstant,
+        )
+        storage.seed(
+            key = SyncObjectKeys.annualObjectKey(2025),
+            body = encodeAnnual(remoteSummary, testKey),
+            lastModified = baseInstant,
+        )
+        val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo)
+
+        val result = engine.mergeAll(MergeStrategy.OverwriteAll)
+
+        assertTrue(result is RemoteResult.Ok)
+        val summary = (result as RemoteResult.Ok).value
+        assertEquals(2, summary.uploaded)
+        assertEquals("本地日记", decodeDiary(storage.objects[SyncObjectKeys.diaryObjectKey(date)]!!.body, testKey).content)
+        assertEquals("本地年度", decodeAnnual(storage.objects[SyncObjectKeys.annualObjectKey(2025)]!!.body, testKey).content)
+    }
+
+    @Test
+    fun mergeAll_skipExisting_skipsConflictsButSyncsMissingItems() = runTest {
+        val localOnlyDate = LocalDate.of(2025, 5, 1)
+        val remoteOnlyDate = LocalDate.of(2025, 5, 2)
+        val bothDate = LocalDate.of(2025, 5, 3)
+        val localOnly = newEntry(localOnlyDate, content = "本地独有")
+        val bothLocal = newEntry(bothDate, content = "本地冲突", updatedAt = baseInstant.minusSeconds(600))
+        val bothRemote = newEntry(bothDate, content = "远端冲突", updatedAt = baseInstant)
+        val remoteOnly = newEntry(remoteOnlyDate, content = "远端独有")
+        val bothLocalSummary = newSummary(2025, content = "本地年度冲突", updatedAt = baseInstant.minusSeconds(600))
+        val bothRemoteSummary = newSummary(2025, content = "远端年度冲突", updatedAt = baseInstant)
+        val diaryRepo = FakeDiaryRepository(listOf(localOnly, bothLocal))
+        val annualRepo = FakeAnnualSummaryRepository(listOf(bothLocalSummary))
+        val metaRepo = FakeSyncMetadataRepository()
+        val storage = FakeRemoteStorage()
+        storage.seed(
+            key = SyncObjectKeys.diaryObjectKey(remoteOnlyDate),
+            body = encodeDiary(remoteOnly, testKey),
+            lastModified = remoteOnly.updatedAt,
+        )
+        storage.seed(
+            key = SyncObjectKeys.diaryObjectKey(bothDate),
+            body = encodeDiary(bothRemote, testKey),
+            lastModified = bothRemote.updatedAt,
+        )
+        storage.seed(
+            key = SyncObjectKeys.annualObjectKey(2025),
+            body = encodeAnnual(bothRemoteSummary, testKey),
+            lastModified = bothRemoteSummary.updatedAt,
+        )
+        val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo)
+
+        val result = engine.mergeAll(MergeStrategy.SkipExisting)
+
+        assertTrue(result is RemoteResult.Ok)
+        val summary = (result as RemoteResult.Ok).value
+        assertEquals(1, summary.uploaded)
+        assertEquals(1, summary.downloaded)
+        assertEquals(2, summary.skipped)
+        assertNotNull(storage.objects[SyncObjectKeys.diaryObjectKey(localOnlyDate)])
+        assertEquals("远端独有", diaryRepo.store[remoteOnlyDate]?.content)
+        assertEquals("本地冲突", diaryRepo.store[bothDate]?.content)
+        assertEquals("本地年度冲突", annualRepo.store[2025]?.content)
+        assertEquals("远端年度冲突", decodeAnnual(storage.objects[SyncObjectKeys.annualObjectKey(2025)]!!.body, testKey).content)
     }
 
     @Test

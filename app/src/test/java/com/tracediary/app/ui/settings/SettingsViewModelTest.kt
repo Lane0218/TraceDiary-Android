@@ -3,13 +3,26 @@ package com.tracediary.app.ui.settings
 import com.tracediary.app.data.settings.UserPreferences
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.data.settings.UserPreferencesRepository
+import com.tracediary.app.data.security.CloudCipherCredentialStore
+import com.tracediary.app.data.security.CryptoBox
+import com.tracediary.app.data.sync.SyncEngine
+import com.tracediary.app.data.sync.SyncObjectKeys
+import com.tracediary.app.data.sync.SyncWorkScheduler
+import com.tracediary.app.data.sync.decodeDiary
+import com.tracediary.app.data.sync.encodeDiary
+import com.tracediary.app.domain.model.AnnualSummary
 import com.tracediary.app.domain.model.SyncMetadata
+import com.tracediary.app.domain.model.DiaryEntry
+import com.tracediary.app.domain.model.SyncState
+import com.tracediary.app.domain.repository.AnnualSummaryRepository
+import com.tracediary.app.domain.repository.DiaryRepository
 import com.tracediary.app.domain.repository.SyncMetadataRepository
+import com.tracediary.app.domain.usecase.MergeStrategy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -30,7 +43,10 @@ import org.junit.Before
 import org.junit.Test
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
+import java.time.ZoneOffset
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
@@ -69,6 +85,7 @@ class SettingsViewModelTest {
         assertEquals("TraceDiary/", state.syncDirectory)
         assertEquals(SaveStatus.Idle, state.saveStatus)
         assertEquals("暂无同步记录", state.lastSyncText)
+        assertEquals(MergeStrategy.KeepNewer, state.manualSyncStrategy)
     }
 
     @Test
@@ -164,6 +181,102 @@ class SettingsViewModelTest {
         viewModel.onToggleSync(true)
         advanceUntilIdle()
         assertTrue(fakeRepo.current().syncEnabled)
+    }
+
+    @Test
+    fun onToggleSync_trueDoesNotSchedulePeriodicSync() = runTest(testDispatcher) {
+        val scheduler = FakeSyncWorkScheduler()
+        viewModel = SettingsViewModel(
+            repository = fakeRepo,
+            saveDelayMillis = 0L,
+            syncScheduler = scheduler,
+            syncMetadataRepository = FakeSyncMetadataRepository(),
+        )
+        advanceUntilIdle()
+
+        viewModel.onToggleSync(true)
+        advanceUntilIdle()
+
+        assertTrue(fakeRepo.current().syncEnabled)
+        assertEquals(0, scheduler.scheduleCalls)
+        assertEquals(0, scheduler.cancelCalls)
+    }
+
+    @Test
+    fun onToggleSync_falseCancelsExistingPeriodicSync() = runTest(testDispatcher) {
+        val scheduler = FakeSyncWorkScheduler()
+        viewModel = SettingsViewModel(
+            repository = fakeRepo,
+            saveDelayMillis = 0L,
+            syncScheduler = scheduler,
+            syncMetadataRepository = FakeSyncMetadataRepository(),
+        )
+        fakeRepo.setSyncEnabled(true)
+        advanceUntilIdle()
+
+        viewModel.onToggleSync(false)
+        advanceUntilIdle()
+
+        assertFalse(fakeRepo.current().syncEnabled)
+        assertEquals(0, scheduler.scheduleCalls)
+        assertEquals(1, scheduler.cancelCalls)
+    }
+
+    @Test
+    fun onManualSyncStrategyChanged_updatesState() = runTest(testDispatcher) {
+        advanceUntilIdle()
+
+        viewModel.onManualSyncStrategyChanged(MergeStrategy.SkipExisting)
+
+        assertEquals(MergeStrategy.SkipExisting, viewModel.uiState.value.manualSyncStrategy)
+    }
+
+    @Test
+    fun onMergeAll_usesSelectedManualStrategy() = runTest(testDispatcher) {
+        val date = LocalDate.of(2026, 5, 20)
+        val localEntry = DiaryEntry(
+            date = date,
+            content = "本机内容",
+            createdAt = Instant.parse("2026-05-20T00:00:00Z"),
+            updatedAt = Instant.parse("2026-05-20T01:00:00Z"),
+            syncState = SyncState.LocalOnly,
+        )
+        val remoteEntry = localEntry.copy(
+            content = "云端内容",
+            updatedAt = Instant.parse("2026-05-20T02:00:00Z"),
+        )
+        val key = CryptoBox.deriveKey("password", "salt-123456789012".toByteArray())
+        val storage = FakeRemoteStorage()
+        storage.seed(
+            key = SyncObjectKeys.diaryObjectKey(date),
+            body = encodeDiary(remoteEntry, key),
+            lastModified = remoteEntry.updatedAt,
+        )
+        val diaryRepo = FakeDiaryRepository(listOf(localEntry))
+        val syncEngine = SyncEngine(
+            storageProvider = { storage },
+            secureCredentialStore = FakeCredentialStore("password", "salt-123456789012".toByteArray()),
+            diaryRepository = diaryRepo,
+            annualSummaryRepository = FakeAnnualSummaryRepository(),
+            syncMetadataRepository = FakeSyncMetadataRepository(),
+            clock = Clock.fixed(Instant.parse("2026-05-20T03:00:00Z"), ZoneOffset.UTC),
+        )
+        viewModel = SettingsViewModel(
+            repository = fakeRepo,
+            saveDelayMillis = 0L,
+            syncEngine = syncEngine,
+            syncMetadataRepository = FakeSyncMetadataRepository(),
+        )
+        advanceUntilIdle()
+
+        viewModel.onManualSyncStrategyChanged(MergeStrategy.OverwriteAll)
+        viewModel.onMergeAll()
+        advanceUntilIdle()
+
+        val status = viewModel.uiState.value.syncOpStatus
+        assertTrue(status is SyncOpStatus.Done)
+        assertEquals(1, (status as SyncOpStatus.Done).summary.uploaded)
+        assertEquals("本机内容", decodeDiary(storage.objects[SyncObjectKeys.diaryObjectKey(date)]!!.body, key).content)
     }
 
     @Test
@@ -452,23 +565,203 @@ class SettingsViewModelTest {
         override suspend fun deleteMetadata(objectKey: String) = Unit
     }
 
+    private class FakeSyncWorkScheduler : SyncWorkScheduler {
+        var scheduleCalls = 0
+        var cancelCalls = 0
+
+        override fun schedule() {
+            scheduleCalls++
+        }
+
+        override fun cancel() {
+            cancelCalls++
+        }
+    }
+
+    private class FakeCredentialStore(
+        private var password: String?,
+        salt: ByteArray,
+    ) : CloudCipherCredentialStore {
+        private var currentSalt = salt.copyOf()
+
+        override fun saveLocalPassword(value: String?) {
+            password = value
+        }
+
+        override fun loadLocalPassword(): String? = password
+
+        override fun loadOrCreateCloudCipherSalt(): ByteArray = currentSalt.copyOf()
+
+        override fun rotateCloudCipherSalt(): ByteArray = currentSalt
+
+        override fun saveCloudCipherSalt(bytes: ByteArray) {
+            currentSalt = bytes.copyOf()
+        }
+    }
+
+    private class FakeDiaryRepository(
+        initial: List<DiaryEntry> = emptyList(),
+    ) : DiaryRepository {
+        val store: MutableMap<LocalDate, DiaryEntry> = LinkedHashMap<LocalDate, DiaryEntry>().apply {
+            initial.forEach { put(it.date, it) }
+        }
+        private val all = MutableStateFlow(store.values.toList())
+
+        private fun publish() {
+            all.value = store.values.toList()
+        }
+
+        override fun observeEntry(date: LocalDate): Flow<DiaryEntry?> = flowOf(store[date])
+
+        override fun observeEntriesInMonth(month: YearMonth): Flow<List<DiaryEntry>> =
+            flowOf(store.values.filter { YearMonth.from(it.date) == month })
+
+        override fun observeRecordedDates(): Flow<List<LocalDate>> = flowOf(store.keys.toList())
+
+        override fun observeAllEntries(): Flow<List<DiaryEntry>> = all.asStateFlow()
+
+        override suspend fun getEntry(date: LocalDate): DiaryEntry? = store[date]
+
+        override suspend fun getEntriesBetween(
+            start: LocalDate,
+            endInclusive: LocalDate,
+        ): List<DiaryEntry> = store.values.filter {
+            !it.date.isBefore(start) && !it.date.isAfter(endInclusive)
+        }
+
+        override suspend fun saveEntry(date: LocalDate, content: String): DiaryEntry {
+            val existing = store[date]
+            val entry = DiaryEntry(
+                date = date,
+                content = content,
+                createdAt = existing?.createdAt ?: Instant.parse("2026-05-20T03:00:00Z"),
+                updatedAt = Instant.parse("2026-05-20T03:00:00Z"),
+                syncState = SyncState.LocalOnly,
+            )
+            store[date] = entry
+            publish()
+            return entry
+        }
+
+        override suspend fun deleteEntry(date: LocalDate) {
+            store.remove(date)
+            publish()
+        }
+
+        override suspend fun searchEntries(
+            query: String,
+            year: Int?,
+            recordedOnly: Boolean,
+        ): List<DiaryEntry> = emptyList()
+
+        override suspend fun getSameMonthDayEntries(date: LocalDate): List<DiaryEntry> = emptyList()
+
+        override suspend fun setSyncState(date: LocalDate, state: SyncState) {
+            store[date]?.let { store[date] = it.copy(syncState = state) }
+            publish()
+        }
+    }
+
+    private class FakeAnnualSummaryRepository(
+        initial: List<AnnualSummary> = emptyList(),
+    ) : AnnualSummaryRepository {
+        private val store: MutableMap<Int, AnnualSummary> = LinkedHashMap<Int, AnnualSummary>().apply {
+            initial.forEach { put(it.year, it) }
+        }
+        private val all = MutableStateFlow(store.values.toList())
+
+        private fun publish() {
+            all.value = store.values.toList()
+        }
+
+        override fun observeSummary(year: Int): Flow<AnnualSummary?> = flowOf(store[year])
+
+        override fun observeSummaries(): Flow<List<AnnualSummary>> = all.asStateFlow()
+
+        override suspend fun getSummary(year: Int): AnnualSummary? = store[year]
+
+        override suspend fun saveSummary(year: Int, content: String): AnnualSummary {
+            val existing = store[year]
+            val summary = AnnualSummary(
+                year = year,
+                content = content,
+                createdAt = existing?.createdAt ?: Instant.parse("2026-05-20T03:00:00Z"),
+                updatedAt = Instant.parse("2026-05-20T03:00:00Z"),
+                syncState = SyncState.LocalOnly,
+            )
+            store[year] = summary
+            publish()
+            return summary
+        }
+
+        override suspend fun deleteSummary(year: Int) {
+            store.remove(year)
+            publish()
+        }
+
+        override suspend fun setSyncState(year: Int, state: SyncState) {
+            store[year]?.let { store[year] = it.copy(syncState = state) }
+            publish()
+        }
+    }
+
     private class FakeRemoteStorage(
-        private val pingResult: RemoteResult<Unit>,
+        private val pingResult: RemoteResult<Unit> = RemoteResult.Ok(Unit),
     ) : RemoteStorage {
+        data class StoredObject(
+            val key: String,
+            val body: ByteArray,
+            val etag: String,
+            val lastModified: Instant?,
+        )
+
+        val objects: MutableMap<String, StoredObject> = LinkedHashMap()
+        private var etagSeq = 0
+        val lastIfMatchEtags: MutableList<String?> = mutableListOf()
+
+        fun seed(key: String, body: ByteArray, lastModified: Instant?) {
+            etagSeq++
+            objects[key] = StoredObject(key, body, "etag-$etagSeq", lastModified)
+        }
+
         override suspend fun put(
             key: String,
             body: ByteArray,
             contentType: String,
             ifMatchEtag: String?,
-        ): RemoteResult<RemoteObject> = error("not used")
+        ): RemoteResult<RemoteObject> {
+            lastIfMatchEtags += ifMatchEtag
+            val current = objects[key]
+            if (ifMatchEtag != null && current != null && current.etag != ifMatchEtag) {
+                return RemoteResult.Err(ErrorCode.CONFLICT, "etag mismatch")
+            }
+            etagSeq++
+            val now = Instant.parse("2026-05-20T03:00:00Z")
+            val stored = StoredObject(key, body, "etag-$etagSeq", now)
+            objects[key] = stored
+            return RemoteResult.Ok(RemoteObject(key, stored.etag, now, body.size.toLong()))
+        }
 
-        override suspend fun get(key: String): RemoteResult<ByteArray> = error("not used")
+        override suspend fun get(key: String): RemoteResult<ByteArray> =
+            objects[key]?.body?.let { RemoteResult.Ok(it) }
+                ?: RemoteResult.Err(ErrorCode.NOT_FOUND, "missing")
 
-        override suspend fun head(key: String): RemoteResult<RemoteObject> = error("not used")
+        override suspend fun head(key: String): RemoteResult<RemoteObject> {
+            val obj = objects[key] ?: return RemoteResult.Err(ErrorCode.NOT_FOUND, "missing")
+            return RemoteResult.Ok(RemoteObject(obj.key, obj.etag, obj.lastModified, obj.body.size.toLong()))
+        }
 
-        override suspend fun list(prefix: String): RemoteResult<List<RemoteObject>> = error("not used")
+        override suspend fun list(prefix: String): RemoteResult<List<RemoteObject>> =
+            RemoteResult.Ok(
+                objects.values
+                    .filter { it.key.startsWith(prefix) }
+                    .map { RemoteObject(it.key, it.etag, it.lastModified, it.body.size.toLong()) }
+            )
 
-        override suspend fun delete(key: String): RemoteResult<Unit> = error("not used")
+        override suspend fun delete(key: String): RemoteResult<Unit> {
+            objects.remove(key)
+            return RemoteResult.Ok(Unit)
+        }
 
         override suspend fun ping(): RemoteResult<Unit> = pingResult
     }

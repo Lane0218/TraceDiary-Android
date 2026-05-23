@@ -19,7 +19,7 @@ import com.tracediary.app.data.sync.RemoteResult
 import com.tracediary.app.data.sync.RemoteStorage
 import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.data.sync.SyncProvider
-import com.tracediary.app.data.sync.SyncScheduler
+import com.tracediary.app.data.sync.SyncWorkScheduler
 import com.tracediary.app.data.sync.TencentCosRemoteStorage
 import com.tracediary.app.domain.repository.SyncMetadataRepository
 import com.tracediary.app.domain.usecase.ExportDiaryDataUseCase
@@ -27,6 +27,7 @@ import com.tracediary.app.domain.usecase.ExportFormat
 import com.tracediary.app.domain.usecase.ImportDiaryDataUseCase
 import com.tracediary.app.domain.usecase.ImportOptions
 import com.tracediary.app.domain.usecase.ImportResult
+import com.tracediary.app.domain.usecase.MergeStrategy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -110,6 +111,7 @@ data class SettingsUiState(
     val saveError: String? = null,
     val backupStatus: BackupStatus = BackupStatus.Idle,
     val lastImportResult: ImportResult? = null,
+    val manualSyncStrategy: MergeStrategy = MergeStrategy.KeepNewer,
     val syncOpStatus: SyncOpStatus = SyncOpStatus.Idle,
     val passwordRotationStatus: PasswordRotationStatus = PasswordRotationStatus.Idle,
     val lastSyncText: String = "暂无同步记录",
@@ -143,7 +145,7 @@ class SettingsViewModel(
     private val saveDelayMillis: Long = DEFAULT_SAVE_DELAY_MILLIS,
     private val secureCredentialStore: SecureCredentialStore? = null,
     private val syncEngine: SyncEngine? = null,
-    private val syncScheduler: SyncScheduler? = null,
+    private val syncScheduler: SyncWorkScheduler? = null,
     private val appPasswordManager: AppPasswordManager? = null,
     private val syncMetadataRepository: SyncMetadataRepository? = null,
     private val remoteStorageFactory: ((SettingsUiState) -> RemoteStorage?)? = null,
@@ -395,10 +397,8 @@ class SettingsViewModel(
     fun onToggleSync(value: Boolean) {
         viewModelScope.launch {
             repository.setSyncEnabled(value)
-            // 周期同步开关与 DataStore 状态保持一致：开 -> KEEP 入队，关 -> 立即取消。
-            if (value) {
-                syncScheduler?.schedule()
-            } else {
+            // 新版本不再启用周期同步；关闭时仍取消旧版本可能已经入队的周期任务。
+            if (!value) {
                 syncScheduler?.cancel()
             }
         }
@@ -560,9 +560,16 @@ class SettingsViewModel(
 
     // ---------- 三个一次性同步入口 ----------
 
+    fun onManualSyncStrategyChanged(strategy: MergeStrategy) {
+        _uiState.update { it.copy(manualSyncStrategy = strategy) }
+    }
+
     fun onUploadLocal() = launchSyncOp(SyncOperation.Upload) { it.uploadAll() }
     fun onDownloadRemote() = launchSyncOp(SyncOperation.Download) { it.downloadAll() }
-    fun onMergeAll() = launchSyncOp(SyncOperation.Merge) { it.mergeAll() }
+    fun onMergeAll() {
+        val strategy = _uiState.value.manualSyncStrategy
+        launchSyncOp(SyncOperation.Merge) { it.mergeAll(strategy) }
+    }
 
     private fun launchSyncOp(
         op: SyncOperation,

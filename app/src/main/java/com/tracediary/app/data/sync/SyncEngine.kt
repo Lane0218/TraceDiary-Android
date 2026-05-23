@@ -11,6 +11,7 @@ import com.tracediary.app.domain.repository.DiaryRepository
 import com.tracediary.app.domain.repository.PendingSyncDeletion
 import com.tracediary.app.domain.repository.PendingSyncDeletionRepository
 import com.tracediary.app.domain.repository.SyncMetadataRepository
+import com.tracediary.app.domain.usecase.MergeStrategy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -206,7 +207,7 @@ class SyncEngine(
         RemoteResult.Ok(SyncSummary(0, downloaded, skipped, failed, 0, 0, errors))
     }
 
-    suspend fun mergeAll(): RemoteResult<SyncSummary> = operationMutex.withLock {
+    suspend fun mergeAll(strategy: MergeStrategy = MergeStrategy.KeepNewer): RemoteResult<SyncSummary> = operationMutex.withLock {
         val storage = storageProvider() ?: return@withLock notConfigured()
         val password = loadPasswordContext() ?: return@withLock missingPassword()
         emit(SyncStage.Merging, 0, 0, null)
@@ -260,6 +261,7 @@ class SyncEngine(
                     date = date,
                     local = localDiaryByDate[date],
                     remote = remoteDiaryByDate[date],
+                    strategy = strategy,
                 )
             ) {
                 MergeOutcome.Uploaded -> uploaded++
@@ -287,6 +289,7 @@ class SyncEngine(
                     year = year,
                     local = localAnnualByYear[year],
                     remote = remoteAnnualByYear[year],
+                    strategy = strategy,
                 )
             ) {
                 MergeOutcome.Uploaded -> uploaded++
@@ -601,11 +604,18 @@ class SyncEngine(
         date: LocalDate,
         local: DiaryEntry?,
         remote: RemoteObject?,
+        strategy: MergeStrategy,
     ): MergeOutcome {
         return when {
             local != null && remote == null -> uploadDiaryInternal(storage, key, local).toMergeOutcome()
             local == null && remote != null -> downloadDiaryInternal(storage, key, date, null, remote).toMergeOutcome()
             local != null && remote != null -> {
+                if (strategy == MergeStrategy.OverwriteAll) {
+                    return uploadDiaryInternal(storage, key, local, force = true).toMergeOutcome()
+                }
+                if (strategy == MergeStrategy.SkipExisting) {
+                    return MergeOutcome.Skipped
+                }
                 val remotePayload = when (val result = loadRemoteDiary(storage, key, date, remote)) {
                     is RemoteResult.Ok -> result.value
                     is RemoteResult.Err -> {
@@ -717,11 +727,18 @@ class SyncEngine(
         year: Int,
         local: AnnualSummary?,
         remote: RemoteObject?,
+        strategy: MergeStrategy,
     ): MergeOutcome {
         return when {
             local != null && remote == null -> uploadAnnualInternal(storage, key, local).toMergeOutcome()
             local == null && remote != null -> downloadAnnualInternal(storage, key, year, null, remote).toMergeOutcome()
             local != null && remote != null -> {
+                if (strategy == MergeStrategy.OverwriteAll) {
+                    return uploadAnnualInternal(storage, key, local, force = true).toMergeOutcome()
+                }
+                if (strategy == MergeStrategy.SkipExisting) {
+                    return MergeOutcome.Skipped
+                }
                 val remotePayload = when (val result = loadRemoteAnnual(storage, key, year, remote)) {
                     is RemoteResult.Ok -> result.value
                     is RemoteResult.Err -> {
