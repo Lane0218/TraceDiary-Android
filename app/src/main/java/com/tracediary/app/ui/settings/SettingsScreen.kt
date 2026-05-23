@@ -269,7 +269,7 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                             onCheckedChange = { value ->
                                 if (!value) {
                                     viewModel.onToggleReminder(false)
-                                    return@Switch
+                                    return@TraceSwitch
                                 }
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                     val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -861,7 +861,7 @@ private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewMode
                             onCheckedChange = { value ->
                                 if (!value) {
                                     viewModel.onToggleReminder(false)
-                                    return@Switch
+                                    return@TraceSwitch
                                 }
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                     val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
