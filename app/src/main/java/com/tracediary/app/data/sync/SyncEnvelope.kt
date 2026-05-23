@@ -19,6 +19,7 @@ data class DiaryEnvelope(
     val date: String,
     val updatedAt: String,
     val cipher: String,
+    val salt: String? = null,
 )
 
 @Serializable
@@ -27,4 +28,5 @@ data class AnnualEnvelope(
     val year: Int,
     val updatedAt: String,
     val cipher: String,
+    val salt: String? = null,
 )

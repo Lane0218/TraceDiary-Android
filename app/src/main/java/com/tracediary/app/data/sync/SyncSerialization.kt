@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Base64
 import javax.crypto.SecretKey
 
 /**
@@ -82,12 +83,13 @@ internal data class DecodedAnnualPayload(
     val format: SyncPayloadFormat,
 )
 
-fun encodeDiary(entry: DiaryEntry, key: SecretKey): ByteArray {
+fun encodeDiary(entry: DiaryEntry, key: SecretKey, salt: ByteArray? = null): ByteArray {
     val payload = syncJson.encodeToString(entry.toSyncDto()).toByteArray(Charsets.UTF_8)
     val envelope = DiaryEnvelope(
         date = entry.date.format(dateFormatter),
         updatedAt = entry.updatedAt.toString(),
         cipher = CryptoBox.encryptToBase64(key, payload),
+        salt = salt?.let { Base64.getEncoder().encodeToString(it) },
     )
     return syncJson.encodeToString(envelope).toByteArray(Charsets.UTF_8)
 }
@@ -95,11 +97,19 @@ fun encodeDiary(entry: DiaryEntry, key: SecretKey): ByteArray {
 fun decodeDiary(bytes: ByteArray, key: SecretKey): DiaryEntry =
     decodeDiaryPayload(bytes, key).entry
 
-internal fun decodeDiaryPayload(bytes: ByteArray, key: SecretKey): DecodedDiaryPayload {
+internal fun decodeDiaryPayload(
+    bytes: ByteArray,
+    key: SecretKey,
+    keyForSalt: ((ByteArray) -> SecretKey)? = null,
+): DecodedDiaryPayload {
     val raw = bytes.toString(Charsets.UTF_8)
     val envelope = runCatching { syncJson.decodeFromString<DiaryEnvelope>(raw) }.getOrNull()
     if (envelope != null) {
-        val payload = CryptoBox.decryptFromBase64(key, envelope.cipher)
+        val envelopeKey = envelope.salt
+            ?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
+            ?.let { salt -> keyForSalt?.invoke(salt) }
+            ?: key
+        val payload = CryptoBox.decryptFromBase64(envelopeKey, envelope.cipher)
         val dto = syncJson.decodeFromString<SyncDiaryDto>(payload.toString(Charsets.UTF_8))
         return DecodedDiaryPayload(dto.toDomain(), SyncPayloadFormat.Envelope)
     }
@@ -107,12 +117,13 @@ internal fun decodeDiaryPayload(bytes: ByteArray, key: SecretKey): DecodedDiaryP
     return DecodedDiaryPayload(dto.toDomain(), SyncPayloadFormat.LegacyPlaintext)
 }
 
-fun encodeAnnual(summary: AnnualSummary, key: SecretKey): ByteArray {
+fun encodeAnnual(summary: AnnualSummary, key: SecretKey, salt: ByteArray? = null): ByteArray {
     val payload = syncJson.encodeToString(summary.toSyncDto()).toByteArray(Charsets.UTF_8)
     val envelope = AnnualEnvelope(
         year = summary.year,
         updatedAt = summary.updatedAt.toString(),
         cipher = CryptoBox.encryptToBase64(key, payload),
+        salt = salt?.let { Base64.getEncoder().encodeToString(it) },
     )
     return syncJson.encodeToString(envelope).toByteArray(Charsets.UTF_8)
 }
@@ -120,11 +131,19 @@ fun encodeAnnual(summary: AnnualSummary, key: SecretKey): ByteArray {
 fun decodeAnnual(bytes: ByteArray, key: SecretKey): AnnualSummary =
     decodeAnnualPayload(bytes, key).summary
 
-internal fun decodeAnnualPayload(bytes: ByteArray, key: SecretKey): DecodedAnnualPayload {
+internal fun decodeAnnualPayload(
+    bytes: ByteArray,
+    key: SecretKey,
+    keyForSalt: ((ByteArray) -> SecretKey)? = null,
+): DecodedAnnualPayload {
     val raw = bytes.toString(Charsets.UTF_8)
     val envelope = runCatching { syncJson.decodeFromString<AnnualEnvelope>(raw) }.getOrNull()
     if (envelope != null) {
-        val payload = CryptoBox.decryptFromBase64(key, envelope.cipher)
+        val envelopeKey = envelope.salt
+            ?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
+            ?.let { salt -> keyForSalt?.invoke(salt) }
+            ?: key
+        val payload = CryptoBox.decryptFromBase64(envelopeKey, envelope.cipher)
         val dto = syncJson.decodeFromString<SyncAnnualDto>(payload.toString(Charsets.UTF_8))
         return DecodedAnnualPayload(dto.toDomain(), SyncPayloadFormat.Envelope)
     }
