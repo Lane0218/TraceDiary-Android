@@ -447,7 +447,7 @@ class SyncEngine(
             var progress = 0
 
             for ((date, remote) in diaryRemotes) {
-                when (val payload = loadRemoteDiary(storage, oldKey, date, remote)) {
+                when (val payload = loadRemoteDiary(storage, oldKey, date)) {
                     is RemoteResult.Ok -> diaryPayloads += remote to payload.value.entry
                     is RemoteResult.Err -> {
                         emit(SyncStage.Failed, progress, total, payload.message)
@@ -459,7 +459,7 @@ class SyncEngine(
             }
 
             for ((year, remote) in annualRemotes) {
-                when (val payload = loadRemoteAnnual(storage, oldKey, year, remote)) {
+                when (val payload = loadRemoteAnnual(storage, oldKey, year)) {
                     is RemoteResult.Ok -> annualPayloads += remote to payload.value.summary
                     is RemoteResult.Err -> {
                         emit(SyncStage.Failed, progress, total, payload.message)
@@ -572,7 +572,7 @@ class SyncEngine(
         if (!force && local != null && remote.lastModified != null && !remote.lastModified.isAfter(local.updatedAt)) {
             return DownloadOutcome.Skipped
         }
-        return when (val payloadResult = loadRemoteDiary(storage, key, date, remote)) {
+        return when (val payloadResult = loadRemoteDiary(storage, key, date)) {
             is RemoteResult.Ok -> {
                 val decoded = payloadResult.value.entry
                 if (!force && local != null && !decoded.updatedAt.isAfter(local.updatedAt)) {
@@ -620,7 +620,7 @@ class SyncEngine(
                 if (strategy == MergeStrategy.SkipExisting) {
                     return MergeOutcome.Skipped
                 }
-                val remotePayload = when (val result = loadRemoteDiary(storage, key, date, remote)) {
+                val remotePayload = when (val result = loadRemoteDiary(storage, key, date)) {
                     is RemoteResult.Ok -> result.value
                     is RemoteResult.Err -> {
                         markDiaryFailed(date)
@@ -699,7 +699,7 @@ class SyncEngine(
         if (!force && local != null && remote.lastModified != null && !remote.lastModified.isAfter(local.updatedAt)) {
             return DownloadOutcome.Skipped
         }
-        return when (val payloadResult = loadRemoteAnnual(storage, key, year, remote)) {
+        return when (val payloadResult = loadRemoteAnnual(storage, key, year)) {
             is RemoteResult.Ok -> {
                 val decoded = payloadResult.value.summary
                 if (!force && local != null && !decoded.updatedAt.isAfter(local.updatedAt)) {
@@ -747,7 +747,7 @@ class SyncEngine(
                 if (strategy == MergeStrategy.SkipExisting) {
                     return MergeOutcome.Skipped
                 }
-                val remotePayload = when (val result = loadRemoteAnnual(storage, key, year, remote)) {
+                val remotePayload = when (val result = loadRemoteAnnual(storage, key, year)) {
                     is RemoteResult.Ok -> result.value
                     is RemoteResult.Err -> {
                         markAnnualFailed(year)
@@ -772,9 +772,8 @@ class SyncEngine(
         storage: RemoteStorage,
         key: SecretKey,
         date: LocalDate,
-        remote: RemoteObject,
     ): RemoteResult<RemoteDiaryPayload> {
-        val getResult = storage.get(remote.key)
+        val getResult = storage.get(SyncObjectKeys.diaryObjectKey(date))
         if (getResult is RemoteResult.Err) return getResult
         val decoded = runCatching { decodeDiaryPayload((getResult as RemoteResult.Ok).value, key) }.getOrNull()
             ?: return RemoteResult.Err(ErrorCode.AUTH, "同步密码错误或云端数据已损坏")
@@ -788,9 +787,8 @@ class SyncEngine(
         storage: RemoteStorage,
         key: SecretKey,
         year: Int,
-        remote: RemoteObject,
     ): RemoteResult<RemoteAnnualPayload> {
-        val getResult = storage.get(remote.key)
+        val getResult = storage.get(SyncObjectKeys.annualObjectKey(year))
         if (getResult is RemoteResult.Err) return getResult
         val decoded = runCatching { decodeAnnualPayload((getResult as RemoteResult.Ok).value, key) }.getOrNull()
             ?: return RemoteResult.Err(ErrorCode.AUTH, "同步密码错误或云端数据已损坏")
