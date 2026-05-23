@@ -11,13 +11,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,11 +37,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.tracediary.app.data.security.AppLockState
-import androidx.compose.foundation.text.KeyboardOptions
 
 /**
  * 应用解锁 / 首次设置密码屏。
@@ -52,6 +58,13 @@ fun AppLockScreen(
     onSetupPassword: (String) -> Unit,
     onUnlock: (String) -> Unit,
 ) {
+    val isNeedSetup = state == AppLockState.NeedSetup
+    val title = if (isNeedSetup) "设置应用密码" else "输入应用密码"
+    val subtitle = if (isNeedSetup) {
+        "用于解锁应用、保护本地数据并加密云端备份。请妥善保管，遗忘后无法找回。"
+    } else {
+        "应用已锁定，输入密码继续。"
+    }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
 
@@ -60,120 +73,155 @@ fun AppLockScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .imePadding(),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.TopCenter,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp),
+                .widthIn(max = 420.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
-                contentAlignment = Alignment.Center,
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Lock,
-                    contentDescription = null,
-                    modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.primary,
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(MaterialTheme.shapes.medium)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Lock,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Text(
+                    text = "TraceDiary",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
                 )
-            }
-
-            val title = if (state == AppLockState.NeedSetup) "设置应用密码" else "输入应用密码"
-            val subtitle = if (state == AppLockState.NeedSetup) {
-                "用于解锁应用、保护本地数据并加密云端备份。请妥善保管，遗忘后无法找回。"
-            } else {
-                null
-            }
-
-            Text(text = title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            if (subtitle != null) {
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text(if (state == AppLockState.NeedSetup) "新密码" else "密码") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    autoCorrectEnabled = false,
-                    imeAction = if (state == AppLockState.NeedSetup) ImeAction.Next else ImeAction.Done,
-                ),
-            )
-
-            if (state == AppLockState.NeedSetup) {
-                OutlinedTextField(
-                    value = confirmPassword,
-                    onValueChange = { confirmPassword = it },
-                    label = { Text("确认新密码") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password,
-                        autoCorrectEnabled = false,
-                        imeAction = ImeAction.Done,
-                    ),
-                )
-
-                androidx.compose.foundation.layout.Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+            Card(
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("在本机记住密码", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text(if (isNeedSetup) "新密码" else "密码") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            autoCorrectEnabled = false,
+                            imeAction = if (isNeedSetup) ImeAction.Next else ImeAction.Done,
+                        ),
+                        colors = lockTextFieldColors(),
+                    )
+
+                    if (isNeedSetup) {
+                        OutlinedTextField(
+                            value = confirmPassword,
+                            onValueChange = { confirmPassword = it },
+                            label = { Text("确认新密码") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Done,
+                            ),
+                            colors = lockTextFieldColors(),
+                        )
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        androidx.compose.foundation.layout.Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("在本机记住密码", style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    "关闭后每次冷启动都需要输入密码",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(checked = rememberPassword, onCheckedChange = onRememberChanged)
+                        }
+                    }
+
+                    if (!errorMessage.isNullOrBlank()) {
                         Text(
-                            "关闭后每次冷启动都需要输入密码",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = errorMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
                         )
                     }
-                    Switch(checked = rememberPassword, onCheckedChange = onRememberChanged)
-                }
-            }
 
-            if (!errorMessage.isNullOrBlank()) {
-                Text(
-                    text = errorMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Button(
-                onClick = {
-                    if (state == AppLockState.NeedSetup) {
-                        if (password.isEmpty() || password != confirmPassword) {
-                            // 由外层 ViewModel 通过 errorMessage 反馈；这里仅本地兜底。
-                            onSetupPassword("")
-                        } else {
-                            onSetupPassword(password)
-                        }
-                    } else {
-                        onUnlock(password)
+                    Button(
+                        onClick = {
+                            if (isNeedSetup) {
+                                if (password.isEmpty() || password != confirmPassword) {
+                                    // 由外层 ViewModel 通过 errorMessage 反馈；这里仅本地兜底。
+                                    onSetupPassword("")
+                                } else {
+                                    onSetupPassword(password)
+                                }
+                            } else {
+                                onUnlock(password)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Text(if (isNeedSetup) "设置并进入" else "解锁")
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-            ) {
-                Text(if (state == AppLockState.NeedSetup) "设置并进入" else "解锁")
+                }
             }
         }
     }
 }
+
+@Composable
+private fun lockTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = MaterialTheme.colorScheme.surface,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+    disabledContainerColor = MaterialTheme.colorScheme.surface,
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+    disabledBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+    cursorColor = MaterialTheme.colorScheme.primary,
+)
