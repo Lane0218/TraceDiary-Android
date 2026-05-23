@@ -191,7 +191,7 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
     ) {
         item {
             Text(
-                text = "往年今日",
+                text = "往年今日记录排序",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 4.dp),
@@ -207,14 +207,14 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
             ) {
                 Column {
                     ChoiceRow(
-                        label = "晚到早",
+                        label = "按年份从晚到早显示",
                         selected = state.sameDayEntrySortOrder == SameDayEntrySortOrder.LatestFirst,
                         enabled = true,
                         onClick = { viewModel.onSameDayEntrySortOrderChanged(SameDayEntrySortOrder.LatestFirst) }
                     )
                     SyncRowDivider()
                     ChoiceRow(
-                        label = "早到晚",
+                        label = "按年份从早到晚显示",
                         selected = state.sameDayEntrySortOrder == SameDayEntrySortOrder.EarliestFirst,
                         enabled = true,
                         onClick = { viewModel.onSameDayEntrySortOrderChanged(SameDayEntrySortOrder.EarliestFirst) }
