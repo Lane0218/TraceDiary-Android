@@ -1494,7 +1494,7 @@ private fun AboutPage() {
         Image(
             painter = painterResource(id = R.drawable.tracediary_logo_transparent),
             contentDescription = "Logo",
-            modifier = Modifier.size(128.dp)
+            modifier = Modifier.size(152.dp)
         )
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = "TraceDiary", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
