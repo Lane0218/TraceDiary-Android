@@ -29,7 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.tracediary.app.data.security.AppLockState
 
@@ -85,15 +88,17 @@ fun AppLockScreen(
             val subtitle = if (state == AppLockState.NeedSetup) {
                 "用于解锁应用、保护本地数据并加密云端备份。请妥善保管，遗忘后无法找回。"
             } else {
-                "请输入应用密码以解锁 TraceDiary。"
+                null
             }
 
             Text(text = title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             OutlinedTextField(
                 value = password,
@@ -102,6 +107,10 @@ fun AppLockScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = if (state == AppLockState.NeedSetup) ImeAction.Next else ImeAction.Done,
+                ),
             )
 
             if (state == AppLockState.NeedSetup) {
@@ -112,6 +121,10 @@ fun AppLockScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done,
+                    ),
                 )
 
                 androidx.compose.foundation.layout.Row(
