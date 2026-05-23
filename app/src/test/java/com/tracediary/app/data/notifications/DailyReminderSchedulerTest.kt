@@ -1,9 +1,13 @@
 package com.tracediary.app.data.notifications
 
+import com.tracediary.app.domain.model.DiaryEntry
+import com.tracediary.app.domain.model.SyncState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -77,4 +81,31 @@ class DailyReminderSchedulerTest {
         // 0:00 已过当天，跳到第二天 0:00：差 1 分钟。
         assertEquals(Duration.ofMinutes(1).toMillis(), actual)
     }
+
+    @Test
+    fun `shouldShowReminder 在当天没有记录时提醒`() {
+        assertTrue(DailyReminderWorker.shouldShowReminder(null))
+    }
+
+    @Test
+    fun `shouldShowReminder 在当天只有空白内容时提醒`() {
+        val entry = diaryEntry(content = " \n\t ")
+
+        assertTrue(DailyReminderWorker.shouldShowReminder(entry))
+    }
+
+    @Test
+    fun `shouldShowReminder 在当天已有非空内容时不提醒`() {
+        val entry = diaryEntry(content = "今天已经记录过了")
+
+        assertFalse(DailyReminderWorker.shouldShowReminder(entry))
+    }
+
+    private fun diaryEntry(content: String): DiaryEntry = DiaryEntry(
+        date = LocalDate.of(2026, 5, 17),
+        content = content,
+        createdAt = Instant.parse("2026-05-17T12:00:00Z"),
+        updatedAt = Instant.parse("2026-05-17T12:00:00Z"),
+        syncState = SyncState.Pending,
+    )
 }

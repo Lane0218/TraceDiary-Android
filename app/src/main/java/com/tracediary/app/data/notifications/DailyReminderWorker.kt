@@ -13,6 +13,12 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.tracediary.app.MainActivity
 import com.tracediary.app.R
+import com.tracediary.app.TraceDiaryApplication
+import com.tracediary.app.domain.model.DiaryEntry
+import com.tracediary.app.domain.model.isRecorded
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.time.LocalDate
 
 /**
  * 每日提醒后台任务：到指定时间向用户推送一条通知，提醒打开 TraceDiary 写日记。
@@ -20,6 +26,7 @@ import com.tracediary.app.R
  * - 通知 channel: [CHANNEL_ID]，名称"每日提醒"，重要性 DEFAULT。
  * - 通知 id 固定为 [NOTIFICATION_ID]，避免堆叠多条提醒。
  * - 用户拒绝通知权限时直接 success() 退出，避免 worker 反复重试。
+ * - 当天已有非空日记时直接 success() 退出，不再打扰用户。
  */
 class DailyReminderWorker(
     context: Context,
@@ -34,6 +41,11 @@ class DailyReminderWorker(
         if (!manager.areNotificationsEnabled()) {
             // 用户系统层关闭了通知或拒绝了 POST_NOTIFICATIONS 权限，
             // 此次直接成功返回，等下个周期再尝试。
+            return Result.success()
+        }
+
+        val todayEntry = runCatching { loadTodayEntry(context) }.getOrNull()
+        if (!shouldShowReminder(todayEntry)) {
             return Result.success()
         }
 
@@ -65,10 +77,19 @@ class DailyReminderWorker(
         return Result.success()
     }
 
+    private suspend fun loadTodayEntry(context: Context): DiaryEntry? {
+        val application = context.applicationContext as? TraceDiaryApplication ?: return null
+        return withContext(Dispatchers.IO) {
+            application.diaryRepository.getEntry(LocalDate.now())
+        }
+    }
+
     companion object {
         const val CHANNEL_ID = "daily_reminder"
         const val CHANNEL_NAME = "每日提醒"
         const val NOTIFICATION_ID = 1001
+
+        internal fun shouldShowReminder(entry: DiaryEntry?): Boolean = entry?.isRecorded != true
 
         /**
          * 在 Application 启动时或 Worker 内创建一次即可；重复调用是幂等的。
