@@ -1491,9 +1491,9 @@ private fun AboutPage() {
         Spacer(modifier = Modifier.height(32.dp))
         // Logo Section
         Image(
-            painter = painterResource(id = R.drawable.tracediary_logo),
+            painter = painterResource(id = R.drawable.tracediary_logo_transparent),
             contentDescription = "Logo",
-            modifier = Modifier.size(88.dp)
+            modifier = Modifier.size(128.dp)
         )
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = "TraceDiary", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
