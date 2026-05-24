@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.AnnualSummary
+import com.tracediary.app.ui.components.PrimaryPageHeader
 import com.tracediary.app.ui.components.TraceDropdownMenu
 import com.tracediary.app.ui.theme.DiaryContentTextStyle
 import com.tracediary.app.ui.theme.DiaryEditorTextStyle
@@ -106,9 +107,8 @@ fun ReviewScreen(
             .background(MaterialTheme.colorScheme.background),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "回顾",
-                style = MaterialTheme.typography.displayLarge,
+            PrimaryPageHeader(
+                title = "回顾",
                 modifier = Modifier.padding(bottom = 12.dp),
             )
 

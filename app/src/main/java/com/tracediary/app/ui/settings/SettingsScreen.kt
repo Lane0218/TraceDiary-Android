@@ -53,6 +53,7 @@ import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.domain.usecase.ExportFormat
 import com.tracediary.app.domain.usecase.ImportOptions
 import com.tracediary.app.domain.usecase.MergeStrategy
+import com.tracediary.app.ui.components.PrimaryPageHeader
 import java.time.LocalTime
 
 @Composable
@@ -106,11 +107,7 @@ private fun MainSettingsList(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Text(
-                text = "设置",
-                style = MaterialTheme.typography.displayLarge,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            PrimaryPageHeader(title = "设置")
         }
 
         item {

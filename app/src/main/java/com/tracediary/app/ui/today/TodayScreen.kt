@@ -76,6 +76,7 @@ import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
 
+import com.tracediary.app.ui.components.PrimaryPageHeader
 import com.tracediary.app.ui.components.TraceDropdownMenu
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -109,20 +110,10 @@ fun TodayScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            PrimaryPageHeader(
+                title = "今天",
+                onTitleClick = viewModel::onJumpToToday,
             ) {
-                Text(
-                    text = "今天",
-                    style = MaterialTheme.typography.displayLarge,
-                    modifier = Modifier
-                        .clip(MaterialTheme.shapes.small)
-                        .clickable { viewModel.onJumpToToday() }
-                        .padding(vertical = 4.dp, horizontal = 2.dp),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
                 TodayOverflowMenu(
                     displayMonth = state.displayMonth,
                     onJumpToMonth = viewModel::onJumpToMonth,
