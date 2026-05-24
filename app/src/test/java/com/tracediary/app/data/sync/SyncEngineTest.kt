@@ -21,6 +21,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Clock
@@ -581,8 +582,36 @@ class SyncEngineTest {
         assertTrue(result is RemoteResult.Ok)
         assertEquals(testPassword, credentialStore.loadLocalPassword())
         val newKey = CryptoBox.deriveCloudKey("new-password")
-        assertEquals("远端内容", decodeDiary(storage.objects[SyncObjectKeys.diaryObjectKey(date)]!!.body, newKey).content)
-        assertEquals("2025 年度总结", decodeAnnual(storage.objects[SyncObjectKeys.annualObjectKey(2025)]!!.body, newKey).content)
+        val reencryptedDiary = storage.objects[SyncObjectKeys.diaryObjectKey(date)]!!.body
+        val reencryptedAnnual = storage.objects[SyncObjectKeys.annualObjectKey(2025)]!!.body
+        assertThrows(Throwable::class.java) { decodeDiary(reencryptedDiary, testKey) }
+        assertThrows(Throwable::class.java) { decodeAnnual(reencryptedAnnual, testKey) }
+        assertEquals("远端内容", decodeDiary(reencryptedDiary, newKey).content)
+        assertEquals("2025 年度总结", decodeAnnual(reencryptedAnnual, newKey).content)
+    }
+
+    @Test
+    fun rotateSyncPassword_thenUploadUsesNewPasswordForCloudEncryption() = runTest {
+        val date = LocalDate.of(2025, 5, 18)
+        val entry = newEntry(date, content = "改密前远端内容")
+        val diaryRepo = FakeDiaryRepository(listOf(entry))
+        val annualRepo = FakeAnnualSummaryRepository()
+        val metaRepo = FakeSyncMetadataRepository()
+        val storage = FakeRemoteStorage()
+        storage.seed(SyncObjectKeys.diaryObjectKey(date), encodeDiary(entry, testKey), baseInstant)
+        val credentialStore = FakeCredentialStore(testPassword)
+        val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo, credentialStore)
+
+        val rotated = engine.rotateSyncPassword(testPassword, "new-password")
+        credentialStore.saveLocalPassword("new-password")
+        diaryRepo.saveEntry(date, "改密后新上传内容")
+        val uploaded = engine.uploadDiary(date)
+
+        assertTrue(rotated is RemoteResult.Ok)
+        assertTrue(uploaded is RemoteResult.Ok)
+        val body = storage.objects[SyncObjectKeys.diaryObjectKey(date)]!!.body
+        assertThrows(Throwable::class.java) { decodeDiary(body, testKey) }
+        assertEquals("改密后新上传内容", decodeDiary(body, CryptoBox.deriveCloudKey("new-password")).content)
     }
 
     @Test
