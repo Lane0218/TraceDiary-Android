@@ -421,6 +421,12 @@ private fun SettingsSubPageContainer(title: String, onBack: () -> Unit, content:
 @Composable
 private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
     val rotationWorking = state.passwordRotationStatus is PasswordRotationStatus.Working
+    var showPasswordErrorDialog by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.passwordRotationStatus) {
+        val status = state.passwordRotationStatus
+        showPasswordErrorDialog = status is PasswordRotationStatus.Failed && status.message.isNotBlank()
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
@@ -509,18 +515,25 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                     .fillMaxWidth()
                     .height(48.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                colors = passwordRotationButtonColors(state.passwordRotationStatus)
             ) {
                 Text(
-                    if (rotationWorking) "正在更新…" else "更新密码",
+                    text = passwordRotationButtonLabel(state.passwordRotationStatus),
                     fontWeight = FontWeight.Medium
                 )
             }
         }
+    }
 
-        item {
-            PasswordRotationStatusRow(status = state.passwordRotationStatus)
-        }
+    val failedStatus = state.passwordRotationStatus as? PasswordRotationStatus.Failed
+    if (showPasswordErrorDialog && failedStatus != null && failedStatus.message.isNotBlank()) {
+        TraceStatusDialog(
+            title = "密码更新失败",
+            message = failedStatus.message,
+            confirmText = "我知道了",
+            onDismissRequest = { showPasswordErrorDialog = false },
+            onConfirm = { showPasswordErrorDialog = false },
+        )
     }
 }
 
@@ -727,6 +740,34 @@ private fun syncSaveButtonColors(status: SaveStatus): ButtonColors {
             contentColor = Color.White,
         )
         SaveStatus.Failed -> ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError,
+        )
+    }
+}
+
+@Composable
+private fun passwordRotationButtonLabel(status: PasswordRotationStatus): String = when (status) {
+    PasswordRotationStatus.Idle -> "更新密码"
+    PasswordRotationStatus.Working -> "正在更新…"
+    is PasswordRotationStatus.Success -> "已更新"
+    is PasswordRotationStatus.Failed -> "更新失败"
+}
+
+@Composable
+private fun passwordRotationButtonColors(status: PasswordRotationStatus): ButtonColors {
+    return when (status) {
+        PasswordRotationStatus.Idle, PasswordRotationStatus.Working -> ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+            disabledContentColor = MaterialTheme.colorScheme.onPrimary,
+        )
+        is PasswordRotationStatus.Success -> ButtonDefaults.buttonColors(
+            containerColor = Color(0xFF167A45),
+            contentColor = Color.White,
+        )
+        is PasswordRotationStatus.Failed -> ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.error,
             contentColor = MaterialTheme.colorScheme.onError,
         )
@@ -1263,16 +1304,6 @@ private fun TraceChoiceChip(selected: Boolean, onClick: () -> Unit, label: Strin
             selectedLabelColor = MaterialTheme.colorScheme.primary
         )
     )
-}
-
-@Composable
-private fun PasswordRotationStatusRow(status: PasswordRotationStatus) {
-    when (status) {
-        PasswordRotationStatus.Idle -> Unit
-        PasswordRotationStatus.Working -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth().clip(CircleShape))
-        is PasswordRotationStatus.Success -> Text(text = status.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-        is PasswordRotationStatus.Failed -> Text(text = status.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-    }
 }
 
 @Composable
