@@ -4,10 +4,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodes
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.tracediary.app.data.security.AppLockState
@@ -44,7 +43,7 @@ class AppLockScreenTest {
         composeTestRule.onNodeWithText("新密码").assertIsDisplayed()
         composeTestRule.onNodeWithText("确认新密码").assertIsDisplayed()
         composeTestRule.onNodeWithText("在本机记住密码").assertIsDisplayed()
-        composeTestRule.onNodeWithText("关闭后每次冷启动都需要输入密码").assertDoesNotExist()
+        composeTestRule.onAllNodesWithText("关闭后每次冷启动都需要输入密码").assertCountEquals(0)
         composeTestRule.onNodeWithText("设置并进入").assertIsDisplayed()
         composeTestRule.onAllNodes(hasSetTextAction()).assertCountEquals(2)
     }

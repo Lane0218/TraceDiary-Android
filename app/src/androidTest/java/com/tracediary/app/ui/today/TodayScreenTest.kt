@@ -3,7 +3,7 @@ package com.tracediary.app.ui.today
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -177,7 +177,7 @@ class TodayScreenTest {
 
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("今天", useUnmergedTree = true)
-            .assert(hasClickAction())
+            .assertHasClickAction()
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.onNodeWithContentDescriptionSafe(

@@ -2,6 +2,7 @@ package com.tracediary.app
 
 import android.app.Application
 import androidx.room.Room
+import com.tracediary.app.data.local.SqlCipherRekey
 import com.tracediary.app.data.local.TraceDiaryDatabase
 import com.tracediary.app.data.notifications.DailyReminderScheduler
 import com.tracediary.app.data.notifications.DailyReminderWorker
@@ -174,9 +175,8 @@ class TraceDiaryApplication : Application() {
     @Synchronized
     fun rekeyDatabase(newPassword: String) {
         check(::database.isInitialized) { "数据库尚未初始化" }
-        val newPassphrase = CryptoBox.deriveDatabasePassphraseString(newPassword)
-        val escaped = newPassphrase.replace("'", "''")
-        database.openHelper.writableDatabase.execSQL("PRAGMA rekey = '$escaped'")
+        val newPassphrase = CryptoBox.deriveDatabasePassphrase(newPassword)
+        SqlCipherRekey.rekey(database.openHelper.writableDatabase, newPassphrase)
     }
 
     fun resolveCurrentAppDate(now: LocalDateTime = LocalDateTime.now()): LocalDate {
