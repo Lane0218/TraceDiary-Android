@@ -1,7 +1,6 @@
 package com.tracediary.app.data.sync
 
 import com.tracediary.app.data.security.CryptoBox
-import com.tracediary.app.data.security.CloudCipherCredentialStore
 import com.tracediary.app.domain.model.AnnualSummary
 import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.model.SyncMetadata
@@ -26,7 +25,6 @@ import javax.crypto.SecretKey
 
 class SyncEngine(
     private val storageProvider: () -> RemoteStorage?,
-    private val secureCredentialStore: CloudCipherCredentialStore,
     private val diaryRepository: DiaryRepository,
     private val annualSummaryRepository: AnnualSummaryRepository,
     private val syncMetadataRepository: SyncMetadataRepository,
@@ -56,18 +54,15 @@ class SyncEngine(
 
     private data class PasswordContext(
         val password: String,
-        val salt: ByteArray,
         val key: SecretKey,
     )
 
     private data class RemoteDiaryPayload(
         val entry: DiaryEntry,
-        val format: SyncPayloadFormat,
     )
 
     private data class RemoteAnnualPayload(
         val summary: AnnualSummary,
-        val format: SyncPayloadFormat,
     )
 
     private val _state = MutableStateFlow(SyncEngineState())
@@ -97,7 +92,7 @@ class SyncEngine(
         val errors = mutableListOf<String>()
 
         for (entry in diaries) {
-            when (val r = uploadDiaryInternal(storage, password.key, entry, salt = password.salt)) {
+            when (val r = uploadDiaryInternal(storage, password.key, entry)) {
                 UploadOutcome.Uploaded -> uploaded++
                 UploadOutcome.Skipped -> skipped++
                 UploadOutcome.Conflict -> conflicts++
@@ -115,7 +110,7 @@ class SyncEngine(
         }
 
         for (summary in summaries) {
-            when (val r = uploadAnnualInternal(storage, password.key, summary, salt = password.salt)) {
+            when (val r = uploadAnnualInternal(storage, password.key, summary)) {
                 UploadOutcome.Uploaded -> uploaded++
                 UploadOutcome.Skipped -> skipped++
                 UploadOutcome.Conflict -> conflicts++
@@ -176,7 +171,6 @@ class SyncEngine(
                     date,
                     local,
                     remote,
-                    keyForSalt = { salt -> password.deriveKeyForSalt(salt) },
                 )
             ) {
                 DownloadOutcome.Downloaded -> downloaded++
@@ -203,7 +197,6 @@ class SyncEngine(
                     year,
                     local,
                     remote,
-                    keyForSalt = { salt -> password.deriveKeyForSalt(salt) },
                 )
             ) {
                 DownloadOutcome.Downloaded -> downloaded++
@@ -280,8 +273,6 @@ class SyncEngine(
                     local = localDiaryByDate[date],
                     remote = remoteDiaryByDate[date],
                     strategy = strategy,
-                    salt = password.salt,
-                    keyForSalt = { salt -> password.deriveKeyForSalt(salt) },
                 )
             ) {
                 MergeOutcome.Uploaded -> uploaded++
@@ -310,8 +301,6 @@ class SyncEngine(
                     local = localAnnualByYear[year],
                     remote = remoteAnnualByYear[year],
                     strategy = strategy,
-                    salt = password.salt,
-                    keyForSalt = { salt -> password.deriveKeyForSalt(salt) },
                 )
             ) {
                 MergeOutcome.Uploaded -> uploaded++
@@ -387,7 +376,7 @@ class SyncEngine(
         val entry = diaryRepository.getEntry(date)
             ?: return@withLock RemoteResult.Err(ErrorCode.NOT_FOUND, "本地不存在 ${date} 的日记")
         emit(SyncStage.Uploading, 0, 1, null)
-        when (val result = uploadDiaryInternal(storage, password.key, entry, salt = password.salt)) {
+        when (val result = uploadDiaryInternal(storage, password.key, entry)) {
             UploadOutcome.Uploaded -> {
                 emit(SyncStage.Done, 1, 1, null)
                 RemoteResult.Ok(SyncSummary(uploaded = 1))
@@ -413,7 +402,7 @@ class SyncEngine(
         val summary = annualSummaryRepository.getSummary(year)
             ?: return@withLock RemoteResult.Err(ErrorCode.NOT_FOUND, "本地不存在 $year 年的年度总结")
         emit(SyncStage.Uploading, 0, 1, null)
-        when (val result = uploadAnnualInternal(storage, password.key, summary, salt = password.salt)) {
+        when (val result = uploadAnnualInternal(storage, password.key, summary)) {
             UploadOutcome.Uploaded -> {
                 emit(SyncStage.Done, 1, 1, null)
                 RemoteResult.Ok(SyncSummary(uploaded = 1))
@@ -436,16 +425,14 @@ class SyncEngine(
     suspend fun rotateSyncPassword(oldPassword: String, newPassword: String): RemoteResult<SyncSummary> =
         operationMutex.withLock {
             val storage = storageProvider() ?: return@withLock notConfigured()
-            val persistedPassword = passwordProvider().takeUnless { it.isNullOrEmpty() }
-                ?: secureCredentialStore.loadLocalPassword()
+            val activePassword = passwordProvider().takeUnless { it.isNullOrEmpty() }
                 ?: return@withLock missingPassword()
-            if (persistedPassword != oldPassword) {
-                emit(SyncStage.Failed, 0, 0, "旧同步密码不正确")
-                return@withLock RemoteResult.Err(ErrorCode.AUTH, "旧同步密码不正确")
+            if (activePassword != oldPassword) {
+                emit(SyncStage.Failed, 0, 0, "旧应用密码不正确")
+                return@withLock RemoteResult.Err(ErrorCode.AUTH, "旧应用密码不正确")
             }
-            val oldSalt = secureCredentialStore.loadOrCreateCloudCipherSalt()
-            val oldKey = CryptoBox.deriveKey(oldPassword, oldSalt)
-            val oldKeyForSalt = { salt: ByteArray -> CryptoBox.deriveKey(oldPassword, salt) }
+            val oldKey = CryptoBox.deriveCloudKey(oldPassword)
+            val newKey = CryptoBox.deriveCloudKey(newPassword)
 
             val diaryListing = storage.list(SyncObjectKeys.DIARY_PREFIX)
             if (diaryListing is RemoteResult.Err) {
@@ -470,7 +457,7 @@ class SyncEngine(
             var progress = 0
 
             for ((date, remote) in diaryRemotes) {
-                when (val payload = loadRemoteDiary(storage, oldKey, date, oldKeyForSalt)) {
+                when (val payload = loadRemoteDiary(storage, oldKey, date)) {
                     is RemoteResult.Ok -> diaryPayloads += remote to payload.value.entry
                     is RemoteResult.Err -> {
                         emit(SyncStage.Failed, progress, total, payload.message)
@@ -482,7 +469,7 @@ class SyncEngine(
             }
 
             for ((year, remote) in annualRemotes) {
-                when (val payload = loadRemoteAnnual(storage, oldKey, year, oldKeyForSalt)) {
+                when (val payload = loadRemoteAnnual(storage, oldKey, year)) {
                     is RemoteResult.Ok -> annualPayloads += remote to payload.value.summary
                     is RemoteResult.Err -> {
                         emit(SyncStage.Failed, progress, total, payload.message)
@@ -493,46 +480,36 @@ class SyncEngine(
                 emit(SyncStage.Rekeying, progress, total, null)
             }
 
-            val newSalt = secureCredentialStore.rotateCloudCipherSalt()
-            val newKey = CryptoBox.deriveKey(newPassword, newSalt)
             progress = 0
-            try {
-                for ((remote, entry) in diaryPayloads) {
-                    val put = storage.put(
-                        key = remote.key,
-                        body = encodeDiary(entry, newKey, newSalt),
-                        contentType = "application/json",
-                        ifMatchEtag = remote.etag,
-                    )
-                    if (put is RemoteResult.Err) {
-                        secureCredentialStore.saveCloudCipherSalt(oldSalt)
-                        emit(SyncStage.Failed, progress, total, put.message)
-                        return@withLock put
-                    }
-                    progress++
-                    emit(SyncStage.Rekeying, progress, total, null)
+            for ((remote, entry) in diaryPayloads) {
+                val put = storage.put(
+                    key = remote.key,
+                    body = encodeDiary(entry, newKey),
+                    contentType = "application/json",
+                    ifMatchEtag = remote.etag,
+                )
+                if (put is RemoteResult.Err) {
+                    emit(SyncStage.Failed, progress, total, put.message)
+                    return@withLock put
                 }
-                for ((remote, summary) in annualPayloads) {
-                    val put = storage.put(
-                        key = remote.key,
-                        body = encodeAnnual(summary, newKey, newSalt),
-                        contentType = "application/json",
-                        ifMatchEtag = remote.etag,
-                    )
-                    if (put is RemoteResult.Err) {
-                        secureCredentialStore.saveCloudCipherSalt(oldSalt)
-                        emit(SyncStage.Failed, progress, total, put.message)
-                        return@withLock put
-                    }
-                    progress++
-                    emit(SyncStage.Rekeying, progress, total, null)
+                progress++
+                emit(SyncStage.Rekeying, progress, total, null)
+            }
+            for ((remote, summary) in annualPayloads) {
+                val put = storage.put(
+                    key = remote.key,
+                    body = encodeAnnual(summary, newKey),
+                    contentType = "application/json",
+                    ifMatchEtag = remote.etag,
+                )
+                if (put is RemoteResult.Err) {
+                    emit(SyncStage.Failed, progress, total, put.message)
+                    return@withLock put
                 }
-            } catch (t: Throwable) {
-                secureCredentialStore.saveCloudCipherSalt(oldSalt)
-                throw t
+                progress++
+                emit(SyncStage.Rekeying, progress, total, null)
             }
 
-            secureCredentialStore.saveLocalPassword(newPassword)
             emit(SyncStage.Done, total, total, null)
             RemoteResult.Ok(SyncSummary(uploaded = total))
         }
@@ -541,7 +518,6 @@ class SyncEngine(
         storage: RemoteStorage,
         key: SecretKey,
         entry: DiaryEntry,
-        salt: ByteArray? = null,
         force: Boolean = false,
     ): UploadOutcome {
         val objectKey = SyncObjectKeys.diaryObjectKey(entry.date)
@@ -558,7 +534,7 @@ class SyncEngine(
         if (!force && remoteUpdatedAt != null && remoteUpdatedAt.isAfter(entry.updatedAt)) {
             return UploadOutcome.Skipped
         }
-        val body = encodeDiary(entry, key, salt)
+        val body = encodeDiary(entry, key)
         val putResult = storage.put(objectKey, body, "application/json", existingEtag)
         return when (putResult) {
             is RemoteResult.Ok -> {
@@ -592,12 +568,11 @@ class SyncEngine(
         local: DiaryEntry?,
         remote: RemoteObject,
         force: Boolean = false,
-        keyForSalt: ((ByteArray) -> SecretKey)? = null,
     ): DownloadOutcome {
         if (!force && local != null && remote.lastModified != null && !remote.lastModified.isAfter(local.updatedAt)) {
             return DownloadOutcome.Skipped
         }
-        return when (val payloadResult = loadRemoteDiary(storage, key, date, keyForSalt)) {
+        return when (val payloadResult = loadRemoteDiary(storage, key, date)) {
             is RemoteResult.Ok -> {
                 val decoded = payloadResult.value.entry
                 if (!force && local != null && !decoded.updatedAt.isAfter(local.updatedAt)) {
@@ -631,23 +606,21 @@ class SyncEngine(
         local: DiaryEntry?,
         remote: RemoteObject?,
         strategy: MergeStrategy,
-        salt: ByteArray? = null,
-        keyForSalt: ((ByteArray) -> SecretKey)? = null,
     ): MergeOutcome {
         return when {
-            local != null && remote == null -> uploadDiaryInternal(storage, key, local, salt = salt).toMergeOutcome()
-            local == null && remote != null -> downloadDiaryInternal(storage, key, date, null, remote, keyForSalt = keyForSalt).toMergeOutcome()
+            local != null && remote == null -> uploadDiaryInternal(storage, key, local).toMergeOutcome()
+            local == null && remote != null -> downloadDiaryInternal(storage, key, date, null, remote).toMergeOutcome()
             local != null && remote != null -> {
                 if (strategy == MergeStrategy.OverwriteAll) {
-                    return uploadDiaryInternal(storage, key, local, salt = salt, force = true).toMergeOutcome()
+                    return uploadDiaryInternal(storage, key, local, force = true).toMergeOutcome()
                 }
                 if (strategy == MergeStrategy.PreferRemote) {
-                    return downloadDiaryInternal(storage, key, date, local, remote, force = true, keyForSalt = keyForSalt).toMergeOutcome()
+                    return downloadDiaryInternal(storage, key, date, local, remote, force = true).toMergeOutcome()
                 }
                 if (strategy == MergeStrategy.SkipExisting) {
                     return MergeOutcome.Skipped
                 }
-                val remotePayload = when (val result = loadRemoteDiary(storage, key, date, keyForSalt)) {
+                val remotePayload = when (val result = loadRemoteDiary(storage, key, date)) {
                     is RemoteResult.Ok -> result.value
                     is RemoteResult.Err -> {
                         markDiaryFailed(date)
@@ -655,12 +628,10 @@ class SyncEngine(
                     }
                 }
                 when {
-                    remotePayload.format == SyncPayloadFormat.LegacyPlaintext ->
-                        uploadDiaryInternal(storage, key, local, salt = salt, force = true).toMergeOutcome()
                     remotePayload.entry.updatedAt.isAfter(local.updatedAt) ->
-                        downloadDiaryInternal(storage, key, date, local, remote, keyForSalt = keyForSalt).toMergeOutcome()
+                        downloadDiaryInternal(storage, key, date, local, remote).toMergeOutcome()
                     local.updatedAt.isAfter(remotePayload.entry.updatedAt) ->
-                        uploadDiaryInternal(storage, key, local, salt = salt).toMergeOutcome()
+                        uploadDiaryInternal(storage, key, local).toMergeOutcome()
                     else -> MergeOutcome.Skipped
                 }
             }
@@ -672,7 +643,6 @@ class SyncEngine(
         storage: RemoteStorage,
         key: SecretKey,
         summary: AnnualSummary,
-        salt: ByteArray? = null,
         force: Boolean = false,
     ): UploadOutcome {
         val objectKey = SyncObjectKeys.annualObjectKey(summary.year)
@@ -689,7 +659,7 @@ class SyncEngine(
         if (!force && remoteUpdatedAt != null && remoteUpdatedAt.isAfter(summary.updatedAt)) {
             return UploadOutcome.Skipped
         }
-        val body = encodeAnnual(summary, key, salt)
+        val body = encodeAnnual(summary, key)
         val putResult = storage.put(objectKey, body, "application/json", existingEtag)
         return when (putResult) {
             is RemoteResult.Ok -> {
@@ -723,12 +693,11 @@ class SyncEngine(
         local: AnnualSummary?,
         remote: RemoteObject,
         force: Boolean = false,
-        keyForSalt: ((ByteArray) -> SecretKey)? = null,
     ): DownloadOutcome {
         if (!force && local != null && remote.lastModified != null && !remote.lastModified.isAfter(local.updatedAt)) {
             return DownloadOutcome.Skipped
         }
-        return when (val payloadResult = loadRemoteAnnual(storage, key, year, keyForSalt)) {
+        return when (val payloadResult = loadRemoteAnnual(storage, key, year)) {
             is RemoteResult.Ok -> {
                 val decoded = payloadResult.value.summary
                 if (!force && local != null && !decoded.updatedAt.isAfter(local.updatedAt)) {
@@ -762,23 +731,21 @@ class SyncEngine(
         local: AnnualSummary?,
         remote: RemoteObject?,
         strategy: MergeStrategy,
-        salt: ByteArray? = null,
-        keyForSalt: ((ByteArray) -> SecretKey)? = null,
     ): MergeOutcome {
         return when {
-            local != null && remote == null -> uploadAnnualInternal(storage, key, local, salt = salt).toMergeOutcome()
-            local == null && remote != null -> downloadAnnualInternal(storage, key, year, null, remote, keyForSalt = keyForSalt).toMergeOutcome()
+            local != null && remote == null -> uploadAnnualInternal(storage, key, local).toMergeOutcome()
+            local == null && remote != null -> downloadAnnualInternal(storage, key, year, null, remote).toMergeOutcome()
             local != null && remote != null -> {
                 if (strategy == MergeStrategy.OverwriteAll) {
-                    return uploadAnnualInternal(storage, key, local, salt = salt, force = true).toMergeOutcome()
+                    return uploadAnnualInternal(storage, key, local, force = true).toMergeOutcome()
                 }
                 if (strategy == MergeStrategy.PreferRemote) {
-                    return downloadAnnualInternal(storage, key, year, local, remote, force = true, keyForSalt = keyForSalt).toMergeOutcome()
+                    return downloadAnnualInternal(storage, key, year, local, remote, force = true).toMergeOutcome()
                 }
                 if (strategy == MergeStrategy.SkipExisting) {
                     return MergeOutcome.Skipped
                 }
-                val remotePayload = when (val result = loadRemoteAnnual(storage, key, year, keyForSalt)) {
+                val remotePayload = when (val result = loadRemoteAnnual(storage, key, year)) {
                     is RemoteResult.Ok -> result.value
                     is RemoteResult.Err -> {
                         markAnnualFailed(year)
@@ -786,12 +753,10 @@ class SyncEngine(
                     }
                 }
                 when {
-                    remotePayload.format == SyncPayloadFormat.LegacyPlaintext ->
-                        uploadAnnualInternal(storage, key, local, salt = salt, force = true).toMergeOutcome()
                     remotePayload.summary.updatedAt.isAfter(local.updatedAt) ->
-                        downloadAnnualInternal(storage, key, year, local, remote, keyForSalt = keyForSalt).toMergeOutcome()
+                        downloadAnnualInternal(storage, key, year, local, remote).toMergeOutcome()
                     local.updatedAt.isAfter(remotePayload.summary.updatedAt) ->
-                        uploadAnnualInternal(storage, key, local, salt = salt).toMergeOutcome()
+                        uploadAnnualInternal(storage, key, local).toMergeOutcome()
                     else -> MergeOutcome.Skipped
                 }
             }
@@ -803,46 +768,39 @@ class SyncEngine(
         storage: RemoteStorage,
         key: SecretKey,
         date: LocalDate,
-        keyForSalt: ((ByteArray) -> SecretKey)? = null,
     ): RemoteResult<RemoteDiaryPayload> {
         val getResult = storage.get(SyncObjectKeys.diaryObjectKey(date))
         if (getResult is RemoteResult.Err) return getResult
-        val decoded = runCatching { decodeDiaryPayload((getResult as RemoteResult.Ok).value, key, keyForSalt) }.getOrNull()
-            ?: return RemoteResult.Err(ErrorCode.AUTH, "同步密码错误或云端数据已损坏")
+        val decoded = runCatching { decodeDiaryPayload((getResult as RemoteResult.Ok).value, key) }.getOrNull()
+            ?: return RemoteResult.Err(ErrorCode.AUTH, "应用密码错误或云端数据已损坏")
         if (decoded.entry.date != date) {
             return RemoteResult.Err(ErrorCode.UNKNOWN, "远端 diary 对象日期与文件名不一致")
         }
-        return RemoteResult.Ok(RemoteDiaryPayload(decoded.entry, decoded.format))
+        return RemoteResult.Ok(RemoteDiaryPayload(decoded.entry))
     }
 
     private suspend fun loadRemoteAnnual(
         storage: RemoteStorage,
         key: SecretKey,
         year: Int,
-        keyForSalt: ((ByteArray) -> SecretKey)? = null,
     ): RemoteResult<RemoteAnnualPayload> {
         val getResult = storage.get(SyncObjectKeys.annualObjectKey(year))
         if (getResult is RemoteResult.Err) return getResult
-        val decoded = runCatching { decodeAnnualPayload((getResult as RemoteResult.Ok).value, key, keyForSalt) }.getOrNull()
-            ?: return RemoteResult.Err(ErrorCode.AUTH, "同步密码错误或云端数据已损坏")
+        val decoded = runCatching { decodeAnnualPayload((getResult as RemoteResult.Ok).value, key) }.getOrNull()
+            ?: return RemoteResult.Err(ErrorCode.AUTH, "应用密码错误或云端数据已损坏")
         if (decoded.summary.year != year) {
             return RemoteResult.Err(ErrorCode.UNKNOWN, "远端 annual 对象年份与文件名不一致")
         }
-        return RemoteResult.Ok(RemoteAnnualPayload(decoded.summary, decoded.format))
+        return RemoteResult.Ok(RemoteAnnualPayload(decoded.summary))
     }
 
     private fun loadPasswordContext(): PasswordContext? {
         // 优先用 passwordProvider（解锁后内存中的密码），保证关闭"记住密码"时仍可同步。
         val password = passwordProvider().takeUnless { it.isNullOrEmpty() }
-            ?: secureCredentialStore.loadLocalPassword()
             ?: return null
-        val salt = secureCredentialStore.loadOrCreateCloudCipherSalt()
-        val key = CryptoBox.deriveKey(password, salt)
-        return PasswordContext(password, salt, key)
+        val key = CryptoBox.deriveCloudKey(password)
+        return PasswordContext(password, key)
     }
-
-    private fun PasswordContext.deriveKeyForSalt(salt: ByteArray): SecretKey =
-        CryptoBox.deriveKey(password, salt)
 
     /**
      * 重试本地已删除但云端删除失败的对象。成功删除一项就清掉对应记录，
@@ -899,8 +857,8 @@ class SyncEngine(
     }
 
     private fun missingPassword(): RemoteResult<SyncSummary> {
-        emit(SyncStage.Failed, 0, 0, "请先在设置页设置同步密码")
-        return RemoteResult.Err(ErrorCode.AUTH, "请先在设置页设置同步密码")
+        emit(SyncStage.Failed, 0, 0, "请先输入应用密码")
+        return RemoteResult.Err(ErrorCode.AUTH, "请先输入应用密码")
     }
 
     private fun UploadOutcome.toMergeOutcome(): MergeOutcome = when (this) {

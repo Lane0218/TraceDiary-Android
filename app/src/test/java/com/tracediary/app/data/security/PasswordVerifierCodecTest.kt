@@ -8,12 +8,11 @@ import javax.crypto.AEADBadTagException
 
 class PasswordVerifierCodecTest {
 
-    private val salt = "salt-for-test-16".toByteArray()
     private val dek = "tracediary-fake-data-encryption-key".toByteArray()
 
     @Test
     fun wrapAndUnwrapRoundtrip() {
-        val kek = CryptoBox.deriveKey("correct-password", salt)
+        val kek = CryptoBox.derivePasswordVerifierKey("correct-password")
         val wrapped = PasswordVerifierCodec.wrap(kek, dek)
 
         val unwrapped = PasswordVerifierCodec.unwrap(kek, wrapped)
@@ -22,7 +21,7 @@ class PasswordVerifierCodecTest {
 
     @Test
     fun wrappedBlobHasVersionByteAndIv() {
-        val kek = CryptoBox.deriveKey("any-password", salt)
+        val kek = CryptoBox.derivePasswordVerifierKey("any-password")
         val wrapped = PasswordVerifierCodec.wrap(kek, dek)
 
         // 第一个字节是版本号 1，后面 12 字节是 IV。
@@ -32,8 +31,8 @@ class PasswordVerifierCodecTest {
 
     @Test
     fun unwrapWithWrongPasswordFails() {
-        val wrapped = PasswordVerifierCodec.wrap(CryptoBox.deriveKey("correct", salt), dek)
-        val wrongKek = CryptoBox.deriveKey("wrong", salt)
+        val wrapped = PasswordVerifierCodec.wrap(CryptoBox.derivePasswordVerifierKey("correct"), dek)
+        val wrongKek = CryptoBox.derivePasswordVerifierKey("wrong")
 
         try {
             PasswordVerifierCodec.unwrap(wrongKek, wrapped)
@@ -45,7 +44,7 @@ class PasswordVerifierCodecTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun unwrapWithInvalidVersionThrows() {
-        val kek = CryptoBox.deriveKey("p", salt)
+        val kek = CryptoBox.derivePasswordVerifierKey("p")
         val tampered = ByteArray(20)
         tampered[0] = 0x09 // 非法版本号
         PasswordVerifierCodec.unwrap(kek, tampered)

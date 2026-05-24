@@ -389,10 +389,10 @@ class TodayViewModelTest {
         val credentialStore = FakeCredentialStore(localPassword)
         val syncEngine = SyncEngine(
             storageProvider = { remoteStorage },
-            secureCredentialStore = credentialStore,
             diaryRepository = repository,
             annualSummaryRepository = FakeAnnualSummaryRepository(),
             syncMetadataRepository = FakeSyncMetadataRepository(),
+            passwordProvider = { credentialStore.loadLocalPassword() },
             clock = fixedClock,
         )
         return TodayViewModel(
@@ -576,24 +576,11 @@ private class FakeUserPreferencesRepository(
 }
 
 private class FakeCredentialStore(private var password: String?) : CloudCipherCredentialStore {
-    private var salt = "today-sync-salt1".toByteArray()
-
     override fun saveLocalPassword(value: String?) {
         password = value
     }
 
     override fun loadLocalPassword(): String? = password
-
-    override fun loadOrCreateCloudCipherSalt(): ByteArray = salt.copyOf()
-
-    override fun rotateCloudCipherSalt(): ByteArray {
-        salt = "today-rotated-1".toByteArray()
-        return salt.copyOf()
-    }
-
-    override fun saveCloudCipherSalt(bytes: ByteArray) {
-        salt = bytes.copyOf()
-    }
 }
 
 private class FakeRemoteStorage : RemoteStorage {

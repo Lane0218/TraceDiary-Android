@@ -245,7 +245,7 @@ class SettingsViewModelTest {
             content = "云端内容",
             updatedAt = Instant.parse("2026-05-20T01:00:00Z"),
         )
-        val key = CryptoBox.deriveKey("password", "salt-123456789012".toByteArray())
+        val key = CryptoBox.deriveCloudKey("password")
         val storage = FakeRemoteStorage()
         storage.seed(
             key = SyncObjectKeys.diaryObjectKey(date),
@@ -255,10 +255,10 @@ class SettingsViewModelTest {
         val diaryRepo = FakeDiaryRepository(listOf(localEntry))
         val syncEngine = SyncEngine(
             storageProvider = { storage },
-            secureCredentialStore = FakeCredentialStore("password", "salt-123456789012".toByteArray()),
             diaryRepository = diaryRepo,
             annualSummaryRepository = FakeAnnualSummaryRepository(),
             syncMetadataRepository = FakeSyncMetadataRepository(),
+            passwordProvider = { "password" },
             clock = Clock.fixed(Instant.parse("2026-05-20T03:00:00Z"), ZoneOffset.UTC),
         )
         viewModel = SettingsViewModel(
@@ -581,23 +581,12 @@ class SettingsViewModelTest {
 
     private class FakeCredentialStore(
         private var password: String?,
-        salt: ByteArray,
     ) : CloudCipherCredentialStore {
-        private var currentSalt = salt.copyOf()
-
         override fun saveLocalPassword(value: String?) {
             password = value
         }
 
         override fun loadLocalPassword(): String? = password
-
-        override fun loadOrCreateCloudCipherSalt(): ByteArray = currentSalt.copyOf()
-
-        override fun rotateCloudCipherSalt(): ByteArray = currentSalt
-
-        override fun saveCloudCipherSalt(bytes: ByteArray) {
-            currentSalt = bytes.copyOf()
-        }
     }
 
     private class FakeDiaryRepository(

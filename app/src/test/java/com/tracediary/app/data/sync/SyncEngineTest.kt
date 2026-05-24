@@ -4,7 +4,6 @@ import com.tracediary.app.domain.model.AnnualSummary
 import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.model.SyncMetadata
 import com.tracediary.app.domain.model.SyncState
-import com.tracediary.app.data.security.CloudCipherCredentialStore
 import com.tracediary.app.data.security.CryptoBox
 import com.tracediary.app.domain.repository.AnnualSummaryRepository
 import com.tracediary.app.domain.repository.DiaryRepository
@@ -35,8 +34,7 @@ class SyncEngineTest {
     private val baseInstant: Instant = Instant.parse("2025-05-18T10:00:00Z")
     private val clock: Clock = Clock.fixed(baseInstant, ZoneOffset.UTC)
     private val testPassword = "sync-password"
-    private val testSalt = "salt-123456789012".toByteArray()
-    private val testKey = CryptoBox.deriveKey(testPassword, testSalt)
+    private val testKey = CryptoBox.deriveCloudKey(testPassword)
 
     private fun newEntry(
         date: LocalDate,
@@ -59,15 +57,15 @@ class SyncEngineTest {
         diaryRepo: FakeDiaryRepository,
         annualRepo: FakeAnnualSummaryRepository,
         metaRepo: FakeSyncMetadataRepository,
-        credentialStore: FakeCredentialStore = FakeCredentialStore(testPassword, testSalt),
+        credentialStore: FakeCredentialStore = FakeCredentialStore(testPassword),
         pendingRepo: FakePendingSyncDeletionRepository = FakePendingSyncDeletionRepository(),
     ): SyncEngine = SyncEngine(
         storageProvider = { storage },
-        secureCredentialStore = credentialStore,
         diaryRepository = diaryRepo,
         annualSummaryRepository = annualRepo,
         syncMetadataRepository = metaRepo,
         pendingSyncDeletionRepository = pendingRepo,
+        passwordProvider = { credentialStore.loadLocalPassword() },
         clock = clock,
     )
 
@@ -117,14 +115,14 @@ class SyncEngineTest {
             diaryRepo,
             annualRepo,
             metaRepo,
-            credentialStore = FakeCredentialStore(null, testSalt),
+            credentialStore = FakeCredentialStore(null),
         )
 
         val result = engine.uploadAll()
 
         assertTrue(result is RemoteResult.Err)
         assertEquals(ErrorCode.AUTH, (result as RemoteResult.Err).code)
-        assertEquals("请先在设置页设置同步密码", result.message)
+        assertEquals("请先输入应用密码", result.message)
     }
 
     @Test
@@ -478,7 +476,7 @@ class SyncEngineTest {
     }
 
     @Test
-    fun mergeAll_legacyRemoteWithLocalEntry_uploadsEncryptedLocalEvenWhenRemoteNewer() = runTest {
+    fun mergeAll_legacyRemoteWithLocalEntry_returnsAuthError() = runTest {
         val date = LocalDate.of(2025, 5, 18)
         val localEntry = newEntry(date, content = "本地内容", updatedAt = baseInstant.minusSeconds(600))
         val remoteEntry = newEntry(date, content = "旧明文远端", updatedAt = baseInstant)
@@ -495,12 +493,8 @@ class SyncEngineTest {
 
         val result = engine.mergeAll()
 
-        assertTrue(result is RemoteResult.Ok)
-        assertEquals(1, (result as RemoteResult.Ok).value.uploaded)
-        val body = storage.objects[SyncObjectKeys.diaryObjectKey(date)]!!.body.toString(Charsets.UTF_8)
-        assertTrue(body.contains("\"cipher\""))
-        assertFalse(body.contains("本地内容"))
-        assertEquals("本地内容", decodeDiary(storage.objects[SyncObjectKeys.diaryObjectKey(date)]!!.body, testKey).content)
+        assertTrue(result is RemoteResult.Err)
+        assertEquals(ErrorCode.AUTH, (result as RemoteResult.Err).code)
     }
 
     @Test
@@ -545,34 +539,33 @@ class SyncEngineTest {
         val storage = FakeRemoteStorage()
         storage.seed(SyncObjectKeys.diaryObjectKey(date), encodeDiary(entry, testKey), baseInstant)
         storage.seed(SyncObjectKeys.annualObjectKey(2025), encodeAnnual(summary, testKey), baseInstant)
-        val credentialStore = FakeCredentialStore(testPassword, testSalt)
+        val credentialStore = FakeCredentialStore(testPassword)
         val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo, credentialStore)
 
         val result = engine.rotateSyncPassword(testPassword, "new-password")
 
         assertTrue(result is RemoteResult.Ok)
-        assertEquals("new-password", credentialStore.loadLocalPassword())
-        val newKey = CryptoBox.deriveKey("new-password", credentialStore.loadOrCreateCloudCipherSalt())
+        assertEquals(testPassword, credentialStore.loadLocalPassword())
+        val newKey = CryptoBox.deriveCloudKey("new-password")
         assertEquals("远端内容", decodeDiary(storage.objects[SyncObjectKeys.diaryObjectKey(date)]!!.body, newKey).content)
         assertEquals("2025 年度总结", decodeAnnual(storage.objects[SyncObjectKeys.annualObjectKey(2025)]!!.body, newKey).content)
     }
 
     @Test
-    fun rotateSyncPassword_decodeFailure_keepsPasswordAndSalt() = runTest {
+    fun rotateSyncPassword_decodeFailure_keepsPassword() = runTest {
         val date = LocalDate.of(2025, 5, 18)
         val diaryRepo = FakeDiaryRepository()
         val annualRepo = FakeAnnualSummaryRepository()
         val metaRepo = FakeSyncMetadataRepository()
         val storage = FakeRemoteStorage()
         storage.seed(SyncObjectKeys.diaryObjectKey(date), """{"v":1,"date":"2025-05-18","updatedAt":"2025-05-18T10:00:00Z","cipher":"bad"}""".toByteArray(), baseInstant)
-        val credentialStore = FakeCredentialStore(testPassword, testSalt)
+        val credentialStore = FakeCredentialStore(testPassword)
         val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo, credentialStore)
 
         val result = engine.rotateSyncPassword(testPassword, "new-password")
 
         assertTrue(result is RemoteResult.Err)
         assertEquals(testPassword, credentialStore.loadLocalPassword())
-        assertTrue(testSalt.contentEquals(credentialStore.loadOrCreateCloudCipherSalt()))
     }
 
     @Test
@@ -890,28 +883,12 @@ private class FakeSyncMetadataRepository : SyncMetadataRepository {
 
 private class FakeCredentialStore(
     private var password: String?,
-    salt: ByteArray,
-) : CloudCipherCredentialStore {
-    private var currentSalt: ByteArray = salt.copyOf()
-    private var saltSeq = 0
-
-    override fun saveLocalPassword(value: String?) {
+) {
+    fun saveLocalPassword(value: String?) {
         password = value?.takeIf { it.isNotEmpty() }
     }
 
-    override fun loadLocalPassword(): String? = password
-
-    override fun loadOrCreateCloudCipherSalt(): ByteArray = currentSalt.copyOf()
-
-    override fun rotateCloudCipherSalt(): ByteArray {
-        saltSeq += 1
-        currentSalt = "rotated-salt-$saltSeq".padEnd(16, 'x').toByteArray()
-        return currentSalt.copyOf()
-    }
-
-    override fun saveCloudCipherSalt(bytes: ByteArray) {
-        currentSalt = bytes.copyOf()
-    }
+    fun loadLocalPassword(): String? = password
 }
 
 private class FakePendingSyncDeletionRepository : PendingSyncDeletionRepository {

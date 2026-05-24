@@ -6,7 +6,7 @@ import javax.crypto.spec.GCMParameterSpec
 import java.security.SecureRandom
 
 /**
- * 密码验证器（wrapped DEK）的纯算法实现，独立于 Android Keystore 等系统依赖，
+ * AES-GCM 包裹载荷的纯算法实现，独立于 Android Keystore 等系统依赖，
  * 便于在 JVM 单元测试中验证 AES-GCM 包裹/解包格式。
  *
  * 验证器格式：`[1B 版本=1][12B IV][密文+16B GCM tag]`

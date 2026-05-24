@@ -9,7 +9,7 @@ class CryptoBoxTest {
 
     @Test
     fun encryptToBase64_samePlaintextProducesDifferentCiphertext() {
-        val key = CryptoBox.deriveKey("password", "salt-123456789012".toByteArray())
+        val key = CryptoBox.deriveCloudKey("password")
         val plaintext = "同步内容".toByteArray(Charsets.UTF_8)
 
         val first = CryptoBox.encryptToBase64(key, plaintext)
@@ -21,10 +21,10 @@ class CryptoBoxTest {
     }
 
     @Test
-    fun decryptFromBase64_rejectsWrongPasswordOrSalt() {
+    fun decryptFromBase64_rejectsWrongPassword() {
         val plaintext = "同步内容".toByteArray(Charsets.UTF_8)
-        val correctKey = CryptoBox.deriveKey("password", "salt-123456789012".toByteArray())
-        val wrongKey = CryptoBox.deriveKey("password", "other-salt-12345".toByteArray())
+        val correctKey = CryptoBox.deriveCloudKey("password")
+        val wrongKey = CryptoBox.deriveCloudKey("wrong-password")
         val cipher = CryptoBox.encryptToBase64(correctKey, plaintext)
 
         assertThrows(Throwable::class.java) {
@@ -33,14 +33,14 @@ class CryptoBoxTest {
     }
 
     @Test
-    fun decryptFromBase64_rejectsIllegalVersionByte() {
-        val key = CryptoBox.deriveKey("password", "salt-123456789012".toByteArray())
+    fun decryptFromBase64_rejectsTamperedIv() {
+        val key = CryptoBox.deriveCloudKey("password")
         val cipher = CryptoBox.encryptToBase64(key, "同步内容".toByteArray(Charsets.UTF_8))
         val raw = java.util.Base64.getDecoder().decode(cipher)
         raw[0] = 99
         val corrupted = java.util.Base64.getEncoder().encodeToString(raw)
 
-        assertThrows(IllegalArgumentException::class.java) {
+        assertThrows(Throwable::class.java) {
             CryptoBox.decryptFromBase64(key, corrupted)
         }
     }

@@ -10,23 +10,18 @@ import kotlinx.serialization.Serializable
  *   否则只要拿不到密码就连同步策略都无法运转。
  * - [date]/[year] 是文件名的天然映射，藏起来也没意义。
  *
- * 旧版（W1）上传过的明文 JSON 用 [SyncDiaryDto]/[SyncAnnualDto] 直接序列化，没有 cipher 字段。
- * 解码时按"是否含 cipher"分流：含则信封解密，不含按旧明文反序列化。
+ * 旧版明文 JSON、带版本/随机 salt 的旧信封不再兼容；新安装和新云端数据从当前格式开始。
  */
 @Serializable
 data class DiaryEnvelope(
-    val v: Int = 1,
     val date: String,
     val updatedAt: String,
     val cipher: String,
-    val salt: String? = null,
 )
 
 @Serializable
 data class AnnualEnvelope(
-    val v: Int = 1,
     val year: Int,
     val updatedAt: String,
     val cipher: String,
-    val salt: String? = null,
 )

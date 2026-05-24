@@ -79,6 +79,7 @@ class DailyReminderWorker(
 
     private suspend fun loadTodayEntry(context: Context): DiaryEntry? {
         val application = context.applicationContext as? TraceDiaryApplication ?: return null
+        if (!application.isDataLayerReady()) return null
         return withContext(Dispatchers.IO) {
             application.diaryRepository.getEntry(LocalDate.now())
         }

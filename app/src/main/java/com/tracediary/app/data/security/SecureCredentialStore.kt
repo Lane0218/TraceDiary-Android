@@ -7,16 +7,11 @@ import androidx.security.crypto.MasterKey
 interface CloudCipherCredentialStore {
     fun saveLocalPassword(value: String?)
     fun loadLocalPassword(): String?
-    fun loadOrCreateCloudCipherSalt(): ByteArray
-    fun rotateCloudCipherSalt(): ByteArray
-    fun saveCloudCipherSalt(bytes: ByteArray)
 }
 
 /**
- * 云同步敏感字段（AccessKey / 本机数据密码）安全存储。
- *
- * 与 [PassphraseStore] 隔离：使用独立的 prefs 文件 [PREF_FILE_NAME]，
- * 避免数据库 passphrase 与云凭证写到同一个加密文件，便于分别清空与排错。
+ * 云同步敏感字段（AccessKey）与本机便利密码缓存。
+ * 本机缓存只用于“记住密码”，不参与数据可恢复性。
  */
 class SecureCredentialStore(context: Context) : CloudCipherCredentialStore {
 
@@ -78,43 +73,10 @@ class SecureCredentialStore(context: Context) : CloudCipherCredentialStore {
         return if (value.isNullOrEmpty()) null else value
     }
 
-    /**
-     * 同步加密用的 salt。首次调用时随机生成 16 字节 salt 并持久化，之后直接读取。
-     * 与本机密码分开：salt 不是机密，但变更会让所有云端密文不可解，因此一旦生成不修改。
-     * 修改密码时 [rotateCloudCipherSalt] 会显式生成新 salt 并触发 rekey 流程。
-     */
-    @Synchronized
-    override fun loadOrCreateCloudCipherSalt(): ByteArray {
-        val existing = prefs.getString(KEY_CLOUD_CIPHER_SALT, null)
-        if (existing != null) return android.util.Base64.decode(existing, android.util.Base64.NO_WRAP)
-        val generated = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
-        prefs.edit()
-            .putString(KEY_CLOUD_CIPHER_SALT, android.util.Base64.encodeToString(generated, android.util.Base64.NO_WRAP))
-            .apply()
-        return generated
-    }
-
-    /** 修改同步密码时生成新的 salt。调用方负责用旧 key 解远端、用新 key 重新上传。 */
-    @Synchronized
-    override fun rotateCloudCipherSalt(): ByteArray {
-        val generated = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
-        saveCloudCipherSalt(generated)
-        return generated
-    }
-
-    /** 显式写入指定 salt，用于密码轮换失败后的回滚恢复。 */
-    @Synchronized
-    override fun saveCloudCipherSalt(bytes: ByteArray) {
-        prefs.edit()
-            .putString(KEY_CLOUD_CIPHER_SALT, android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP))
-            .apply()
-    }
-
     private companion object {
         const val PREF_FILE_NAME = "tracediary_credentials_prefs"
         const val KEY_ACCESS_KEY_ID = "cloud_access_key_id"
         const val KEY_ACCESS_KEY_SECRET = "cloud_access_key_secret"
         const val KEY_LOCAL_PASSWORD = "local_password"
-        const val KEY_CLOUD_CIPHER_SALT = "cloud_cipher_salt"
     }
 }

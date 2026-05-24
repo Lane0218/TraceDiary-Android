@@ -1,10 +1,8 @@
 package com.tracediary.app.data.security
 
 import android.content.Context
-import android.util.Base64
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import javax.crypto.SecretKey
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,11 +11,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * 应用密码 / 数据密钥管理。
  *
  * 模型：
- * - 数据库密钥（DEK）由 [PassphraseStore] 持有的 32 字节随机串提供，DEK 的存在不依赖应用密码。
- * - 应用密码派生 KEK（PBKDF2）后，用 AES-GCM 把 DEK 包成"验证器"（wrapped DEK）持久化在
- *   独立的 EncryptedSharedPreferences 文件中。验证器仅用于校验密码正确性，不影响 DB 实际打开。
- * - 同时保留与现有 [CloudCipherCredentialStore.loadOrCreateCloudCipherSalt] 配合的"云密码"，
- *   等价于应用密码——一处密码同时承担"App 解锁 + 数据密钥保护 + 云端加密"三个职责。
+ * - 唯一秘密是用户应用密码；数据库、云端与验证器分别用固定公开 salt 派生 key。
+ * - 验证器是固定明文载荷的 AES-GCM 密文，只用于判断密码是否正确，不包含随机 DEK。
+ * - “记住密码”只把应用密码缓存在本机 EncryptedSharedPreferences 中，关闭后不会影响
+ *   本地数据库或云端对象在其它设备上的可恢复性。
  *
  * 状态：
  * - [AppLockState.NeedSetup]：未设置应用密码（首次启动 / 升级清库）。
@@ -27,7 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 class AppPasswordManager(
     context: Context,
     private val credentialStore: SecureCredentialStore,
-    private val passphraseStore: PassphraseStore = PassphraseStore(context),
+    private val onPasswordAccepted: (String) -> Unit = {},
 ) {
 
     private val appContext = context.applicationContext
@@ -65,6 +62,7 @@ class AppPasswordManager(
                 runCatching { verifyPassword(stored) }
                     .onSuccess { ok ->
                         if (ok) {
+                            onPasswordAccepted(stored)
                             unlockedFlag = true
                             activePasswordRef = stored
                         }
@@ -95,16 +93,13 @@ class AppPasswordManager(
         if (password.isEmpty()) return Result.failure(IllegalArgumentException("密码不能为空"))
         if (isPasswordConfigured()) return Result.failure(IllegalStateException("已设置应用密码，请使用修改密码"))
         return runCatching {
-            // DEK 取自现有 PassphraseStore（与 SQLCipher 实际打开使用的字节串一致）。
-            val dek = passphraseStore.getOrCreate()
-            val salt = credentialStore.loadOrCreateCloudCipherSalt()
-            val kek = CryptoBox.deriveKey(password, salt)
-            val verifier = wrapDek(kek, dek)
+            val verifier = createVerifier(password)
             prefs.edit()
-                .putString(KEY_VERIFIER, Base64.encodeToString(verifier, Base64.NO_WRAP))
+                .putString(KEY_VERIFIER, verifier)
                 .putBoolean(KEY_REMEMBER_PASSWORD, remember)
                 .apply()
             credentialStore.saveLocalPassword(if (remember) password else null)
+            onPasswordAccepted(password)
             unlockedFlag = true
             activePasswordRef = password
             publishState()
@@ -118,6 +113,7 @@ class AppPasswordManager(
         return runCatching {
             val ok = verifyPassword(password)
             if (!ok) throw IllegalArgumentException("密码错误")
+            onPasswordAccepted(password)
             unlockedFlag = true
             activePasswordRef = password
             // 解锁成功且当前是"记住密码"配置，把内存中的密码同步到 SecureCredentialStore，
@@ -129,7 +125,7 @@ class AppPasswordManager(
         }
     }
 
-    /** 立即上锁。内存态 [unlockedFlag] 与 [activePasswordRef] 一并清空；持久化的验证器与 salt 不变。 */
+    /** 立即上锁。内存态 [unlockedFlag] 与 [activePasswordRef] 一并清空；持久化的验证器不变。 */
     fun lockNow() {
         unlockedFlag = false
         activePasswordRef = null
@@ -143,22 +139,16 @@ class AppPasswordManager(
     }
 
     /**
-     * 修改应用密码：先校验旧密码 → 重新包裹 DEK → 让调用方触发云端 rekey。
-     *
-     * 若云端 rekey 由 [com.tracediary.app.data.sync.SyncEngine.rotateSyncPassword] 完成，
-     * 调用方应在本方法返回 success 后再调用 SyncEngine 同步轮换；
-     * 这里只负责本地验证器的更新，因此本地失败不会影响云端。
+     * 修改应用密码：只更新本地验证器与便利缓存。调用方必须先完成 SQLCipher rekey
+     * 与云端对象 rekey，确认成功后再调用本方法。
      */
     fun changePassword(oldPassword: String, newPassword: String): Result<Unit> {
         if (newPassword.isEmpty()) return Result.failure(IllegalArgumentException("新密码不能为空"))
         if (!verifyPassword(oldPassword)) return Result.failure(IllegalArgumentException("旧密码错误"))
         return runCatching {
-            val dek = passphraseStore.getOrCreate()
-            val salt = credentialStore.loadOrCreateCloudCipherSalt()
-            val kek = CryptoBox.deriveKey(newPassword, salt)
-            val verifier = wrapDek(kek, dek)
+            val verifier = createVerifier(newPassword)
             prefs.edit()
-                .putString(KEY_VERIFIER, Base64.encodeToString(verifier, Base64.NO_WRAP))
+                .putString(KEY_VERIFIER, verifier)
                 .apply()
             if (isRememberPasswordEnabled()) {
                 credentialStore.saveLocalPassword(newPassword)
@@ -171,10 +161,9 @@ class AppPasswordManager(
     /** 仅校验密码是否能解开当前验证器。不修改解锁状态。 */
     fun verifyPassword(password: String): Boolean {
         val raw = prefs.getString(KEY_VERIFIER, null) ?: return false
-        val bytes = runCatching { Base64.decode(raw, Base64.NO_WRAP) }.getOrNull() ?: return false
-        val salt = credentialStore.loadOrCreateCloudCipherSalt()
-        val kek = CryptoBox.deriveKey(password, salt)
-        return runCatching { unwrapDek(kek, bytes) }.isSuccess
+        val key = CryptoBox.derivePasswordVerifierKey(password)
+        val payload = runCatching { CryptoBox.decryptFromBase64(key, raw) }.getOrNull() ?: return false
+        return payload.contentEquals(CryptoBox.verifierPayload())
     }
 
     private fun isPasswordConfigured(): Boolean = prefs.contains(KEY_VERIFIER)
@@ -189,14 +178,11 @@ class AppPasswordManager(
         _state.value = computeState()
     }
 
-    /**
-     * 验证器格式：`[1B 版本=1][12B IV][密文+16B GCM tag]`。委托给 [PasswordVerifierCodec] 完成。
-     */
-    private fun wrapDek(kek: SecretKey, dek: ByteArray): ByteArray =
-        PasswordVerifierCodec.wrap(kek, dek)
-
-    private fun unwrapDek(kek: SecretKey, raw: ByteArray): ByteArray =
-        PasswordVerifierCodec.unwrap(kek, raw)
+    private fun createVerifier(password: String): String =
+        CryptoBox.encryptToBase64(
+            key = CryptoBox.derivePasswordVerifierKey(password),
+            plaintext = CryptoBox.verifierPayload(),
+        )
 
     private companion object {
         const val PREF_FILE_NAME = "tracediary_app_password_prefs"

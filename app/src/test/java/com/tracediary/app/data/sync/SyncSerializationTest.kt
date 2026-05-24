@@ -16,7 +16,7 @@ import javax.crypto.SecretKey
 
 class SyncSerializationTest {
 
-    private val key: SecretKey = CryptoBox.deriveKey("sync-password", "salt-123456789012".toByteArray())
+    private val key: SecretKey = CryptoBox.deriveCloudKey("sync-password")
 
     @Test
     fun encodeThenDecodeDiary_isLossless() {
@@ -60,7 +60,7 @@ class SyncSerializationTest {
     }
 
     @Test
-    fun decodeDiary_ignoresUnknownFields() {
+    fun decodeDiary_rejectsLegacyPlaintext() {
         val json = """
             {
               "date": "2025-01-02",
@@ -73,15 +73,13 @@ class SyncSerializationTest {
             }
         """.trimIndent()
 
-        val decoded = decodeDiary(json.toByteArray(Charsets.UTF_8), key)
-
-        assertEquals(LocalDate.of(2025, 1, 2), decoded.date)
-        assertEquals("hello", decoded.content)
-        assertEquals(Instant.parse("2025-01-02T03:04:06Z"), decoded.updatedAt)
+        assertThrows(Throwable::class.java) {
+            decodeDiary(json.toByteArray(Charsets.UTF_8), key)
+        }
     }
 
     @Test
-    fun decodeAnnual_ignoresUnknownFields() {
+    fun decodeAnnual_rejectsLegacyPlaintext() {
         val json = """
             {
               "year": 2025,
@@ -93,10 +91,9 @@ class SyncSerializationTest {
             }
         """.trimIndent()
 
-        val decoded = decodeAnnual(json.toByteArray(Charsets.UTF_8), key)
-
-        assertEquals(2025, decoded.year)
-        assertEquals("y", decoded.content)
+        assertThrows(Throwable::class.java) {
+            decodeAnnual(json.toByteArray(Charsets.UTF_8), key)
+        }
     }
 
     @Test

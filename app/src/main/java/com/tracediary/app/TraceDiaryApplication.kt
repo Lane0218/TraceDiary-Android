@@ -10,7 +10,7 @@ import com.tracediary.app.data.repository.DefaultDiaryRepository
 import com.tracediary.app.data.repository.DefaultPendingSyncDeletionRepository
 import com.tracediary.app.data.repository.DefaultSyncMetadataRepository
 import com.tracediary.app.data.security.AppPasswordManager
-import com.tracediary.app.data.security.PassphraseStore
+import com.tracediary.app.data.security.CryptoBox
 import com.tracediary.app.data.security.SecureCredentialStore
 import com.tracediary.app.data.settings.DataStoreUserPreferencesRepository
 import com.tracediary.app.data.settings.UserPreferences
@@ -83,7 +83,7 @@ class TraceDiaryApplication : Application() {
     val statisticsUseCase = DiaryStatisticsUseCase()
     val searchUseCase = SearchDiaryEntriesUseCase()
 
-    // 导入导出用例：lazy 初始化，确保 onCreate 完成后 repository 已就绪。
+    // 导入导出用例：lazy 初始化，确保解锁并初始化数据层后 repository 已就绪。
     val exportDiaryDataUseCase: ExportDiaryDataUseCase by lazy {
         ExportDiaryDataUseCase(
             diaryRepository = diaryRepository,
@@ -113,34 +113,11 @@ class TraceDiaryApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // SQLCipher 加密本地数据库。passphrase 通过 EncryptedSharedPreferences 安全存放，
-        // 首版采用破坏式迁移（既有数据为测试数据，可丢弃）。
         // sqlcipher-android 4.6+ 通过 System.loadLibrary 加载原生库，且 .so 已 16 KB 对齐。
         System.loadLibrary("sqlcipher")
-        val passphrase = PassphraseStore(this).getOrCreate()
-        database = buildDatabase(passphrase)
-
-        diaryRepository = DefaultDiaryRepository(database.diaryEntryDao())
-        annualSummaryRepository = DefaultAnnualSummaryRepository(database.annualSummaryDao())
         userPreferencesRepository = DataStoreUserPreferencesRepository(applicationContext)
         dailyReminderScheduler = DailyReminderScheduler(applicationContext)
-
-        // 同步相关：先建凭证库，再建元数据仓库，最后组装 SyncEngine。
         secureCredentialStore = SecureCredentialStore(applicationContext)
-        appPasswordManager = AppPasswordManager(applicationContext, secureCredentialStore)
-        syncMetadataRepository = DefaultSyncMetadataRepository(database.syncMetadataDao())
-        pendingSyncDeletionRepository =
-            DefaultPendingSyncDeletionRepository(database.pendingSyncDeletionDao())
-        syncEngine = SyncEngine(
-            storageProvider = { buildRemoteStorageOrNull() },
-            secureCredentialStore = secureCredentialStore,
-            diaryRepository = diaryRepository,
-            annualSummaryRepository = annualSummaryRepository,
-            syncMetadataRepository = syncMetadataRepository,
-            pendingSyncDeletionRepository = pendingSyncDeletionRepository,
-            passwordProvider = { appPasswordManager.loadActivePassword() },
-            clock = Clock.systemDefaultZone(),
-        )
 
         runBlocking(Dispatchers.IO) {
             val prefs = userPreferencesRepository.preferences.first()
@@ -161,6 +138,45 @@ class TraceDiaryApplication : Application() {
 
         // 周期同步调度器：仅实例化，由用户在设置页切换开关时显式 schedule / cancel。
         syncScheduler = SyncScheduler(applicationContext)
+
+        appPasswordManager = AppPasswordManager(
+            context = applicationContext,
+            credentialStore = secureCredentialStore,
+            onPasswordAccepted = { password -> initializeDataLayer(password) },
+        )
+    }
+
+    @Synchronized
+    fun isDataLayerReady(): Boolean = ::database.isInitialized
+
+    @Synchronized
+    fun initializeDataLayer(password: String) {
+        if (::database.isInitialized) return
+        val passphrase = CryptoBox.deriveDatabasePassphrase(password)
+        database = buildDatabase(passphrase)
+
+        diaryRepository = DefaultDiaryRepository(database.diaryEntryDao())
+        annualSummaryRepository = DefaultAnnualSummaryRepository(database.annualSummaryDao())
+        syncMetadataRepository = DefaultSyncMetadataRepository(database.syncMetadataDao())
+        pendingSyncDeletionRepository =
+            DefaultPendingSyncDeletionRepository(database.pendingSyncDeletionDao())
+        syncEngine = SyncEngine(
+            storageProvider = { buildRemoteStorageOrNull() },
+            diaryRepository = diaryRepository,
+            annualSummaryRepository = annualSummaryRepository,
+            syncMetadataRepository = syncMetadataRepository,
+            pendingSyncDeletionRepository = pendingSyncDeletionRepository,
+            passwordProvider = { appPasswordManager.loadActivePassword() },
+            clock = Clock.systemDefaultZone(),
+        )
+    }
+
+    @Synchronized
+    fun rekeyDatabase(newPassword: String) {
+        check(::database.isInitialized) { "数据库尚未初始化" }
+        val newPassphrase = CryptoBox.deriveDatabasePassphraseString(newPassword)
+        val escaped = newPassphrase.replace("'", "''")
+        database.openHelper.writableDatabase.execSQL("PRAGMA rekey = '$escaped'")
     }
 
     fun resolveCurrentAppDate(now: LocalDateTime = LocalDateTime.now()): LocalDate {
@@ -230,7 +246,7 @@ class TraceDiaryApplication : Application() {
         const val DB_META_PREFS = "tracediary_db_meta"
         const val KEY_DB_FORMAT_VERSION = "db_format_version"
         // 升级 SQLCipher 大版本或修改加密参数时 +1，触发启动时清库重建。
-        // v2：新增 pending_sync_deletions 表 + 用户密码包裹 SQLCipher 数据密钥（DEK）。
-        const val CURRENT_DB_FORMAT_VERSION = 2
+        // v3：SQLCipher passphrase 改为由应用密码固定派生，不再使用本机随机 passphrase。
+        const val CURRENT_DB_FORMAT_VERSION = 3
     }
 }

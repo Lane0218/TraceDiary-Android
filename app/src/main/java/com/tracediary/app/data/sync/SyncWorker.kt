@@ -21,6 +21,7 @@ class SyncWorker(
 
     override suspend fun doWork(): Result {
         val app = applicationContext as? TraceDiaryApplication ?: return Result.success()
+        if (!app.isDataLayerReady()) return Result.success()
         val engine = app.syncEngine
         return when (val outcome = engine.mergeAll()) {
             is RemoteResult.Ok -> Result.success()

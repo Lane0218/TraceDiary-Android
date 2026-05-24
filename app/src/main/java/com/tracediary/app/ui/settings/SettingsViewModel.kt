@@ -100,7 +100,7 @@ data class SettingsUiState(
     val syncRegion: String = "",
     val syncDirectory: String = "TraceDiary/",
     val sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.LatestFirst,
-    // AK/SK 与本机密码：通过 SecureCredentialStore（EncryptedSharedPreferences）持久化。
+    // AK/SK 与“记住密码”缓存：通过 SecureCredentialStore（EncryptedSharedPreferences）持久化。
     val syncAccessKeyId: String = "",
     val syncAccessKeySecret: String = "",
     val localPassword: String = "",
@@ -149,6 +149,7 @@ class SettingsViewModel(
     private val appPasswordManager: AppPasswordManager? = null,
     private val syncMetadataRepository: SyncMetadataRepository? = null,
     private val remoteStorageFactory: ((SettingsUiState) -> RemoteStorage?)? = null,
+    private val databaseRekeyer: (suspend (String) -> Unit)? = null,
     private val zoneId: ZoneId = ZoneId.systemDefault(),
     private val clock: Clock = Clock.system(zoneId),
 ) : ViewModel() {
@@ -161,7 +162,7 @@ class SettingsViewModel(
     val syncEngineState: StateFlow<SyncEngine.SyncEngineState>? = syncEngine?.state
 
     init {
-        // 启动时把已持久化的 AK/SK 与本机密码回填到内存 state，保证页面打开就能看到。
+        // 启动时把已持久化的 AK/SK 与本机密码缓存回填到内存 state，保证页面打开就能看到。
         secureCredentialStore?.let { store ->
             val cred = store.loadCloudCredential()
             val pwd = store.loadLocalPassword().orEmpty()
@@ -344,7 +345,16 @@ class SettingsViewModel(
 
         _uiState.update { it.copy(passwordRotationStatus = PasswordRotationStatus.Working) }
         viewModelScope.launch {
-            // 仅在云同步引擎已配置时执行远端 rekey；纯本地用户也允许只更新本地验证器。
+            try {
+                withContext(Dispatchers.IO) { databaseRekeyer?.invoke(newPassword) }
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                _uiState.update {
+                    it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("本地数据库更新失败：${t.message ?: "未知错误"}"))
+                }
+                return@launch
+            }
+
             val engine = syncEngine
             val remoteResult: RemoteResult<SyncEngine.SyncSummary>? = if (engine != null) {
                 try {
@@ -359,13 +369,15 @@ class SettingsViewModel(
                 }
             } else null
 
-            // 远端 rekey 出错或处于未配置态时，AUTH 错误视为"无云同步"——继续本地轮换；其它错误回滚。
+            // 远端未配置时继续本地轮换；其它错误回滚本地 SQLCipher passphrase。
             val remoteOk = when (remoteResult) {
                 null -> true
                 is RemoteResult.Ok -> true
-                is RemoteResult.Err -> remoteResult.code == com.tracediary.app.data.sync.ErrorCode.AUTH
+                is RemoteResult.Err -> remoteResult.code == com.tracediary.app.data.sync.ErrorCode.AUTH &&
+                    remoteResult.message == "未配置云同步"
             }
             if (!remoteOk) {
+                runCatching { withContext(Dispatchers.IO) { databaseRekeyer?.invoke(oldPassword) } }
                 val err = remoteResult as RemoteResult.Err
                 _uiState.update {
                     it.copy(passwordRotationStatus = PasswordRotationStatus.Failed(err.message))
@@ -373,9 +385,9 @@ class SettingsViewModel(
                 return@launch
             }
 
-            // 远端成功（或无云端）后再更新本地验证器。
             val localOk = manager?.changePassword(oldPassword, newPassword)?.isSuccess ?: true
             if (!localOk) {
+                runCatching { withContext(Dispatchers.IO) { databaseRekeyer?.invoke(oldPassword) } }
                 _uiState.update {
                     it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("本地密码更新失败"))
                 }
@@ -763,6 +775,7 @@ class SettingsViewModel(
                         appPasswordManager = application.appPasswordManager,
                         syncMetadataRepository = application.syncMetadataRepository,
                         remoteStorageFactory = { snapshot -> createRemoteStorage(snapshot) },
+                        databaseRekeyer = { newPassword -> application.rekeyDatabase(newPassword) },
                     ) as T
                 }
             }

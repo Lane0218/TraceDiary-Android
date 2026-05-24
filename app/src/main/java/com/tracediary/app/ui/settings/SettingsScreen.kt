@@ -1513,7 +1513,7 @@ private fun stageLabel(stage: SyncEngine.SyncStage): String = when (stage) {
     SyncEngine.SyncStage.Uploading -> "上传中"
     SyncEngine.SyncStage.Downloading -> "下载中"
     SyncEngine.SyncStage.Merging -> "合并中"
-    SyncEngine.SyncStage.Rekeying -> "正在更新同步密码"
+    SyncEngine.SyncStage.Rekeying -> "正在更新应用密码"
     SyncEngine.SyncStage.Deleting -> "正在删除云端对象"
     SyncEngine.SyncStage.Done -> "已完成"
     SyncEngine.SyncStage.Failed -> "失败"
