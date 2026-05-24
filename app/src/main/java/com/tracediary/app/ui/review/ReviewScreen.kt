@@ -91,6 +91,7 @@ import java.time.format.DateTimeFormatter
 
 private val EntryDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
 private const val ContentPreviewLimit: Int = 60
+private val SearchControlsHeight = 124.dp
 
 @Composable
 fun ReviewScreen(
@@ -243,7 +244,9 @@ private fun AnnualSummaryList(
                 ReviewEmptyState(
                     title = "尚未撰写年度总结",
                     description = "点击右下角的“+”按钮，开启你的年度回顾与总结吧",
-                    modifier = Modifier.fillParentMaxHeight(),
+                    modifier = Modifier
+                        .fillParentMaxHeight()
+                        .padding(top = SearchControlsHeight),
                 )
             }
         }
