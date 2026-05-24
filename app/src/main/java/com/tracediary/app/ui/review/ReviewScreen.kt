@@ -649,7 +649,7 @@ private fun ReviewEmptyState(
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(
-            modifier = Modifier.padding(top = 156.dp),
+            modifier = Modifier.padding(top = 132.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
