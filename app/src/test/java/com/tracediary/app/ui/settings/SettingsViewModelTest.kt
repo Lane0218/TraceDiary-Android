@@ -63,6 +63,7 @@ class SettingsViewModelTest {
         viewModel = SettingsViewModel(
             repository = fakeRepo,
             saveDelayMillis = 0L,
+            ioDispatcher = testDispatcher,
             syncMetadataRepository = FakeSyncMetadataRepository(),
         )
     }
@@ -96,6 +97,7 @@ class SettingsViewModelTest {
         viewModel = SettingsViewModel(
             repository = fakeRepo,
             saveDelayMillis = 0L,
+            ioDispatcher = testDispatcher,
             syncMetadataRepository = metadataRepo,
             zoneId = ZoneId.of("Asia/Shanghai"),
             clock = Clock.fixed(Instant.parse("2026-05-19T02:00:00Z"), ZoneId.of("Asia/Shanghai")),
@@ -115,6 +117,7 @@ class SettingsViewModelTest {
         viewModel = SettingsViewModel(
             repository = fakeRepo,
             saveDelayMillis = 0L,
+            ioDispatcher = testDispatcher,
             syncMetadataRepository = metadataRepo,
             zoneId = zoneId,
             clock = Clock.fixed(Instant.parse("2026-05-19T10:00:00Z"), zoneId),
@@ -139,6 +142,7 @@ class SettingsViewModelTest {
         viewModel = SettingsViewModel(
             repository = fakeRepo,
             saveDelayMillis = 0L,
+            ioDispatcher = testDispatcher,
             syncMetadataRepository = metadataRepo,
             zoneId = zoneId,
             clock = Clock.fixed(Instant.parse("2026-05-19T10:00:00Z"), zoneId),
@@ -189,6 +193,7 @@ class SettingsViewModelTest {
         viewModel = SettingsViewModel(
             repository = fakeRepo,
             saveDelayMillis = 0L,
+            ioDispatcher = testDispatcher,
             syncScheduler = scheduler,
             syncMetadataRepository = FakeSyncMetadataRepository(),
         )
@@ -208,6 +213,7 @@ class SettingsViewModelTest {
         viewModel = SettingsViewModel(
             repository = fakeRepo,
             saveDelayMillis = 0L,
+            ioDispatcher = testDispatcher,
             syncScheduler = scheduler,
             syncMetadataRepository = FakeSyncMetadataRepository(),
         )
@@ -264,6 +270,7 @@ class SettingsViewModelTest {
         viewModel = SettingsViewModel(
             repository = fakeRepo,
             saveDelayMillis = 0L,
+            ioDispatcher = testDispatcher,
             syncEngine = syncEngine,
             syncMetadataRepository = FakeSyncMetadataRepository(),
         )
@@ -361,6 +368,7 @@ class SettingsViewModelTest {
         viewModel = SettingsViewModel(
             repository = fakeRepo,
             saveDelayMillis = 0L,
+            ioDispatcher = testDispatcher,
             syncMetadataRepository = FakeSyncMetadataRepository(),
             remoteStorageFactory = { storage },
         )
@@ -388,6 +396,7 @@ class SettingsViewModelTest {
         viewModel = SettingsViewModel(
             repository = fakeRepo,
             saveDelayMillis = 0L,
+            ioDispatcher = testDispatcher,
             syncMetadataRepository = FakeSyncMetadataRepository(),
             remoteStorageFactory = { storage },
         )
@@ -413,6 +422,7 @@ class SettingsViewModelTest {
         viewModel = SettingsViewModel(
             repository = fakeRepo,
             saveDelayMillis = 0L,
+            ioDispatcher = testDispatcher,
             syncMetadataRepository = FakeSyncMetadataRepository(),
             remoteStorageFactory = { storage },
         )

@@ -221,6 +221,40 @@ class SyncEngineTest {
     }
 
     @Test
+    fun downloadAll_samePasswordOnNewDeviceDecryptsRemoteObjects() = runTest {
+        val date = LocalDate.of(2025, 5, 18)
+        val originalEntry = newEntry(date, content = "跨设备可恢复内容")
+        val originalSummary = newSummary(2025, content = "跨设备年度总结")
+        val firstDeviceDiaryRepo = FakeDiaryRepository(listOf(originalEntry))
+        val firstDeviceAnnualRepo = FakeAnnualSummaryRepository(listOf(originalSummary))
+        val storage = FakeRemoteStorage()
+        val uploadEngine = newEngine(
+            storage = storage,
+            diaryRepo = firstDeviceDiaryRepo,
+            annualRepo = firstDeviceAnnualRepo,
+            metaRepo = FakeSyncMetadataRepository(),
+            credentialStore = FakeCredentialStore(testPassword),
+        )
+
+        val upload = uploadEngine.uploadAll()
+        val secondDeviceDiaryRepo = FakeDiaryRepository()
+        val secondDeviceAnnualRepo = FakeAnnualSummaryRepository()
+        val downloadEngine = newEngine(
+            storage = storage,
+            diaryRepo = secondDeviceDiaryRepo,
+            annualRepo = secondDeviceAnnualRepo,
+            metaRepo = FakeSyncMetadataRepository(),
+            credentialStore = FakeCredentialStore(testPassword),
+        )
+        val download = downloadEngine.downloadAll()
+
+        assertTrue(upload is RemoteResult.Ok)
+        assertTrue(download is RemoteResult.Ok)
+        assertEquals("跨设备可恢复内容", secondDeviceDiaryRepo.store[date]?.content)
+        assertEquals("跨设备年度总结", secondDeviceAnnualRepo.store[2025]?.content)
+    }
+
+    @Test
     fun downloadAll_skipsWhenLocalNewerThanRemote() = runTest {
         val date = LocalDate.of(2025, 5, 18)
         val localEntry = newEntry(date, content = "本地新", updatedAt = baseInstant)

@@ -508,10 +508,6 @@ private class FakeUserPreferencesRepository(
     )
     override val preferences: Flow<UserPreferences> = prefs
 
-    fun setSameDayEntrySortOrder(value: SameDayEntrySortOrder) {
-        prefs.update { it.copy(sameDayEntrySortOrder = value) }
-    }
-
     override suspend fun setReminderEnabled(value: Boolean) {
         prefs.update { it.copy(dailyReminderEnabled = value) }
     }

@@ -29,6 +29,7 @@ import com.tracediary.app.domain.usecase.ImportOptions
 import com.tracediary.app.domain.usecase.ImportResult
 import com.tracediary.app.domain.usecase.MergeStrategy
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -150,6 +151,7 @@ class SettingsViewModel(
     private val syncMetadataRepository: SyncMetadataRepository? = null,
     private val remoteStorageFactory: ((SettingsUiState) -> RemoteStorage?)? = null,
     private val databaseRekeyer: (suspend (String) -> Unit)? = null,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val zoneId: ZoneId = ZoneId.systemDefault(),
     private val clock: Clock = Clock.system(zoneId),
 ) : ViewModel() {
@@ -346,7 +348,7 @@ class SettingsViewModel(
         _uiState.update { it.copy(passwordRotationStatus = PasswordRotationStatus.Working) }
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { databaseRekeyer?.invoke(newPassword) }
+                withContext(ioDispatcher) { databaseRekeyer?.invoke(newPassword) }
             } catch (t: Throwable) {
                 if (t is kotlinx.coroutines.CancellationException) throw t
                 _uiState.update {
@@ -358,7 +360,7 @@ class SettingsViewModel(
             val engine = syncEngine
             val remoteResult: RemoteResult<SyncEngine.SyncSummary>? = if (engine != null) {
                 try {
-                    withContext(Dispatchers.IO) { engine.rotateSyncPassword(oldPassword, newPassword) }
+                    withContext(ioDispatcher) { engine.rotateSyncPassword(oldPassword, newPassword) }
                 } catch (t: Throwable) {
                     if (t is kotlinx.coroutines.CancellationException) throw t
                     RemoteResult.Err(
@@ -377,7 +379,7 @@ class SettingsViewModel(
                     remoteResult.message == "未配置云同步"
             }
             if (!remoteOk) {
-                runCatching { withContext(Dispatchers.IO) { databaseRekeyer?.invoke(oldPassword) } }
+                runCatching { withContext(ioDispatcher) { databaseRekeyer?.invoke(oldPassword) } }
                 val err = remoteResult as RemoteResult.Err
                 _uiState.update {
                     it.copy(passwordRotationStatus = PasswordRotationStatus.Failed(err.message))
@@ -387,7 +389,7 @@ class SettingsViewModel(
 
             val localOk = manager?.changePassword(oldPassword, newPassword)?.isSuccess ?: true
             if (!localOk) {
-                runCatching { withContext(Dispatchers.IO) { databaseRekeyer?.invoke(oldPassword) } }
+                runCatching { withContext(ioDispatcher) { databaseRekeyer?.invoke(oldPassword) } }
                 _uiState.update {
                     it.copy(passwordRotationStatus = PasswordRotationStatus.Failed("本地密码更新失败"))
                 }
@@ -420,22 +422,30 @@ class SettingsViewModel(
         val current = _uiState.value
         if (provider == current.syncProvider) return
         syncDraftsByProvider[current.syncProvider] = current.toSyncConfigurationDraft()
-        val restoredDraft = syncDraftsByProvider[provider]
-        syncDraftsByProvider[provider] = restoredDraft ?: SyncConfigurationDraft.Empty
+        val restoredDraft = syncDraftsByProvider[provider] ?: SyncConfigurationDraft.Empty
+        syncDraftsByProvider[provider] = restoredDraft
         _uiState.update {
             it.copy(
                 syncProvider = provider,
-                syncDisplayName = restoredDraft?.displayName.orEmpty(),
-                syncBucket = restoredDraft?.bucket.orEmpty(),
-                syncRegion = restoredDraft?.region.orEmpty(),
-                syncDirectory = restoredDraft?.directory ?: "TraceDiary/",
-                syncAccessKeyId = restoredDraft?.accessKeyId.orEmpty(),
-                syncAccessKeySecret = restoredDraft?.accessKeySecret.orEmpty(),
+                syncDisplayName = restoredDraft.displayName,
+                syncBucket = restoredDraft.bucket,
+                syncRegion = restoredDraft.region,
+                syncDirectory = restoredDraft.directory,
+                syncAccessKeyId = restoredDraft.accessKeyId,
+                syncAccessKeySecret = restoredDraft.accessKeySecret,
                 saveStatus = SaveStatus.Idle,
                 saveError = null,
             )
         }
-        viewModelScope.launch { repository.setSyncProvider(provider) }
+        viewModelScope.launch {
+            repository.saveSyncConfiguration(
+                provider = provider,
+                displayName = restoredDraft.displayName,
+                bucket = restoredDraft.bucket,
+                region = restoredDraft.region,
+                directory = restoredDraft.directory,
+            )
+        }
     }
 
     fun onSyncDisplayNameChanged(value: String) {
@@ -514,7 +524,7 @@ class SettingsViewModel(
             // 持久化凭证（已由输入回调覆盖，但保存按钮再兜底一次，应对从 init 直接进保存的场景）。
             persistCloudCredential()
 
-            val pingResult = withContext(Dispatchers.IO) { tryConnect(snapshot) }
+            val pingResult = withContext(ioDispatcher) { tryConnect(snapshot) }
             when (pingResult) {
                 is RemoteResult.Ok -> _uiState.update {
                     it.copy(saveStatus = SaveStatus.Saved, saveError = null)
@@ -598,7 +608,7 @@ class SettingsViewModel(
         _uiState.update { it.copy(syncOpStatus = SyncOpStatus.Working(op)) }
         viewModelScope.launch {
             val result = try {
-                withContext(Dispatchers.IO) { action(engine) }
+                withContext(ioDispatcher) { action(engine) }
             } catch (t: Throwable) {
                 if (t is kotlinx.coroutines.CancellationException) throw t
                 RemoteResult.Err(
@@ -639,8 +649,8 @@ class SettingsViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(backupStatus = BackupStatus.Working) }
             try {
-                val payload = withContext(Dispatchers.IO) { useCase(format) }
-                withContext(Dispatchers.IO) {
+                val payload = withContext(ioDispatcher) { useCase(format) }
+                withContext(ioDispatcher) {
                     contentResolver.openOutputStream(uri, "wt")
                         ?.use { it.write(payload.bytes) }
                         ?: error("无法写入所选位置")
@@ -675,12 +685,12 @@ class SettingsViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(backupStatus = BackupStatus.Working) }
             try {
-                val payload = withContext(Dispatchers.IO) {
+                val payload = withContext(ioDispatcher) {
                     contentResolver.openInputStream(uri)?.use { stream ->
                         stream.readBytes()
                     } ?: error("无法读取所选文件")
                 }
-                val result = withContext(Dispatchers.IO) { useCase(payload, options) }
+                val result = withContext(ioDispatcher) { useCase(payload, options) }
                 val message = buildString {
                     append("导入 ")
                     append(result.importedEntries)

@@ -36,8 +36,11 @@ class SyncSerializationTest {
         assertEquals(entry.createdAt, decoded.createdAt)
         assertEquals(entry.updatedAt, decoded.updatedAt)
         // toDomain 强制 syncState=Synced，这里不参与对比
-        assertTrue(encoded.toString(Charsets.UTF_8).contains("\"cipher\""))
-        assertFalse(encoded.toString(Charsets.UTF_8).contains(entry.content))
+        val json = encoded.toString(Charsets.UTF_8)
+        assertTrue(json.contains("\"cipher\""))
+        assertFalse(json.contains("\"v\""))
+        assertFalse(json.contains("\"salt\""))
+        assertFalse(json.contains(entry.content))
     }
 
     @Test
@@ -107,6 +110,23 @@ class SyncSerializationTest {
 
         assertThrows(Throwable::class.java) {
             decodeDiary(bytes, key)
+        }
+    }
+
+    @Test
+    fun decodeDiary_rejectsWrongPassword() {
+        val entry = DiaryEntry(
+            date = LocalDate.of(2025, 3, 14),
+            content = "需要正确应用密码才能解密",
+            createdAt = Instant.parse("2025-03-14T01:02:03Z"),
+            updatedAt = Instant.parse("2025-03-14T05:06:07Z"),
+            syncState = SyncState.LocalOnly,
+        )
+        val encoded = encodeDiary(entry, key)
+        val wrongKey = CryptoBox.deriveCloudKey("wrong-password")
+
+        assertThrows(Throwable::class.java) {
+            decodeDiary(encoded, wrongKey)
         }
     }
 }
