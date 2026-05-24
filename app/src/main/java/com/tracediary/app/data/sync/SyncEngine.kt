@@ -483,7 +483,7 @@ class SyncEngine(
             progress = 0
             for ((remote, entry) in diaryPayloads) {
                 val put = storage.put(
-                    key = remote.key,
+                    key = SyncObjectKeys.diaryObjectKey(entry.date),
                     body = encodeDiary(entry, newKey),
                     contentType = "application/json",
                     ifMatchEtag = remote.etag,
@@ -497,7 +497,7 @@ class SyncEngine(
             }
             for ((remote, summary) in annualPayloads) {
                 val put = storage.put(
-                    key = remote.key,
+                    key = SyncObjectKeys.annualObjectKey(summary.year),
                     body = encodeAnnual(summary, newKey),
                     contentType = "application/json",
                     ifMatchEtag = remote.etag,

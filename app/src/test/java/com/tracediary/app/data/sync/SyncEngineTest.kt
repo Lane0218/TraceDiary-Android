@@ -615,6 +615,27 @@ class SyncEngineTest {
     }
 
     @Test
+    fun rotateSyncPassword_withPathPrefixReencryptsOriginalObjectWithoutNestedPrefix() = runTest {
+        val date = LocalDate.of(2025, 5, 18)
+        val entry = newEntry(date, content = "带目录前缀的远端内容")
+        val diaryRepo = FakeDiaryRepository()
+        val annualRepo = FakeAnnualSummaryRepository()
+        val metaRepo = FakeSyncMetadataRepository()
+        val storage = FakeRemoteStorage(pathPrefix = "TraceDiary")
+        storage.seed(SyncObjectKeys.diaryObjectKey(date), encodeDiary(entry, testKey), baseInstant)
+        val credentialStore = FakeCredentialStore(testPassword)
+        val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo, credentialStore)
+
+        val result = engine.rotateSyncPassword(testPassword, "new-password")
+
+        assertTrue(result is RemoteResult.Ok)
+        assertFalse(storage.objects.containsKey("TraceDiary/TraceDiary/diary/2025-05-18.json"))
+        val body = storage.objects["TraceDiary/diary/2025-05-18.json"]!!.body
+        assertThrows(Throwable::class.java) { decodeDiary(body, testKey) }
+        assertEquals("带目录前缀的远端内容", decodeDiary(body, CryptoBox.deriveCloudKey("new-password")).content)
+    }
+
+    @Test
     fun rotateSyncPassword_decodeFailure_keepsPassword() = runTest {
         val date = LocalDate.of(2025, 5, 18)
         val diaryRepo = FakeDiaryRepository()
@@ -739,6 +760,7 @@ class SyncEngineTest {
 private class FakeRemoteStorage(
     private val forceConflictOnPut: Boolean = false,
     var forceDeleteError: Boolean = false,
+    private val pathPrefix: String = "",
 ) : RemoteStorage {
 
     data class StoredObject(
@@ -753,8 +775,9 @@ private class FakeRemoteStorage(
     val lastIfMatchEtags: MutableList<String?> = mutableListOf()
 
     fun seed(key: String, body: ByteArray, lastModified: Instant?) {
+        val finalKey = applyPrefix(key)
         etagSeq++
-        objects[key] = StoredObject(key, body, "etag-$etagSeq", lastModified)
+        objects[finalKey] = StoredObject(finalKey, body, "etag-$etagSeq", lastModified)
     }
 
     override suspend fun put(
@@ -767,31 +790,33 @@ private class FakeRemoteStorage(
         if (forceConflictOnPut) {
             return RemoteResult.Err(ErrorCode.CONFLICT, "forced conflict")
         }
-        val current = objects[key]
+        val finalKey = applyPrefix(key)
+        val current = objects[finalKey]
         if (ifMatchEtag != null && current != null && current.etag != ifMatchEtag) {
             return RemoteResult.Err(ErrorCode.CONFLICT, "etag mismatch")
         }
         etagSeq++
         val newEtag = "etag-$etagSeq"
         val now = Instant.parse("2025-05-18T10:00:00Z")
-        val stored = StoredObject(key, body, newEtag, now)
-        objects[key] = stored
-        return RemoteResult.Ok(RemoteObject(key, newEtag, now, body.size.toLong()))
+        val stored = StoredObject(finalKey, body, newEtag, now)
+        objects[finalKey] = stored
+        return RemoteResult.Ok(RemoteObject(finalKey, newEtag, now, body.size.toLong()))
     }
 
     override suspend fun get(key: String): RemoteResult<ByteArray> {
-        val obj = objects[key] ?: return RemoteResult.Err(ErrorCode.NOT_FOUND, "missing")
+        val obj = objects[applyPrefix(key)] ?: return RemoteResult.Err(ErrorCode.NOT_FOUND, "missing")
         return RemoteResult.Ok(obj.body)
     }
 
     override suspend fun head(key: String): RemoteResult<RemoteObject> {
-        val obj = objects[key] ?: return RemoteResult.Err(ErrorCode.NOT_FOUND, "missing")
+        val obj = objects[applyPrefix(key)] ?: return RemoteResult.Err(ErrorCode.NOT_FOUND, "missing")
         return RemoteResult.Ok(RemoteObject(obj.key, obj.etag, obj.lastModified, obj.body.size.toLong()))
     }
 
     override suspend fun list(prefix: String): RemoteResult<List<RemoteObject>> {
+        val finalPrefix = applyPrefix(prefix)
         val items = objects.values
-            .filter { it.key.startsWith(prefix) }
+            .filter { it.key.startsWith(finalPrefix) }
             .map { RemoteObject(it.key, it.etag, it.lastModified, it.body.size.toLong()) }
         return RemoteResult.Ok(items)
     }
@@ -800,11 +825,17 @@ private class FakeRemoteStorage(
         if (forceDeleteError) {
             return RemoteResult.Err(ErrorCode.NETWORK, "forced delete error")
         }
-        objects.remove(key)
+        objects.remove(applyPrefix(key))
         return RemoteResult.Ok(Unit)
     }
 
     override suspend fun ping(): RemoteResult<Unit> = RemoteResult.Ok(Unit)
+
+    private fun applyPrefix(key: String): String {
+        val prefix = pathPrefix.trim('/')
+        val k = key.trimStart('/')
+        return if (prefix.isEmpty()) k else "$prefix/$k"
+    }
 }
 
 private class FakeDiaryRepository(
