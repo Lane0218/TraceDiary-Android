@@ -206,7 +206,7 @@ private fun AnnualSummaryContent(
                     Spacer(modifier = Modifier.height(ReviewSearchControlsHeight))
                     ReviewEmptyState(
                         title = "尚未撰写年度总结",
-                        description = "点击右下角的“+”按钮，开启你的年度回顾与总结吧",
+                        description = "点击“+”开启年度回顾",
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -646,9 +646,12 @@ private fun ReviewEmptyState(
 ) {
     Box(
         modifier = modifier.fillMaxWidth(),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.TopCenter,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier.padding(top = 156.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Icon(
                 Icons.Outlined.AutoStories,
                 contentDescription = null,
@@ -667,7 +670,8 @@ private fun ReviewEmptyState(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 48.dp)
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = 24.dp)
             )
         }
     }
