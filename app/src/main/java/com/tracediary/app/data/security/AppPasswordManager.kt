@@ -96,6 +96,7 @@ class AppPasswordManager(
             val verifier = createVerifier(password)
             prefs.edit()
                 .putString(KEY_VERIFIER, verifier)
+                .putInt(KEY_VERIFIER_VERSION, CURRENT_VERIFIER_VERSION)
                 .putBoolean(KEY_REMEMBER_PASSWORD, remember)
                 .apply()
             credentialStore.saveLocalPassword(if (remember) password else null)
@@ -149,6 +150,7 @@ class AppPasswordManager(
             val verifier = createVerifier(newPassword)
             prefs.edit()
                 .putString(KEY_VERIFIER, verifier)
+                .putInt(KEY_VERIFIER_VERSION, CURRENT_VERIFIER_VERSION)
                 .apply()
             if (isRememberPasswordEnabled()) {
                 credentialStore.saveLocalPassword(newPassword)
@@ -160,13 +162,16 @@ class AppPasswordManager(
 
     /** 仅校验密码是否能解开当前验证器。不修改解锁状态。 */
     fun verifyPassword(password: String): Boolean {
+        if (!isPasswordConfigured()) return false
         val raw = prefs.getString(KEY_VERIFIER, null) ?: return false
         val key = CryptoBox.derivePasswordVerifierKey(password)
         val payload = runCatching { CryptoBox.decryptFromBase64(key, raw) }.getOrNull() ?: return false
         return payload.contentEquals(CryptoBox.verifierPayload())
     }
 
-    private fun isPasswordConfigured(): Boolean = prefs.contains(KEY_VERIFIER)
+    private fun isPasswordConfigured(): Boolean =
+        prefs.contains(KEY_VERIFIER) &&
+            prefs.getInt(KEY_VERIFIER_VERSION, 0) == CURRENT_VERIFIER_VERSION
 
     private fun computeState(): AppLockState = when {
         !isPasswordConfigured() -> AppLockState.NeedSetup
@@ -187,7 +192,9 @@ class AppPasswordManager(
     private companion object {
         const val PREF_FILE_NAME = "tracediary_app_password_prefs"
         const val KEY_VERIFIER = "password_verifier"
+        const val KEY_VERIFIER_VERSION = "password_verifier_version"
         const val KEY_REMEMBER_PASSWORD = "remember_password"
+        const val CURRENT_VERIFIER_VERSION = 2
     }
 }
 
