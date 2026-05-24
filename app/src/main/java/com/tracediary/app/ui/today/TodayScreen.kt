@@ -84,7 +84,6 @@ fun TodayScreen(
     modifier: Modifier = Modifier,
     pendingDate: LocalDate? = null,
     onPendingDateConsumed: () -> Unit = {},
-    onOpenSettings: () -> Unit = {},
     viewModel: TodayViewModel = viewModel(
         factory = TodayViewModel.factory(
             LocalContext.current.applicationContext as TraceDiaryApplication
@@ -128,7 +127,6 @@ fun TodayScreen(
                     displayMonth = state.displayMonth,
                     onJumpToMonth = viewModel::onJumpToMonth,
                     onClearContent = viewModel::onDeleteCurrentEntry,
-                    onOpenSettings = onOpenSettings,
                 )
             }
         }
@@ -596,7 +594,6 @@ private fun TodayOverflowMenu(
     displayMonth: YearMonth,
     onJumpToMonth: (YearMonth) -> Unit,
     onClearContent: () -> Unit,
-    onOpenSettings: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var showMonthPicker by remember { mutableStateOf(false) }
@@ -622,13 +619,6 @@ private fun TodayOverflowMenu(
                 onClick = {
                     menuExpanded = false
                     showClearConfirm = true
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("偏好设置") },
-                onClick = {
-                    menuExpanded = false
-                    onOpenSettings()
                 }
             )
         }
