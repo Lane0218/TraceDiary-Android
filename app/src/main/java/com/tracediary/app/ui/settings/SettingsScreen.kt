@@ -1556,7 +1556,7 @@ private fun AboutPage() {
         Spacer(modifier = Modifier.height(32.dp))
         // Logo Section
         Image(
-            painter = painterResource(id = R.drawable.tracediary_logo_transparent),
+            painter = painterResource(id = R.drawable.tracediary_logo),
             contentDescription = "Logo",
             modifier = Modifier.size(152.dp)
         )

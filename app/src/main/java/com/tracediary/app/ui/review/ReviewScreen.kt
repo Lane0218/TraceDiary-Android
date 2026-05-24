@@ -2,6 +2,7 @@ package com.tracediary.app.ui.review
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -68,11 +68,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusEvent
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.tracediary.app.R
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.AnnualSummary
@@ -629,11 +632,11 @@ private fun ReviewEmptyState(
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                Icons.Outlined.AutoStories,
+            Image(
+                painter = painterResource(id = R.drawable.tracediary_logo),
                 contentDescription = null,
-                modifier = Modifier.size(100.dp),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                modifier = Modifier.size(112.dp),
+                contentScale = ContentScale.Fit,
             )
             Spacer(modifier = Modifier.height(24.dp))
             Text(
