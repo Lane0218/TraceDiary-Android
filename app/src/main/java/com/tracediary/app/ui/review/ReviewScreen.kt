@@ -2,7 +2,6 @@ package com.tracediary.app.ui.review
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -68,14 +68,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusEvent
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.tracediary.app.R
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.AnnualSummary
@@ -91,7 +88,7 @@ import java.time.format.DateTimeFormatter
 
 private val EntryDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
 private const val ContentPreviewLimit: Int = 60
-private val SearchControlsHeight = 124.dp
+private val ReviewSearchControlsHeight = 128.dp
 
 @Composable
 fun ReviewScreen(
@@ -200,7 +197,22 @@ private fun AnnualSummaryContent(
     val selectedYear = state.selectedYear
     if (selectedYear == null) {
         Box(modifier = Modifier.fillMaxSize()) {
-            AnnualSummaryList(state = state, onOpenSummary = onOpenSummary)
+            if (state.summaries.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                ) {
+                    Spacer(modifier = Modifier.height(ReviewSearchControlsHeight))
+                    ReviewEmptyState(
+                        title = "尚未撰写年度总结",
+                        description = "点击右下角的“+”按钮，开启你的年度回顾与总结吧",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            } else {
+                AnnualSummaryList(state = state, onOpenSummary = onOpenSummary)
+            }
 
             if (state.writableYears.isNotEmpty()) {
                 FloatingActionButton(
@@ -239,18 +251,6 @@ private fun AnnualSummaryList(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 80.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (state.summaries.isEmpty()) {
-            item {
-                ReviewEmptyState(
-                    title = "尚未撰写年度总结",
-                    description = "点击右下角的“+”按钮，开启你的年度回顾与总结吧",
-                    modifier = Modifier
-                        .fillParentMaxHeight()
-                        .padding(top = SearchControlsHeight),
-                )
-            }
-        }
-
         if (state.summaries.isNotEmpty()) {
             items(state.summaries, key = AnnualSummary::year) { summary ->
                 Card(
@@ -458,163 +458,177 @@ private fun SearchContent(
     var yearDropdownExpanded by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        TextField(
-            value = state.keyword,
-            onValueChange = onKeywordChanged,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            placeholder = {
-                Text(
-                    "搜索日记内容、关键词...",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    Icons.Outlined.Search,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                )
-            },
-            shape = CircleShape,
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-            ),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(ReviewSearchControlsHeight),
         ) {
-            Box {
-                Surface(
-                    onClick = { yearDropdownExpanded = true },
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surface,
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            Icons.Outlined.CalendarToday,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = state.yearFilter?.let { "${it}年" } ?: "全部年份",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Icon(
-                            Icons.Outlined.KeyboardArrowDown,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-                
-                androidx.compose.material3.DropdownMenu(
-                    expanded = yearDropdownExpanded,
-                    onDismissRequest = { yearDropdownExpanded = false }
-                ) {
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text("全部年份") },
-                        onClick = {
-                            onYearFilterChanged(null)
-                            yearDropdownExpanded = false
-                        }
+            TextField(
+                value = state.keyword,
+                onValueChange = onKeywordChanged,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                placeholder = {
+                    Text(
+                        "搜索日记内容、关键词...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     )
-                    state.availableYears.forEach { year ->
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Outlined.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    )
+                },
+                shape = CircleShape,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box {
+                    Surface(
+                        onClick = { yearDropdownExpanded = true },
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.CalendarToday,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = state.yearFilter?.let { "${it}年" } ?: "全部年份",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Icon(
+                                Icons.Outlined.KeyboardArrowDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = yearDropdownExpanded,
+                        onDismissRequest = { yearDropdownExpanded = false }
+                    ) {
                         androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("${year}年") },
+                            text = { Text("全部年份") },
                             onClick = {
-                                onYearFilterChanged(year)
+                                onYearFilterChanged(null)
                                 yearDropdownExpanded = false
                             }
                         )
+                        state.availableYears.forEach { year ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("${year}年") },
+                                onClick = {
+                                    onYearFilterChanged(year)
+                                    yearDropdownExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (state.keyword.isBlank()) {
-                item {
-                    ReviewEmptyState(
-                        title = "开始回顾你的记录",
-                        description = "搜索关键词或选择条件，查找你的历史日记",
-                        modifier = Modifier.fillParentMaxHeight(),
-                    )
-                }
-            } else if (state.results.isEmpty()) {
-                item {
-                    ReviewEmptyState(
-                        title = "未找到匹配结果",
-                        description = "尝试换一个关键词搜索吧",
-                        modifier = Modifier.fillParentMaxHeight(),
-                    )
-                }
-            } else {
-                items(state.results, key = { it.date.toEpochDay() }) { entry ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.large)
-                            .clickable { onJumpToToday(entry.date) },
-                        shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = entry.date.format(EntryDateFormatter),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            if (entry.content.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                
-                                val previewText = entry.content.preview()
-                                val annotatedText = buildAnnotatedString {
-                                    var currentIndex = 0
-                                    var matchIndex = previewText.indexOf(state.keyword, startIndex = currentIndex, ignoreCase = true)
-                                    
-                                    while (matchIndex >= 0) {
-                                        append(previewText.substring(currentIndex, matchIndex))
-                                        withStyle(style = SpanStyle(
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )) {
-                                            append(previewText.substring(matchIndex, matchIndex + state.keyword.length))
-                                        }
-                                        currentIndex = matchIndex + state.keyword.length
-                                        matchIndex = previewText.indexOf(state.keyword, startIndex = currentIndex, ignoreCase = true)
-                                    }
-                                    append(previewText.substring(currentIndex))
-                                }
-                                
+        when {
+            state.keyword.isBlank() -> {
+                ReviewEmptyState(
+                    title = "开始回顾你的记录",
+                    description = "搜索关键词或选择条件，查找你的历史日记",
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            state.results.isEmpty() -> {
+                ReviewEmptyState(
+                    title = "未找到匹配结果",
+                    description = "尝试换一个关键词搜索吧",
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(state.results, key = { it.date.toEpochDay() }) { entry ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.large)
+                                .clickable { onJumpToToday(entry.date) },
+                            shape = MaterialTheme.shapes.large,
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    text = annotatedText,
-                                    style = DiaryExcerptTextStyle,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    text = entry.date.format(EntryDateFormatter),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
                                 )
+                                if (entry.content.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    val previewText = entry.content.preview()
+                                    val annotatedText = buildAnnotatedString {
+                                        var currentIndex = 0
+                                        var matchIndex = previewText.indexOf(
+                                            state.keyword,
+                                            startIndex = currentIndex,
+                                            ignoreCase = true,
+                                        )
+
+                                        while (matchIndex >= 0) {
+                                            append(previewText.substring(currentIndex, matchIndex))
+                                            withStyle(
+                                                style = SpanStyle(
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            ) {
+                                                append(previewText.substring(matchIndex, matchIndex + state.keyword.length))
+                                            }
+                                            currentIndex = matchIndex + state.keyword.length
+                                            matchIndex = previewText.indexOf(
+                                                state.keyword,
+                                                startIndex = currentIndex,
+                                                ignoreCase = true,
+                                            )
+                                        }
+                                        append(previewText.substring(currentIndex))
+                                    }
+
+                                    Text(
+                                        text = annotatedText,
+                                        style = DiaryExcerptTextStyle,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
                     }
@@ -635,11 +649,11 @@ private fun ReviewEmptyState(
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Image(
-                painter = painterResource(id = R.drawable.tracediary_logo),
+            Icon(
+                Icons.Outlined.AutoStories,
                 contentDescription = null,
-                modifier = Modifier.size(112.dp),
-                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(100.dp),
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
             )
             Spacer(modifier = Modifier.height(24.dp))
             Text(
