@@ -128,35 +128,42 @@ class TencentCosRemoteStorage(
 
     override suspend fun list(prefix: String): RemoteResult<List<RemoteObject>> = withContext(Dispatchers.IO) {
         val finalPrefix = applyPrefix(prefix)
-        // url 参与签名时键值都用小写，且需要 RFC3986 编码
-        val params = linkedMapOf("prefix" to finalPrefix)
-        val headers = mapOf("host" to host)
-        val auth = cosAuthorization("get", "/", params, headers)
-        val query = params.entries.joinToString("&") { (k, v) ->
-            "${urlEncodeRfc3986(k)}=${urlEncodeRfc3986(v)}"
-        }
-        val request = Request.Builder()
-            .url("https://$host/?$query")
-            .get()
-            .header("Host", host)
-            .header("Authorization", auth)
-            .build()
-        runCatching { client.newCall(request).execute() }.fold(
-            onSuccess = { resp ->
-                resp.use {
-                    if (it.isSuccessful) {
-                        val xml = it.body?.bytes() ?: ByteArray(0)
-                        runCatching { parseListBucketResult(xml) }.fold(
-                            onSuccess = { list -> RemoteResult.Ok(list) },
-                            onFailure = { e ->
-                                RemoteResult.Err(ErrorCode.UNKNOWN, "解析 ListBucketResult 失败", e)
-                            },
-                        )
-                    } else mapHttpError(it)
-                }
-            },
-            onFailure = { mapIoError(it) },
-        )
+        val all = mutableListOf<RemoteObject>()
+        var marker: String? = null
+        var isTruncated: Boolean
+        do {
+            // url 参与签名时键值都用小写，且需要 RFC3986 编码
+            val params = linkedMapOf(
+                "prefix" to finalPrefix,
+                "max-keys" to "1000",
+            )
+            marker?.let { params["marker"] = it }
+            val headers = mapOf("host" to host)
+            val auth = cosAuthorization("get", "/", params, headers)
+            val query = params.entries.joinToString("&") { (k, v) ->
+                "${urlEncodeRfc3986(k)}=${urlEncodeRfc3986(v)}"
+            }
+            val request = Request.Builder()
+                .url("https://$host/?$query")
+                .get()
+                .header("Host", host)
+                .header("Authorization", auth)
+                .build()
+            val response = runCatching { client.newCall(request).execute() }
+                .getOrElse { return@withContext mapIoError(it) }
+            val page = response.use {
+                if (!it.isSuccessful) return@withContext mapHttpError(it)
+                val xml = it.body?.bytes() ?: ByteArray(0)
+                runCatching { parseListBucketPage(xml) }
+                    .getOrElse { e ->
+                        return@withContext RemoteResult.Err(ErrorCode.UNKNOWN, "解析 ListBucketResult 失败", e)
+                    }
+            }
+            all += page.objects
+            marker = page.nextMarker ?: page.objects.lastOrNull()?.key
+            isTruncated = page.isTruncated
+        } while (isTruncated && !marker.isNullOrBlank())
+        RemoteResult.Ok(all)
     }
 
     override suspend fun delete(key: String): RemoteResult<Unit> = withContext(Dispatchers.IO) {

@@ -156,38 +156,44 @@ class AliyunOssRemoteStorage(
 
     override suspend fun list(prefix: String): RemoteResult<List<RemoteObject>> = withContext(Dispatchers.IO) {
         val finalPrefix = applyPrefix(prefix)
-        val encoded = urlEncodeRfc3986(finalPrefix)
-        val date = ossHttpDate()
-        // OSS V1 签名规则：max-keys/prefix/marker/delimiter 等普通列表参数不参与 CanonicalizedResource，
-        // 只有 acl/uploads/partNumber 等子资源才参与。
-        val resource = "/${credential.bucket}/"
-        val stringToSign = "GET\n\n\n$date\n$resource"
-        val url = "https://$host/?prefix=$encoded"
-        val request = Request.Builder()
-            .url(url)
-            .get()
-            .header("Host", host)
-            .header("Date", date)
-            .header("Authorization", ossAuthorization(stringToSign))
-            .build()
-        runCatching { client.newCall(request).execute() }.fold(
-            onSuccess = { resp ->
-                resp.use {
-                    if (it.isSuccessful) {
-                        val xml = it.body?.bytes() ?: ByteArray(0)
-                        runCatching { parseListBucketResult(xml) }.fold(
-                            onSuccess = { list -> RemoteResult.Ok(list) },
-                            onFailure = { e ->
-                                RemoteResult.Err(ErrorCode.UNKNOWN, "解析 ListBucketResult 失败", e)
-                            },
-                        )
-                    } else {
-                        mapHttpError(it)
+        val all = mutableListOf<RemoteObject>()
+        var marker: String? = null
+        var isTruncated: Boolean
+        do {
+            val encodedPrefix = urlEncodeRfc3986(finalPrefix)
+            val encodedMarker = marker?.let(::urlEncodeRfc3986)
+            val date = ossHttpDate()
+            // OSS V1 签名规则：max-keys/prefix/marker/delimiter 等普通列表参数不参与 CanonicalizedResource，
+            // 只有 acl/uploads/partNumber 等子资源才参与。
+            val resource = "/${credential.bucket}/"
+            val stringToSign = "GET\n\n\n$date\n$resource"
+            val url = buildString {
+                append("https://").append(host).append("/?prefix=").append(encodedPrefix)
+                append("&max-keys=1000")
+                if (encodedMarker != null) append("&marker=").append(encodedMarker)
+            }
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .header("Host", host)
+                .header("Date", date)
+                .header("Authorization", ossAuthorization(stringToSign))
+                .build()
+            val response = runCatching { client.newCall(request).execute() }
+                .getOrElse { return@withContext mapIoError(it) }
+            val page = response.use {
+                if (!it.isSuccessful) return@withContext mapHttpError(it)
+                val xml = it.body?.bytes() ?: ByteArray(0)
+                runCatching { parseListBucketPage(xml) }
+                    .getOrElse { e ->
+                        return@withContext RemoteResult.Err(ErrorCode.UNKNOWN, "解析 ListBucketResult 失败", e)
                     }
-                }
-            },
-            onFailure = { mapIoError(it) },
-        )
+            }
+            all += page.objects
+            marker = page.nextMarker ?: page.objects.lastOrNull()?.key
+            isTruncated = page.isTruncated
+        } while (isTruncated && !marker.isNullOrBlank())
+        RemoteResult.Ok(all)
     }
 
     override suspend fun delete(key: String): RemoteResult<Unit> = withContext(Dispatchers.IO) {
@@ -337,7 +343,16 @@ private fun extractXmlTag(xml: String, tag: String): String? {
  *     </Contents>
  *   </ListBucketResult>
  */
-internal fun parseListBucketResult(xml: ByteArray): List<RemoteObject> {
+internal fun parseListBucketResult(xml: ByteArray): List<RemoteObject> =
+    parseListBucketPage(xml).objects
+
+internal data class ListBucketPage(
+    val objects: List<RemoteObject>,
+    val isTruncated: Boolean,
+    val nextMarker: String?,
+)
+
+internal fun parseListBucketPage(xml: ByteArray): ListBucketPage {
     val factory = XmlPullParserFactory.newInstance().apply { isNamespaceAware = false }
     val parser = factory.newPullParser()
     parser.setInput(xml.inputStream(), "UTF-8")
@@ -347,6 +362,8 @@ internal fun parseListBucketResult(xml: ByteArray): List<RemoteObject> {
     var lastModified: String? = null
     var size: Long = 0L
     var inContents = false
+    var isTruncated = false
+    var nextMarker: String? = null
     var current: String? = null
     var ev = parser.eventType
     while (ev != XmlPullParser.END_DOCUMENT) {
@@ -365,6 +382,12 @@ internal fun parseListBucketResult(xml: ByteArray): List<RemoteObject> {
                     "ETag" -> etag = (etag ?: "") + text
                     "LastModified" -> lastModified = (lastModified ?: "") + text
                     "Size" -> size = text.trim().toLongOrNull() ?: size
+                }
+            } else if (!inContents) {
+                val text = parser.text ?: ""
+                when (current) {
+                    "IsTruncated" -> isTruncated = text.trim().equals("true", ignoreCase = true)
+                    "NextMarker" -> nextMarker = (nextMarker ?: "") + text
                 }
             }
             XmlPullParser.END_TAG -> {
@@ -390,5 +413,9 @@ internal fun parseListBucketResult(xml: ByteArray): List<RemoteObject> {
         }
         ev = parser.next()
     }
-    return result
+    return ListBucketPage(
+        objects = result,
+        isTruncated = isTruncated,
+        nextMarker = nextMarker?.trim()?.takeIf { it.isNotBlank() },
+    )
 }
