@@ -49,7 +49,6 @@ import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.settings.CalendarWeekStart
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.R
-import com.tracediary.app.data.settings.parseBoundaryTime
 import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.domain.usecase.ExportFormat
 import com.tracediary.app.domain.usecase.ImportOptions
@@ -184,12 +183,10 @@ private fun MainSettingsList(
 @Composable
 private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
     val context = LocalContext.current
+    var showSameDaySortPicker by remember { mutableStateOf(false) }
     var showWeekStartPicker by remember { mutableStateOf(false) }
     var showBoundaryTimePicker by remember { mutableStateOf(false) }
     var showReminderTimePicker by remember { mutableStateOf(false) }
-    val (boundaryHour, _) = remember(state.dayBoundaryTime) {
-        parseHourMinute(state.dayBoundaryTime, maxHour = 5)
-    }
     val (reminderHour, reminderMinute) = remember(state.dailyReminderTime) {
         parseHourMinute(state.dailyReminderTime, maxHour = 23)
     }
@@ -218,19 +215,8 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                 Column {
                     SettingsValueRow(
                         title = "往年今日排序",
-                        value = if (state.sameDayEntrySortOrder == SameDayEntrySortOrder.LatestFirst) {
-                            "从晚到早"
-                        } else {
-                            "从早到晚"
-                        },
-                        onClick = {
-                            val next = if (state.sameDayEntrySortOrder == SameDayEntrySortOrder.LatestFirst) {
-                                SameDayEntrySortOrder.EarliestFirst
-                            } else {
-                                SameDayEntrySortOrder.LatestFirst
-                            }
-                            viewModel.onSameDayEntrySortOrderChanged(next)
-                        }
+                        value = state.sameDayEntrySortOrder.label,
+                        onClick = { showSameDaySortPicker = true }
                     )
                     SyncRowDivider()
                     SettingsValueRow(
@@ -297,90 +283,46 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
         }
     }
 
-    if (showWeekStartPicker) {
-        BasicAlertDialog(
-            onDismissRequest = { showWeekStartPicker = false },
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .width(300.dp)
-        ) {
-            Column(modifier = Modifier.padding(vertical = 12.dp)) {
-                Text(
-                    text = "每周第一天",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
-                )
-                CalendarWeekStart.entries.forEachIndexed { index, option ->
-                    SettingsChoiceRow(
-                        label = option.label,
-                        selected = state.calendarWeekStart == option,
-                        enabled = true,
-                        onClick = {
-                            viewModel.onCalendarWeekStartChanged(option)
-                            showWeekStartPicker = false
-                        }
-                    )
-                    if (index < CalendarWeekStart.entries.lastIndex) SyncRowDivider()
-                }
+    if (showSameDaySortPicker) {
+        PreferenceChoiceDialog(
+            title = "往年今日排序",
+            options = SameDayEntrySortOrder.entries.toList(),
+            selectedOption = state.sameDayEntrySortOrder,
+            optionLabel = { it.label },
+            onDismissRequest = { showSameDaySortPicker = false },
+            onOptionSelected = { option ->
+                viewModel.onSameDayEntrySortOrderChanged(option)
+                showSameDaySortPicker = false
             }
-        }
+        )
+    }
+
+    if (showWeekStartPicker) {
+        PreferenceChoiceDialog(
+            title = "每周第一天",
+            options = CalendarWeekStart.entries.toList(),
+            selectedOption = state.calendarWeekStart,
+            optionLabel = { it.label },
+            onDismissRequest = { showWeekStartPicker = false },
+            onOptionSelected = { option ->
+                viewModel.onCalendarWeekStartChanged(option)
+                showWeekStartPicker = false
+            }
+        )
     }
 
     if (showBoundaryTimePicker) {
-        var selectedHour by remember { mutableStateOf(boundaryHour.coerceIn(0, 5)) }
-
-        BasicAlertDialog(
+        PreferenceChoiceDialog(
+            title = "次日切换时间",
+            options = (0..5).map { hour -> "%02d:00".format(hour) },
+            selectedOption = state.dayBoundaryTime,
+            optionLabel = { it },
             onDismissRequest = { showBoundaryTimePicker = false },
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .width(300.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "选择次日切换时间",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Text(
-                    text = "应用会在所选整点后进入新的一天",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                BoundaryHourPicker(
-                    initialHour = selectedHour,
-                    onHourChanged = { selectedHour = it }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = { showBoundaryTimePicker = false }) {
-                        Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    TextButton(onClick = {
-                        viewModel.onDayBoundaryTimeChanged(
-                            "%02d:00".format(selectedHour.coerceIn(0, 5))
-                        )
-                        showBoundaryTimePicker = false
-                    }) {
-                        Text("确定", fontWeight = FontWeight.Bold)
-                    }
-                }
+            onOptionSelected = { option ->
+                viewModel.onDayBoundaryTimeChanged(option)
+                showBoundaryTimePicker = false
             }
-        }
+        )
     }
 
     if (showReminderTimePicker) {
@@ -433,6 +375,49 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun <T> PreferenceChoiceDialog(
+    title: String,
+    options: List<T>,
+    selectedOption: T,
+    optionLabel: (T) -> String,
+    onDismissRequest: () -> Unit,
+    onOptionSelected: (T) -> Unit,
+) {
+    BasicAlertDialog(
+        onDismissRequest = onDismissRequest,
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .width(300.dp)
+    ) {
+        Column(modifier = Modifier.padding(vertical = 12.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+            )
+            options.forEachIndexed { index, option ->
+                SettingsChoiceRow(
+                    label = optionLabel(option),
+                    selected = option == selectedOption,
+                    enabled = true,
+                    onClick = { onOptionSelected(option) }
+                )
+                if (index < options.lastIndex) SyncRowDivider()
+            }
+        }
+    }
+}
+
+private val SameDayEntrySortOrder.label: String
+    get() = when (this) {
+        SameDayEntrySortOrder.LatestFirst -> "从晚到早"
+        SameDayEntrySortOrder.EarliestFirst -> "从早到晚"
+    }
 
 private val CalendarWeekStart.label: String
     get() = when (this) {
@@ -1861,72 +1846,6 @@ private fun SettingsRow(icon: ImageVector, title: String, subtitle: String? = nu
             null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
         )
-    }
-}
-
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-private fun BoundaryHourPicker(
-    initialHour: Int,
-    onHourChanged: (Int) -> Unit,
-) {
-    var hour by remember { mutableStateOf(initialHour.coerceIn(0, 5)) }
-
-    Row(
-        modifier = Modifier.fillMaxWidth().height(160.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        HourColumn(
-            initialHour = hour,
-            onHourChanged = {
-                hour = it.coerceIn(0, 5)
-                onHourChanged(hour)
-            }
-        )
-    }
-}
-
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-private fun HourColumn(
-    initialHour: Int,
-    onHourChanged: (Int) -> Unit,
-) {
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = initialHour.coerceIn(0, 5))
-
-    LaunchedEffect(listState) {
-        androidx.compose.runtime.snapshotFlow { listState.firstVisibleItemScrollOffset to listState.firstVisibleItemIndex }
-            .collect { (offset, index) ->
-                val selected = if (offset > 20) index + 1 else index
-                onHourChanged(selected.coerceIn(0, 5))
-            }
-    }
-
-    androidx.compose.foundation.lazy.LazyColumn(
-        state = listState,
-        modifier = Modifier.width(84.dp).height(120.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(lazyListState = listState),
-    ) {
-        item { Spacer(modifier = Modifier.height(40.dp)) }
-        items(6) { index ->
-            val isSelected = remember(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
-                val offset = listState.firstVisibleItemScrollOffset
-                val visibleIndex = listState.firstVisibleItemIndex
-                val centerIndex = if (offset > 20) visibleIndex + 1 else visibleIndex
-                index == centerIndex
-            }
-            Box(modifier = Modifier.height(40.dp), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "%02d:00".format(index),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
-            }
-        }
-        item { Spacer(modifier = Modifier.height(40.dp)) }
     }
 }
 
