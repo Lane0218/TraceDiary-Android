@@ -46,6 +46,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.ui.settings.SettingsViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracediary.app.TraceDiaryApplication
+import com.tracediary.app.data.settings.CalendarWeekStart
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.R
 import com.tracediary.app.data.settings.parseBoundaryTime
@@ -183,6 +184,7 @@ private fun MainSettingsList(
 @Composable
 private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
     val context = LocalContext.current
+    var showWeekStartPicker by remember { mutableStateOf(false) }
     var showBoundaryTimePicker by remember { mutableStateOf(false) }
     var showReminderTimePicker by remember { mutableStateOf(false) }
     val (boundaryHour, _) = remember(state.dayBoundaryTime) {
@@ -229,6 +231,12 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                             }
                             viewModel.onSameDayEntrySortOrderChanged(next)
                         }
+                    )
+                    SyncRowDivider()
+                    SettingsValueRow(
+                        title = "每周第一天",
+                        value = state.calendarWeekStart.label,
+                        onClick = { showWeekStartPicker = true }
                     )
                     SyncRowDivider()
                     SettingsValueRow(
@@ -284,6 +292,37 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                         enabled = state.dailyReminderEnabled,
                         onClick = { showReminderTimePicker = true }
                     )
+                }
+            }
+        }
+    }
+
+    if (showWeekStartPicker) {
+        BasicAlertDialog(
+            onDismissRequest = { showWeekStartPicker = false },
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .width(300.dp)
+        ) {
+            Column(modifier = Modifier.padding(vertical = 12.dp)) {
+                Text(
+                    text = "每周第一天",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+                )
+                CalendarWeekStart.entries.forEachIndexed { index, option ->
+                    SettingsChoiceRow(
+                        label = option.label,
+                        selected = state.calendarWeekStart == option,
+                        enabled = true,
+                        onClick = {
+                            viewModel.onCalendarWeekStartChanged(option)
+                            showWeekStartPicker = false
+                        }
+                    )
+                    if (index < CalendarWeekStart.entries.lastIndex) SyncRowDivider()
                 }
             }
         }
@@ -394,6 +433,12 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
         }
     }
 }
+
+private val CalendarWeekStart.label: String
+    get() = when (this) {
+        CalendarWeekStart.Sunday -> "周日"
+        CalendarWeekStart.Monday -> "周一"
+    }
 
 @Composable
 private fun SettingsSubPageContainer(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {

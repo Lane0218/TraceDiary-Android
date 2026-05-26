@@ -9,6 +9,7 @@ import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.notifications.DailyReminderScheduler
 import com.tracediary.app.data.security.AppPasswordManager
 import com.tracediary.app.data.security.SecureCredentialStore
+import com.tracediary.app.data.settings.CalendarWeekStart
 import com.tracediary.app.data.settings.formatBoundaryTime
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.data.settings.parseBoundaryTime
@@ -101,6 +102,7 @@ data class SettingsUiState(
     val syncRegion: String = "",
     val syncDirectory: String = "TraceDiary/",
     val sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.LatestFirst,
+    val calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Sunday,
     // AK/SK 与“记住密码”缓存：通过 SecureCredentialStore（EncryptedSharedPreferences）持久化。
     val syncAccessKeyId: String = "",
     val syncAccessKeySecret: String = "",
@@ -193,6 +195,7 @@ class SettingsViewModel(
                         syncRegion = if (keepDraft) current.syncRegion else prefs.syncRegion,
                         syncDirectory = if (keepDraft) current.syncDirectory else prefs.syncDirectory,
                         sameDayEntrySortOrder = prefs.sameDayEntrySortOrder,
+                        calendarWeekStart = prefs.calendarWeekStart,
                     )
                 }
             }
@@ -470,6 +473,11 @@ class SettingsViewModel(
     fun onSameDayEntrySortOrderChanged(value: SameDayEntrySortOrder) {
         _uiState.update { it.copy(sameDayEntrySortOrder = value) }
         viewModelScope.launch { repository.setSameDayEntrySortOrder(value) }
+    }
+
+    fun onCalendarWeekStartChanged(value: CalendarWeekStart) {
+        _uiState.update { it.copy(calendarWeekStart = value) }
+        viewModelScope.launch { repository.setCalendarWeekStart(value) }
     }
 
     /**

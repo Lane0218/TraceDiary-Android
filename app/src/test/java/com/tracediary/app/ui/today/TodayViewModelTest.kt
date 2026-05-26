@@ -1,6 +1,7 @@
 package com.tracediary.app.ui.today
 
 import com.tracediary.app.data.security.CloudCipherCredentialStore
+import com.tracediary.app.data.settings.CalendarWeekStart
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.data.settings.UserPreferences
 import com.tracediary.app.data.settings.UserPreferencesRepository
@@ -87,6 +88,7 @@ class TodayViewModelTest {
         assertTrue(state.weekDates.contains(fixedToday))
         assertEquals("2026年5月", state.displayMonthLabel)
         assertEquals(SyncState.Pending, state.currentEntrySyncState)
+        assertEquals(listOf("日", "一", "二", "三", "四", "五", "六"), state.weekHeaders)
     }
 
     @Test
@@ -261,6 +263,25 @@ class TodayViewModelTest {
             viewModel.uiState.value.previousYearsOnThisDay.map(DiaryEntry::date),
         )
         assertFalse(viewModel.uiState.value.previousYearsOnThisDay.any { it.date == fixedToday })
+    }
+
+    @Test
+    fun `calendar week start preference updates week dates headers and month grid`() = runTest(dispatcher) {
+        val preferences = FakeUserPreferencesRepository(syncEnabled = false)
+        val viewModel = createViewModel(userPreferencesRepository = preferences)
+        advanceUntilIdle()
+
+        assertEquals(LocalDate.of(2026, 5, 10), viewModel.uiState.value.weekDates.first())
+        assertEquals(LocalDate.of(2026, 4, 26), viewModel.uiState.value.monthGrid.first().date)
+
+        preferences.setCalendarWeekStart(CalendarWeekStart.Monday)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(LocalDate.of(2026, 5, 11), state.weekDates.first())
+        assertEquals(LocalDate.of(2026, 5, 17), state.weekDates.last())
+        assertEquals(listOf("一", "二", "三", "四", "五", "六", "日"), state.weekHeaders)
+        assertEquals(LocalDate.of(2026, 4, 27), state.monthGrid.first().date)
     }
 
     @Test
@@ -499,11 +520,13 @@ private class FakeDiaryRepository(private val clock: Clock) : DiaryRepository {
 private class FakeUserPreferencesRepository(
     syncEnabled: Boolean,
     dayBoundaryTime: String = "00:00",
+    calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Sunday,
 ) : UserPreferencesRepository {
     private val prefs = MutableStateFlow(
         UserPreferences(
             syncEnabled = syncEnabled,
             dayBoundaryTime = dayBoundaryTime,
+            calendarWeekStart = calendarWeekStart,
         )
     )
     override val preferences: Flow<UserPreferences> = prefs
@@ -546,6 +569,10 @@ private class FakeUserPreferencesRepository(
 
     override suspend fun setSameDayEntrySortOrder(value: SameDayEntrySortOrder) {
         prefs.update { it.copy(sameDayEntrySortOrder = value) }
+    }
+
+    override suspend fun setCalendarWeekStart(value: CalendarWeekStart) {
+        prefs.update { it.copy(calendarWeekStart = value) }
     }
 
     override suspend fun setSyncDisplayName(value: String) {

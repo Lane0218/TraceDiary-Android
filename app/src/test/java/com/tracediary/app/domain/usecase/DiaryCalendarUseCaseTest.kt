@@ -47,6 +47,19 @@ class DiaryCalendarUseCaseTest {
     }
 
     @Test
+    fun monthGrid_supportsMondayFirstDay() {
+        val grid = useCase.monthGrid(
+            yearMonth = YearMonth.of(2026, 5),
+            entries = emptyList(),
+            firstDayOfWeek = DayOfWeek.MONDAY,
+        )
+
+        assertEquals(LocalDate.parse("2026-04-27"), grid.first().date)
+        assertEquals(LocalDate.parse("2026-06-07"), grid.last().date)
+        assertEquals(42, grid.size)
+    }
+
+    @Test
     fun recordedDates_filtersRangeAndIgnoresBlankContent() {
         val entries = listOf(
             entry("2026-05-15", "A"),

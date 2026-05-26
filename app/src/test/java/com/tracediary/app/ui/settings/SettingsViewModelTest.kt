@@ -1,6 +1,7 @@
 package com.tracediary.app.ui.settings
 
 import com.tracediary.app.data.settings.UserPreferences
+import com.tracediary.app.data.settings.CalendarWeekStart
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.data.settings.UserPreferencesRepository
 import com.tracediary.app.data.security.CloudCipherCredentialStore
@@ -87,6 +88,7 @@ class SettingsViewModelTest {
         assertEquals(SaveStatus.Idle, state.saveStatus)
         assertEquals("暂无同步记录", state.lastSyncText)
         assertEquals(MergeStrategy.KeepNewer, state.manualSyncStrategy)
+        assertEquals(CalendarWeekStart.Sunday, state.calendarWeekStart)
     }
 
     @Test
@@ -303,6 +305,16 @@ class SettingsViewModelTest {
 
         assertEquals(SameDayEntrySortOrder.EarliestFirst, fakeRepo.current().sameDayEntrySortOrder)
         assertEquals(SameDayEntrySortOrder.EarliestFirst, viewModel.uiState.value.sameDayEntrySortOrder)
+    }
+
+    @Test
+    fun onCalendarWeekStartChanged_persistsPreference() = runTest(testDispatcher) {
+        advanceUntilIdle()
+        viewModel.onCalendarWeekStartChanged(CalendarWeekStart.Monday)
+        advanceUntilIdle()
+
+        assertEquals(CalendarWeekStart.Monday, fakeRepo.current().calendarWeekStart)
+        assertEquals(CalendarWeekStart.Monday, viewModel.uiState.value.calendarWeekStart)
     }
 
     @Test
@@ -531,6 +543,10 @@ class SettingsViewModelTest {
 
         override suspend fun setSameDayEntrySortOrder(value: SameDayEntrySortOrder) {
             _prefs.update { it.copy(sameDayEntrySortOrder = value) }
+        }
+
+        override suspend fun setCalendarWeekStart(value: CalendarWeekStart) {
+            _prefs.update { it.copy(calendarWeekStart = value) }
         }
 
         override suspend fun setSyncDisplayName(value: String) {

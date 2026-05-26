@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.security.AppPasswordManager
 import com.tracediary.app.data.security.CloudCipherCredentialStore
+import com.tracediary.app.data.settings.CalendarWeekStart
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.data.settings.UserPreferencesRepository
 import com.tracediary.app.data.settings.parseBoundaryTime
@@ -56,6 +57,7 @@ data class TodayUiState(
     val selectedDate: LocalDate,
     val calendarAnchorDate: LocalDate,
     val weekDates: List<LocalDate>,
+    val weekHeaders: List<String>,
     val weekDays: List<CalendarDay>,
     val displayMonth: YearMonth,
     val monthGrid: List<CalendarDay>,
@@ -98,6 +100,7 @@ class TodayViewModel(
             selectedDate = initialDate,
             calendarAnchorDate = initialDate,
             weekDates = calendarUseCase.weekDates(initialDate),
+            weekHeaders = CalendarWeekStart.Sunday.weekHeaders(),
             weekDays = buildWeekDays(calendarUseCase.weekDates(initialDate), emptySet()),
             displayMonth = YearMonth.from(initialDate),
             monthGrid = emptyList(),
@@ -118,6 +121,8 @@ class TodayViewModel(
     private var recordedDates: Set<LocalDate> = emptySet()
     private var allEntriesSnapshot: List<DiaryEntry> = emptyList()
     private var sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.LatestFirst
+    private var calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Sunday
+    private var monthEntriesSnapshot: List<DiaryEntry> = emptyList()
 
     /** 当前正文最后一次入库时的快照，用来判断是否需要 flush。 */
     private var lastPersistedContent: String = ""
@@ -141,7 +146,7 @@ class TodayViewModel(
         viewModelScope.launch {
             flushPendingSave()
             displayMonthFlow.value = YearMonth.from(date)
-            val weekDates = calendarUseCase.weekDates(date)
+            val weekDates = weekDatesFor(date)
             _uiState.update { current ->
                 current.copy(
                     selectedDate = date,
@@ -194,7 +199,7 @@ class TodayViewModel(
 
     fun onJumpToMonth(target: YearMonth) {
         val anchor = anchorDateInMonth(_uiState.value.calendarAnchorDate, target)
-        val weekDates = calendarUseCase.weekDates(anchor)
+        val weekDates = weekDatesFor(anchor)
         displayMonthFlow.value = target
         _uiState.update { current ->
             current.copy(
@@ -271,7 +276,7 @@ class TodayViewModel(
 
     private fun shiftWeek(deltaDays: Long) {
         val anchor = _uiState.value.calendarAnchorDate.plusDays(deltaDays)
-        val newWeekDates = calendarUseCase.weekDates(anchor)
+        val newWeekDates = weekDatesFor(anchor)
         displayMonthFlow.value = YearMonth.from(anchor)
         _uiState.update { current ->
             current.copy(
@@ -287,7 +292,7 @@ class TodayViewModel(
     private fun shiftMonth(deltaMonths: Long) {
         val target = displayMonthFlow.value.plusMonths(deltaMonths)
         val anchor = anchorDateInMonth(_uiState.value.calendarAnchorDate, target)
-        val weekDates = calendarUseCase.weekDates(anchor)
+        val weekDates = weekDatesFor(anchor)
         displayMonthFlow.value = target
         _uiState.update { current ->
             current.copy(
@@ -330,6 +335,11 @@ class TodayViewModel(
         preferencesJob = viewModelScope.launch {
             preferencesRepository.preferences.collect { prefs ->
                 sameDayEntrySortOrder = prefs.sameDayEntrySortOrder
+                val weekStartChanged = calendarWeekStart != prefs.calendarWeekStart
+                calendarWeekStart = prefs.calendarWeekStart
+                if (weekStartChanged) {
+                    refreshCalendarForWeekStart()
+                }
                 refreshSameDayEntries(_uiState.value.selectedDate)
             }
         }
@@ -393,7 +403,8 @@ class TodayViewModel(
                 .flatMapLatest { month -> diaryRepository.observeEntriesInMonth(month) }
                 .collectLatest { monthEntries ->
                     val month = displayMonthFlow.value
-                    val grid = calendarUseCase.monthGrid(month, monthEntries)
+                    monthEntriesSnapshot = monthEntries
+                    val grid = monthGridFor(month, monthEntries)
                     _uiState.update { current ->
                         current.copy(displayMonth = month, monthGrid = grid)
                     }
@@ -499,6 +510,24 @@ class TodayViewModel(
         return target.atDay(day)
     }
 
+    private fun refreshCalendarForWeekStart() {
+        _uiState.update { current ->
+            val recalculatedWeekDates = weekDatesFor(current.calendarAnchorDate)
+            current.copy(
+                weekDates = recalculatedWeekDates,
+                weekHeaders = calendarWeekStart.weekHeaders(),
+                weekDays = buildWeekDays(recalculatedWeekDates, recordedDates),
+                monthGrid = monthGridFor(current.displayMonth, monthEntriesSnapshot),
+            )
+        }
+    }
+
+    private fun weekDatesFor(date: LocalDate): List<LocalDate> =
+        calendarUseCase.weekDates(date, calendarWeekStart.dayOfWeek)
+
+    private fun monthGridFor(month: YearMonth, entries: List<DiaryEntry>): List<CalendarDay> =
+        calendarUseCase.monthGrid(month, entries, calendarWeekStart.dayOfWeek)
+
     private fun buildWeekDays(
         weekDates: List<LocalDate>,
         recordedDates: Set<LocalDate>,
@@ -528,5 +557,10 @@ class TodayViewModel(
                     )
                 }
             }
+    }
 }
+
+private fun CalendarWeekStart.weekHeaders(): List<String> = when (this) {
+    CalendarWeekStart.Sunday -> listOf("日", "一", "二", "三", "四", "五", "六")
+    CalendarWeekStart.Monday -> listOf("一", "二", "三", "四", "五", "六", "日")
 }

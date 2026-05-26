@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.time.DayOfWeek
 
 /**
  * 设置页用到的全部偏好项。
@@ -28,6 +29,7 @@ data class UserPreferences(
     val syncRegion: String = "",
     val syncDirectory: String = "TraceDiary/",
     val sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.LatestFirst,
+    val calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Sunday,
 )
 
 enum class SameDayEntrySortOrder(val storageValue: String) {
@@ -39,6 +41,22 @@ enum class SameDayEntrySortOrder(val storageValue: String) {
             EarliestFirst.storageValue -> EarliestFirst
             LatestFirst.storageValue -> LatestFirst
             else -> LatestFirst
+        }
+    }
+}
+
+enum class CalendarWeekStart(
+    val storageValue: String,
+    val dayOfWeek: DayOfWeek,
+) {
+    Sunday("sunday", DayOfWeek.SUNDAY),
+    Monday("monday", DayOfWeek.MONDAY);
+
+    companion object {
+        fun fromStorageValue(value: String?): CalendarWeekStart = when (value) {
+            Monday.storageValue -> Monday
+            Sunday.storageValue -> Sunday
+            else -> Sunday
         }
     }
 }
@@ -61,6 +79,7 @@ interface UserPreferencesRepository {
     suspend fun setSyncDirectory(value: String)
 
     suspend fun setSameDayEntrySortOrder(value: SameDayEntrySortOrder)
+    suspend fun setCalendarWeekStart(value: CalendarWeekStart)
 
     /**
      * 一次性写入云同步相关的非敏感配置。
@@ -100,6 +119,7 @@ class DataStoreUserPreferencesRepository(
             syncRegion = prefs[KEY_SYNC_REGION].orEmpty(),
             syncDirectory = prefs[KEY_SYNC_DIRECTORY] ?: "TraceDiary/",
             sameDayEntrySortOrder = SameDayEntrySortOrder.fromStorageValue(prefs[KEY_SAME_DAY_ENTRY_SORT_ORDER]),
+            calendarWeekStart = CalendarWeekStart.fromStorageValue(prefs[KEY_CALENDAR_WEEK_START]),
         )
     }
 
@@ -147,6 +167,10 @@ class DataStoreUserPreferencesRepository(
         dataStore.edit { it[KEY_SAME_DAY_ENTRY_SORT_ORDER] = value.storageValue }
     }
 
+    override suspend fun setCalendarWeekStart(value: CalendarWeekStart) {
+        dataStore.edit { it[KEY_CALENDAR_WEEK_START] = value.storageValue }
+    }
+
     override suspend fun saveSyncConfiguration(
         provider: String,
         bucket: String,
@@ -175,5 +199,6 @@ class DataStoreUserPreferencesRepository(
         val KEY_SYNC_REGION = stringPreferencesKey("sync_region")
         val KEY_SYNC_DIRECTORY = stringPreferencesKey("sync_directory")
         val KEY_SAME_DAY_ENTRY_SORT_ORDER = stringPreferencesKey("same_day_entry_sort_order")
+        val KEY_CALENDAR_WEEK_START = stringPreferencesKey("calendar_week_start")
     }
 }

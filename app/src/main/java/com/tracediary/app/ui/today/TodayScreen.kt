@@ -125,6 +125,7 @@ fun TodayScreen(
         item {
             CalendarCard(
                 weekDays = state.weekDays,
+                weekHeaders = state.weekHeaders,
                 selectedDate = state.selectedDate,
                 monthLabel = state.displayMonthLabel,
                 displayMonth = state.displayMonth,
@@ -191,6 +192,7 @@ fun TodayScreen(
 @Composable
 private fun CalendarCard(
     weekDays: List<CalendarDay>,
+    weekHeaders: List<String>,
     selectedDate: LocalDate,
     monthLabel: String,
     displayMonth: YearMonth,
@@ -258,12 +260,14 @@ private fun CalendarCard(
             if (isMonthExpanded) {
                 MonthGrid(
                     monthGrid = monthGrid,
+                    weekHeaders = weekHeaders,
                     selectedDate = selectedDate,
                     onSelectDate = onSelectDate,
                 )
             } else {
                 WeekRow(
                     weekDays = weekDays,
+                    weekHeaders = weekHeaders,
                     selectedDate = selectedDate,
                     onSelectDate = onSelectDate,
                 )
@@ -275,11 +279,12 @@ private fun CalendarCard(
 @Composable
 private fun WeekRow(
     weekDays: List<CalendarDay>,
+    weekHeaders: List<String>,
     selectedDate: LocalDate,
     onSelectDate: (LocalDate) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        WeekHeaderRow()
+        WeekHeaderRow(weekHeaders)
         Spacer(modifier = Modifier.height(4.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
             weekDays.forEach { day ->
@@ -305,11 +310,12 @@ private fun WeekRow(
 @Composable
 private fun MonthGrid(
     monthGrid: List<CalendarDay>,
+    weekHeaders: List<String>,
     selectedDate: LocalDate,
     onSelectDate: (LocalDate) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        WeekHeaderRow()
+        WeekHeaderRow(weekHeaders)
         Spacer(modifier = Modifier.height(4.dp))
         monthGrid.chunked(7).forEach { week ->
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
@@ -345,8 +351,7 @@ private fun MonthGrid(
 }
 
 @Composable
-private fun WeekHeaderRow() {
-    val weekHeaders = listOf("日", "一", "二", "三", "四", "五", "六")
+private fun WeekHeaderRow(weekHeaders: List<String>) {
     Row(modifier = Modifier.fillMaxWidth()) {
         weekHeaders.forEach { day ->
             Text(

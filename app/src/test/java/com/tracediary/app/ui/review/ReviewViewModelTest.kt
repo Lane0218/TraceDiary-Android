@@ -7,6 +7,7 @@ import com.tracediary.app.domain.repository.AnnualSummaryRepository
 import com.tracediary.app.domain.repository.DiaryRepository
 import com.tracediary.app.domain.usecase.DiaryCalendarUseCase
 import com.tracediary.app.domain.usecase.SearchDiaryEntriesUseCase
+import com.tracediary.app.data.settings.CalendarWeekStart
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.data.settings.UserPreferences
 import com.tracediary.app.data.settings.UserPreferencesRepository
@@ -356,6 +357,10 @@ class ReviewViewModelTest {
 
         override suspend fun setSameDayEntrySortOrder(value: SameDayEntrySortOrder) {
             prefs.update { it.copy(sameDayEntrySortOrder = value) }
+        }
+
+        override suspend fun setCalendarWeekStart(value: CalendarWeekStart) {
+            prefs.update { it.copy(calendarWeekStart = value) }
         }
 
         override suspend fun saveSyncConfiguration(
