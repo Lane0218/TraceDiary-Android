@@ -155,26 +155,39 @@ class SyncEngineTest {
     }
 
     @Test
-    fun uploadAll_skipsWhenRemoteNewer() = runTest {
+    fun uploadAll_overwritesRemoteNewerObject() = runTest {
         val date = LocalDate.of(2025, 5, 18)
         val entry = newEntry(date, updatedAt = baseInstant.minusSeconds(600))
+        val summary = newSummary(2025, updatedAt = baseInstant.minusSeconds(600))
         val diaryRepo = FakeDiaryRepository(listOf(entry))
-        val annualRepo = FakeAnnualSummaryRepository()
+        val annualRepo = FakeAnnualSummaryRepository(listOf(summary))
         val metaRepo = FakeSyncMetadataRepository()
         val storage = FakeRemoteStorage()
-        // 远端已存在更新的对象
+        // 批量上传是明确的本机数据上传入口，即使远端对象时间较新也应覆盖。
         storage.seed(
             key = SyncObjectKeys.diaryObjectKey(date),
             body = encodeDiary(entry.copy(content = "remote"), testKey),
             lastModified = baseInstant, // 比本地 updatedAt 新
+        )
+        storage.seed(
+            key = SyncObjectKeys.annualObjectKey(2025),
+            body = encodeAnnual(summary.copy(content = "remote annual"), testKey),
+            lastModified = baseInstant,
         )
         val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo)
 
         val result = engine.uploadAll()
 
         assertTrue(result is RemoteResult.Ok)
-        assertEquals(1, (result as RemoteResult.Ok).value.skipped)
-        assertEquals(0, result.value.uploaded)
+        val syncSummary = (result as RemoteResult.Ok).value
+        assertEquals(0, syncSummary.skipped)
+        assertEquals(2, syncSummary.uploaded)
+        val uploadedDiary = storage.objects[SyncObjectKeys.diaryObjectKey(date)]!!.body
+        val uploadedAnnual = storage.objects[SyncObjectKeys.annualObjectKey(2025)]!!.body
+        assertEquals(entry.content, decodeDiary(uploadedDiary, testKey).content)
+        assertEquals(summary.content, decodeAnnual(uploadedAnnual, testKey).content)
+        assertEquals(SyncState.Synced, diaryRepo.syncStates[date])
+        assertEquals(SyncState.Synced, annualRepo.syncStates[2025])
     }
 
     @Test

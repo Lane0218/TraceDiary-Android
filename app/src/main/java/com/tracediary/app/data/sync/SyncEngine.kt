@@ -91,8 +91,9 @@ class SyncEngine(
         var progress = 0
         val errors = mutableListOf<String>()
 
+        // 批量上传是明确的本机数据上传入口：同 key 云端对象应被本机内容覆盖。
         for (entry in diaries) {
-            when (val r = uploadDiaryInternal(storage, password.key, entry)) {
+            when (val r = uploadDiaryInternal(storage, password.key, entry, force = true)) {
                 UploadOutcome.Uploaded -> uploaded++
                 UploadOutcome.Skipped -> skipped++
                 UploadOutcome.Conflict -> conflicts++
@@ -110,7 +111,7 @@ class SyncEngine(
         }
 
         for (summary in summaries) {
-            when (val r = uploadAnnualInternal(storage, password.key, summary)) {
+            when (val r = uploadAnnualInternal(storage, password.key, summary, force = true)) {
                 UploadOutcome.Uploaded -> uploaded++
                 UploadOutcome.Skipped -> skipped++
                 UploadOutcome.Conflict -> conflicts++
