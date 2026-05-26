@@ -609,7 +609,12 @@ class SyncEngine(
         strategy: MergeStrategy,
     ): MergeOutcome {
         return when {
-            local != null && remote == null -> uploadDiaryInternal(storage, key, local).toMergeOutcome()
+            local != null && remote == null -> uploadDiaryInternal(
+                storage = storage,
+                key = key,
+                entry = local,
+                force = strategy == MergeStrategy.OverwriteAll,
+            ).toMergeOutcome()
             local == null && remote != null -> downloadDiaryInternal(storage, key, date, null, remote).toMergeOutcome()
             local != null && remote != null -> {
                 if (strategy == MergeStrategy.OverwriteAll) {
@@ -734,7 +739,12 @@ class SyncEngine(
         strategy: MergeStrategy,
     ): MergeOutcome {
         return when {
-            local != null && remote == null -> uploadAnnualInternal(storage, key, local).toMergeOutcome()
+            local != null && remote == null -> uploadAnnualInternal(
+                storage = storage,
+                key = key,
+                summary = local,
+                force = strategy == MergeStrategy.OverwriteAll,
+            ).toMergeOutcome()
             local == null && remote != null -> downloadAnnualInternal(storage, key, year, null, remote).toMergeOutcome()
             local != null && remote != null -> {
                 if (strategy == MergeStrategy.OverwriteAll) {

@@ -444,6 +444,41 @@ class SyncEngineTest {
     }
 
     @Test
+    fun mergeAll_overwriteAll_overwritesRemoteObjectMissingFromListing() = runTest {
+        val date = LocalDate.of(2025, 5, 18)
+        val localEntry = newEntry(date, content = "本地日记", updatedAt = baseInstant.minusSeconds(600))
+        val remoteEntry = newEntry(date, content = "远端日记", updatedAt = baseInstant)
+        val localSummary = newSummary(2025, content = "本地年度", updatedAt = baseInstant.minusSeconds(600))
+        val remoteSummary = newSummary(2025, content = "远端年度", updatedAt = baseInstant)
+        val diaryRepo = FakeDiaryRepository(listOf(localEntry))
+        val annualRepo = FakeAnnualSummaryRepository(listOf(localSummary))
+        val metaRepo = FakeSyncMetadataRepository()
+        val storage = FakeRemoteStorage(hideObjectsFromList = true)
+        storage.seed(
+            key = SyncObjectKeys.diaryObjectKey(date),
+            body = encodeDiary(remoteEntry, testKey),
+            lastModified = baseInstant,
+        )
+        storage.seed(
+            key = SyncObjectKeys.annualObjectKey(2025),
+            body = encodeAnnual(remoteSummary, testKey),
+            lastModified = baseInstant,
+        )
+        val engine = newEngine(storage, diaryRepo, annualRepo, metaRepo)
+
+        val result = engine.mergeAll(MergeStrategy.OverwriteAll)
+
+        assertTrue(result is RemoteResult.Ok)
+        val summary = (result as RemoteResult.Ok).value
+        assertEquals(2, summary.uploaded)
+        assertEquals(0, summary.skipped)
+        assertEquals("本地日记", decodeDiary(storage.objects[SyncObjectKeys.diaryObjectKey(date)]!!.body, testKey).content)
+        assertEquals("本地年度", decodeAnnual(storage.objects[SyncObjectKeys.annualObjectKey(2025)]!!.body, testKey).content)
+        assertEquals(SyncState.Synced, diaryRepo.syncStates[date])
+        assertEquals(SyncState.Synced, annualRepo.syncStates[2025])
+    }
+
+    @Test
     fun mergeAll_preferRemote_remoteWinsForDiaryAndAnnualEvenWhenLocalNewer() = runTest {
         val date = LocalDate.of(2025, 5, 18)
         val localEntry = newEntry(date, content = "本地日记", updatedAt = baseInstant)
@@ -774,6 +809,7 @@ private class FakeRemoteStorage(
     private val forceConflictOnPut: Boolean = false,
     var forceDeleteError: Boolean = false,
     private val pathPrefix: String = "",
+    private val hideObjectsFromList: Boolean = false,
 ) : RemoteStorage {
 
     data class StoredObject(
@@ -827,6 +863,7 @@ private class FakeRemoteStorage(
     }
 
     override suspend fun list(prefix: String): RemoteResult<List<RemoteObject>> {
+        if (hideObjectsFromList) return RemoteResult.Ok(emptyList())
         val finalPrefix = applyPrefix(prefix)
         val items = objects.values
             .filter { it.key.startsWith(finalPrefix) }
