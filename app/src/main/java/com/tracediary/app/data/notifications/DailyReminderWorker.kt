@@ -18,7 +18,6 @@ import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.model.isRecorded
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.time.LocalDate
 
 /**
  * 每日提醒后台任务：到指定时间向用户推送一条通知，提醒打开 TraceDiary 写日记。
@@ -26,7 +25,7 @@ import java.time.LocalDate
  * - 通知 channel: [CHANNEL_ID]，名称"每日提醒"，重要性 DEFAULT。
  * - 通知 id 固定为 [NOTIFICATION_ID]，避免堆叠多条提醒。
  * - 用户拒绝通知权限时直接 success() 退出，避免 worker 反复重试。
- * - 当天已有非空日记时直接 success() 退出，不再打扰用户。
+ * - 当前业务日已有非空日记时直接 success() 退出，不再打扰用户。
  */
 class DailyReminderWorker(
     context: Context,
@@ -80,8 +79,9 @@ class DailyReminderWorker(
     private suspend fun loadTodayEntry(context: Context): DiaryEntry? {
         val application = context.applicationContext as? TraceDiaryApplication ?: return null
         if (!application.isDataLayerReady()) return null
+        val reminderDate = application.resolveCurrentAppDate()
         return withContext(Dispatchers.IO) {
-            application.diaryRepository.getEntry(LocalDate.now())
+            application.diaryRepository.getEntry(reminderDate)
         }
     }
 

@@ -1,5 +1,6 @@
 package com.tracediary.app.data.notifications
 
+import com.tracediary.app.data.settings.resolveAppDate
 import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.model.SyncState
 import org.junit.Assert.assertEquals
@@ -9,6 +10,7 @@ import org.junit.Test
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 
 /**
@@ -101,8 +103,45 @@ class DailyReminderSchedulerTest {
         assertFalse(DailyReminderWorker.shouldShowReminder(entry))
     }
 
-    private fun diaryEntry(content: String): DiaryEntry = DiaryEntry(
-        date = LocalDate.of(2026, 5, 17),
+    @Test
+    fun `reminder date 在次日切换时间前仍属于前一天`() {
+        val now = LocalDateTime.of(2026, 5, 30, 0, 30)
+        val boundary = LocalTime.of(2, 0)
+
+        val reminderDate = resolveAppDate(now, boundary)
+
+        assertEquals(LocalDate.of(2026, 5, 29), reminderDate)
+    }
+
+    @Test
+    fun `reminder date 到达次日切换时间后属于当天`() {
+        val now = LocalDateTime.of(2026, 5, 30, 2, 0)
+        val boundary = LocalTime.of(2, 0)
+
+        val reminderDate = resolveAppDate(now, boundary)
+
+        assertEquals(LocalDate.of(2026, 5, 30), reminderDate)
+    }
+
+    @Test
+    fun `reminder 在切换时间前根据前一天日记决定是否提醒`() {
+        val now = LocalDateTime.of(2026, 5, 30, 0, 30)
+        val boundary = LocalTime.of(2, 0)
+        val reminderDate = resolveAppDate(now, boundary)
+
+        val writtenEntry = diaryEntry(date = reminderDate, content = "5月29日已经写了")
+        val blankEntry = diaryEntry(date = reminderDate, content = " \n\t ")
+
+        assertFalse(DailyReminderWorker.shouldShowReminder(writtenEntry))
+        assertTrue(DailyReminderWorker.shouldShowReminder(blankEntry))
+        assertTrue(DailyReminderWorker.shouldShowReminder(null))
+    }
+
+    private fun diaryEntry(
+        content: String,
+        date: LocalDate = LocalDate.of(2026, 5, 17),
+    ): DiaryEntry = DiaryEntry(
+        date = date,
         content = content,
         createdAt = Instant.parse("2026-05-17T12:00:00Z"),
         updatedAt = Instant.parse("2026-05-17T12:00:00Z"),
