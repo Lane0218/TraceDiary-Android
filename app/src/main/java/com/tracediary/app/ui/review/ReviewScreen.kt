@@ -81,6 +81,8 @@ import com.tracediary.app.ui.components.TraceDropdownMenu
 import com.tracediary.app.ui.theme.DiaryContentTextStyle
 import com.tracediary.app.ui.theme.DiaryEditorTextStyle
 import com.tracediary.app.ui.theme.DiaryExcerptTextStyle
+import com.tracediary.app.ui.theme.Ink600
+import com.tracediary.app.ui.theme.SurfaceDivider
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
@@ -118,7 +120,7 @@ fun ReviewScreen(
                     .fillMaxWidth()
                     .height(44.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .background(SurfaceDivider)
                     .padding(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -146,8 +148,8 @@ fun ReviewScreen(
                         Text(
                             text = label,
                             style = MaterialTheme.typography.labelMedium,
-                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                            color = if (selected) MaterialTheme.colorScheme.primary else Ink600,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                         )
                         if (selected) {
                             Box(
