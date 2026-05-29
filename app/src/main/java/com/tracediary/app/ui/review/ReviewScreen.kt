@@ -131,7 +131,7 @@ fun ReviewScreen(
                 tabs.forEachIndexed { index, pair ->
                     val (tab, label) = pair
                     val selected = state.selectedTab == tab
-                    val bgShape = if (index == 0) {
+                    val itemShape = if (index == 0) {
                         androidx.compose.foundation.shape.RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp, topEnd = 4.dp, bottomEnd = 4.dp)
                     } else {
                         androidx.compose.foundation.shape.RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp, topEnd = 20.dp, bottomEnd = 20.dp)
@@ -140,8 +140,7 @@ fun ReviewScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(bgShape)
-                            .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                            .clip(itemShape)
                             .clickable { viewModel.onSelectTab(tab) },
                         contentAlignment = Alignment.Center
                     ) {
@@ -151,16 +150,6 @@ fun ReviewScreen(
                             color = if (selected) MaterialTheme.colorScheme.primary else Ink600,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                         )
-                        if (selected) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .padding(bottom = 6.dp)
-                                    .size(width = 24.dp, height = 2.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                            )
-                        }
                     }
                 }
             }
