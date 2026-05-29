@@ -120,8 +120,7 @@ fun ReviewScreen(
                     .fillMaxWidth()
                     .height(44.dp)
                     .clip(CircleShape)
-                    .background(SurfaceDivider)
-                    .padding(4.dp),
+                    .background(SurfaceDivider),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val tabs = listOf(
@@ -141,6 +140,7 @@ fun ReviewScreen(
                             .weight(1f)
                             .fillMaxHeight()
                             .clip(itemShape)
+                            .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
                             .clickable { viewModel.onSelectTab(tab) },
                         contentAlignment = Alignment.Center
                     ) {
