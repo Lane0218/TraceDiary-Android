@@ -1,15 +1,37 @@
-# AGENTS.md
-|IMPORTANT: Prefer retrieval-led reasoning over pre-training-led reasoning for any project tasks.
-|项目:TraceDiary Android
-|运行环境:Codex=WSL2 (Linux)|Android 项目=E:\TraceDiary-Android|WSL=/mnt/e/TraceDiary-Android
-|项目根目录:/mnt/e/TraceDiary-Android
-|规格来源:doc/SPEC.md|全部开发、测试、验收必须遵循|功能、UI、架构、数据结构、测试标准不得偏离
-|沟通语言:与用户对话|进度更新|风险提示|测试结论均使用中文
-|任务启动:先明确目标|影响文件|验收标准|再开始修改
-|执行策略:除非用户明确要求，否则不主动执行构建|运行|安装|测试
-|验收声明:不得将“看起来能用”视为实测验收
-|风险提示:实现存疑时必须明确说明|由用户手动验证
-|任务提交:每完成一个可独立验收的任务执行 commit + push
-|Push 失败:因网络波动连续 2 次失败可仅保留 commit|不视为任务失败
-|Commit Convention:feat|fix|docs|refactor|test|chore: 中文说明
-|提交前检查:改动范围正确|无敏感信息
+# TraceDiary Android 项目协作规范
+
+## 项目与环境
+
+- 项目：TraceDiary Android。
+- Codex 运行环境：WSL2（Linux）。
+- Windows 项目路径：`E:\TraceDiary-Android`。
+- WSL 项目路径及项目根目录：`/mnt/e/TraceDiary-Android`。
+- 与用户沟通、进度更新、风险提示和测试结论均使用中文。
+- 对项目任务优先检索仓库中的真实实现和文档，不以模型的预训练印象代替项目事实。
+
+## 必读上下文
+
+开始任务前按顺序阅读并遵循：
+
+1. `.harness/README.md`：通用 Harness 工作协议。
+2. `.harness/spec/SPEC.md`：本项目功能、UI、架构、数据结构及测试要求的唯一规范来源。
+3. `.harness/STATUS.md`：当前阶段、任务、下一步和阻塞项。
+4. `.harness/tasks/active/`：如果存在当前任务胶囊，继续执行其中约定的范围与验收标准。
+
+实现不得偏离 SPEC。长期有效的需求或设计发生变化时，必须同步更新 SPEC；临时进度不得写入 SPEC。
+
+## 开发与验证
+
+- 启动任务时先明确目标、影响范围、风险等级和验收标准。
+- 是否创建任务胶囊以及如何维护，遵循 `.harness/README.md`。
+- 按 SPEC 的风险分级自动执行对应构建和测试，不需要等待用户额外要求。
+- 无法在当前环境执行的检查必须说明原因、未覆盖风险及需要用户完成的验收步骤。
+- 需要真机验收的任务，在用户确认前只能标记为“待验收”，不得宣称已经完成或“看起来能用”。
+- 实现存在疑点时明确列出，并交由用户进行针对性验证。
+
+## Git 收尾
+
+- 每完成一个可独立验收且已达到对应验证标准的任务，自动执行 commit 和 push。
+- 提交格式：`feat|fix|docs|refactor|test|chore: 中文说明`。
+- 提交前确认改动范围正确、Harness 状态已同步且不包含敏感信息；只暂存当前任务相关文件。
+- Push 因网络波动连续失败两次时保留本地 commit，明确报告失败原因，不将其视为开发任务失败。
