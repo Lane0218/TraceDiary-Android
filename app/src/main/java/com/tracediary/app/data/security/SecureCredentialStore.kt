@@ -57,6 +57,20 @@ class SecureCredentialStore(context: Context) : CloudCipherCredentialStore {
             .apply()
     }
 
+    /** AI 服务 API Key 仅作为本机配置保存，不参与任何用户内容的加解密。 */
+    @Synchronized
+    fun saveAiApiKey(value: String?) {
+        if (value.isNullOrBlank()) {
+            prefs.edit().remove(KEY_AI_API_KEY).apply()
+        } else {
+            prefs.edit().putString(KEY_AI_API_KEY, value).apply()
+        }
+    }
+
+    @Synchronized
+    fun loadAiApiKey(): String? =
+        prefs.getString(KEY_AI_API_KEY, null)?.takeIf { it.isNotBlank() }
+
     /** 本机保存的数据密码；传 null / 空字符串等价于清除。 */
     @Synchronized
     override fun saveLocalPassword(value: String?) {
@@ -78,5 +92,6 @@ class SecureCredentialStore(context: Context) : CloudCipherCredentialStore {
         const val KEY_ACCESS_KEY_ID = "cloud_access_key_id"
         const val KEY_ACCESS_KEY_SECRET = "cloud_access_key_secret"
         const val KEY_LOCAL_PASSWORD = "local_password"
+        const val KEY_AI_API_KEY = "ai_api_key"
     }
 }

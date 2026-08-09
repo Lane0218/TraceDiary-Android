@@ -33,8 +33,8 @@ import java.time.YearMonth
 import java.time.ZoneOffset
 
 /**
- * 验证回顾页 SegmentedButton 两个 Tab（搜索 / 年度总结）切换后内容区会随之变化，
- * 对应 SPEC 6.1.4。
+ * 验证回顾页三个 Tab（搜索 / AI问答 / 年度总结）切换后内容区会随之变化，
+ * 对应 SPEC 7.1.4。
  *
  * 数据源使用空仓储：
  * - 此时 ReviewViewModel.observeAnnualSummaries 计算出的 writableYears = 当年起向前 5 年，
@@ -101,6 +101,31 @@ class ReviewScreenTabsTest {
 
         // 默认就是搜索 Tab，placeholder 已可见。
         composeTestRule.onNodeWithText("搜索日记内容、关键词...").assertIsDisplayed()
+    }
+
+    @Test
+    fun aiTabShowsIndependentQuestionContent() {
+        val viewModel = ReviewViewModel(
+            diaryRepository = EmptyDiaryRepository(),
+            annualSummaryRepository = EmptyAnnualSummaryRepository(),
+            calendarUseCase = DiaryCalendarUseCase(),
+            searchUseCase = SearchDiaryEntriesUseCase(),
+            clock = fixedClock,
+        )
+
+        composeTestRule.setContent {
+            TraceDiaryTheme {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    ReviewScreen(
+                        viewModel = viewModel,
+                        aiContent = { androidx.compose.material3.Text("AI 临时问答内容") },
+                    )
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithText("AI问答").performClick()
+        composeTestRule.onNodeWithText("AI 临时问答内容").assertIsDisplayed()
     }
 
     @Test

@@ -27,7 +27,7 @@ import kotlin.OptIn
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 /**
- * 回顾页（搜索 / 年度总结）共享的 ViewModel。
+ * 回顾页（搜索 / AI问答 / 年度总结）共享的 ViewModel。
  *
  * 设计要点：
  * - 单一 ViewModel，两个子 UI 状态。
@@ -299,7 +299,7 @@ private fun <T> kotlinx.coroutines.flow.Flow<T>.debounceCompat(timeoutMillis: Lo
         }
     }
 
-enum class ReviewTab { Search, AnnualSummary }
+enum class ReviewTab { Search, Ai, AnnualSummary }
 
 enum class SaveStatus { Idle, Saving, Saved, Failed }
 

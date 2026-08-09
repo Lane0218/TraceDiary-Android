@@ -60,6 +60,9 @@ import com.tracediary.app.domain.usecase.ExportFormat
 import com.tracediary.app.domain.usecase.ImportOptions
 import com.tracediary.app.domain.usecase.MergeStrategy
 import com.tracediary.app.ui.components.PrimaryPageHeader
+import com.tracediary.app.ui.ai.AiSettingsPage
+import com.tracediary.app.ui.ai.AiSettingsViewModel
+import com.tracediary.app.ui.ai.aiAvailabilityLabel
 import java.time.LocalTime
 
 @Composable
@@ -72,12 +75,18 @@ fun SettingsScreen(
     )
 ) {
     val state by viewModel.uiState.collectAsState()
+    val application = LocalContext.current.applicationContext as TraceDiaryApplication
+    val aiViewModel: AiSettingsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = AiSettingsViewModel.factory(application),
+    )
+    val aiState by aiViewModel.state.collectAsState()
     var activeSubPage by remember { mutableStateOf<String?>(null) }
     
     AnimatedContent(targetState = activeSubPage, label = "SettingsTransition") { page ->
         if (page == null) {
             MainSettingsList(
                 state = state,
+                aiStatus = aiAvailabilityLabel(aiState.feature.availability),
                 modifier = modifier,
                 onNavigate = { activeSubPage = it }
             )
@@ -91,6 +100,7 @@ fun SettingsScreen(
                         state = state,
                         viewModel = viewModel,
                     )
+                    "AI 搜索" -> AiSettingsPage(state = aiState, viewModel = aiViewModel)
                     "关于" -> AboutPage()
                     else -> Text("开发中...")
                 }
@@ -102,6 +112,7 @@ fun SettingsScreen(
 @Composable
 private fun MainSettingsList(
     state: SettingsUiState,
+    aiStatus: String,
     modifier: Modifier = Modifier,
     onNavigate: (String) -> Unit
 ) {
@@ -128,6 +139,16 @@ private fun MainSettingsList(
                         title = "云同步", 
                         subtitle = "最近同步: ${state.lastSyncText}",
                         onClick = { onNavigate("同步设置") }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 68.dp, end = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
+                    SettingsRow(
+                        icon = Icons.Outlined.AutoAwesome,
+                        title = "AI 搜索",
+                        subtitle = aiStatus,
+                        onClick = { onNavigate("AI 搜索") }
                     )
                 }
             }

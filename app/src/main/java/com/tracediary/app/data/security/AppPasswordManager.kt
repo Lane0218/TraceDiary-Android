@@ -25,6 +25,7 @@ class AppPasswordManager(
     context: Context,
     private val credentialStore: CloudCipherCredentialStore,
     private val onPasswordAccepted: (String) -> Unit = {},
+    private val onLocked: () -> Unit = {},
     private val preferenceFileName: String = PREF_FILE_NAME,
 ) {
 
@@ -95,13 +96,15 @@ class AppPasswordManager(
         if (isPasswordConfigured()) return Result.failure(IllegalStateException("已设置应用密码，请使用修改密码"))
         return runCatching {
             val verifier = createVerifier(password)
+            // 先让数据层验证该密码能否打开可能由备份恢复的数据库。失败时不得落盘
+            // 新验证器，否则一次错误输入会把用户锁死在错误密码上。
+            onPasswordAccepted(password)
             prefs.edit()
                 .putString(KEY_VERIFIER, verifier)
                 .putInt(KEY_VERIFIER_VERSION, CURRENT_VERIFIER_VERSION)
                 .putBoolean(KEY_REMEMBER_PASSWORD, remember)
                 .apply()
             credentialStore.saveLocalPassword(if (remember) password else null)
-            onPasswordAccepted(password)
             unlockedFlag = true
             activePasswordRef = password
             publishState()
@@ -131,6 +134,7 @@ class AppPasswordManager(
     fun lockNow() {
         unlockedFlag = false
         activePasswordRef = null
+        onLocked()
         publishState()
     }
 

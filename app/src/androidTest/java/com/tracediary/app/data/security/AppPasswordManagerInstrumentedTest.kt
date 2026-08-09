@@ -67,6 +67,19 @@ class AppPasswordManagerInstrumentedTest {
         assertNull(credentialStore.loadLocalPassword())
     }
 
+    @Test
+    fun setup_dataLayerRejectsPassword_doesNotPersistWrongVerifier() {
+        val credentialStore = InMemoryCredentialStore()
+        val manager = newManager(credentialStore) { error("恢复数据库密码错误") }
+
+        assertTrue(manager.setupInitialPassword("错误密码", remember = true).isFailure)
+        assertEquals(AppLockState.NeedSetup, manager.state.value)
+        assertNull(credentialStore.loadLocalPassword())
+
+        val reopened = newManager(credentialStore)
+        assertEquals(AppLockState.NeedSetup, reopened.state.value)
+    }
+
     private fun newManager(
         credentialStore: InMemoryCredentialStore,
         onPasswordAccepted: (String) -> Unit = {},

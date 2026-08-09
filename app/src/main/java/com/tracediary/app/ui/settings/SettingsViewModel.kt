@@ -160,6 +160,7 @@ class SettingsViewModel(
     private val syncMetadataRepository: SyncMetadataRepository? = null,
     private val remoteStorageFactory: ((SettingsUiState) -> RemoteStorage?)? = null,
     private val databaseRekeyer: (suspend (String) -> Unit)? = null,
+    private val passwordRotationCompleter: (suspend () -> Unit)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val zoneId: ZoneId = ZoneId.systemDefault(),
     private val clock: Clock = Clock.system(zoneId),
@@ -482,6 +483,8 @@ class SettingsViewModel(
                 }
                 return@launch
             }
+
+            withContext(ioDispatcher) { passwordRotationCompleter?.invoke() }
 
             _uiState.update {
                 it.copy(
@@ -878,6 +881,7 @@ class SettingsViewModel(
                         syncMetadataRepository = application.syncMetadataRepository,
                         remoteStorageFactory = { snapshot -> createRemoteStorage(snapshot) },
                         databaseRekeyer = { newPassword -> application.rekeyDatabase(newPassword) },
+                        passwordRotationCompleter = application::resumeAiAfterPasswordChange,
                     ) as T
                 }
             }

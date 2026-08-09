@@ -75,6 +75,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.AnnualSummary
+import com.tracediary.app.domain.model.AiSourceType
+import com.tracediary.app.ui.ai.AiQuestionScreen
 import com.tracediary.app.ui.components.PrimaryPageHeader
 import com.tracediary.app.ui.components.TraceDropdownMenu
 import com.tracediary.app.ui.theme.DiaryContentTextStyle
@@ -94,6 +96,7 @@ private val ReviewSearchControlsHeight = 128.dp
 fun ReviewScreen(
     modifier: Modifier = Modifier,
     onJumpToToday: (LocalDate) -> Unit = {},
+    aiContent: (@Composable () -> Unit)? = null,
     viewModel: ReviewViewModel = viewModel(
         factory = ReviewViewModel.factory(
             LocalContext.current.applicationContext as TraceDiaryApplication,
@@ -123,15 +126,16 @@ fun ReviewScreen(
             ) {
                 val tabs = listOf(
                     ReviewTab.Search to "搜索",
+                    ReviewTab.Ai to "AI问答",
                     ReviewTab.AnnualSummary to "年度总结",
                 )
                 tabs.forEachIndexed { index, pair ->
                     val (tab, label) = pair
                     val selected = state.selectedTab == tab
-                    val itemShape = if (index == 0) {
-                        androidx.compose.foundation.shape.RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp, topEnd = 4.dp, bottomEnd = 4.dp)
-                    } else {
-                        androidx.compose.foundation.shape.RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp, topEnd = 20.dp, bottomEnd = 20.dp)
+                    val itemShape = when (index) {
+                        0 -> androidx.compose.foundation.shape.RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp, topEnd = 4.dp, bottomEnd = 4.dp)
+                        tabs.lastIndex -> androidx.compose.foundation.shape.RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp, topEnd = 20.dp, bottomEnd = 20.dp)
+                        else -> androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
                     }
                     Box(
                         modifier = Modifier
@@ -162,6 +166,28 @@ fun ReviewScreen(
                     onRecordedOnlyChanged = viewModel::onToggleRecordedOnly,
                     onJumpToToday = onJumpToToday,
                 )
+
+                ReviewTab.Ai -> {
+                    if (aiContent != null) {
+                        aiContent()
+                    } else {
+                        AiQuestionScreen(
+                            onOpenEvidence = { evidence ->
+                                when (evidence.source.type) {
+                                    AiSourceType.Diary -> runCatching { LocalDate.parse(evidence.source.key) }
+                                        .getOrNull()
+                                        ?.let(onJumpToToday)
+                                    AiSourceType.AnnualSummary -> evidence.source.key.toIntOrNull()?.let { year ->
+                                        viewModel.onOpenSummary(year)
+                                        viewModel.onSelectTab(ReviewTab.AnnualSummary)
+                                    }
+                                    AiSourceType.Statistics,
+                                    AiSourceType.Preferences -> Unit
+                                }
+                            }
+                        )
+                    }
+                }
 
                 ReviewTab.AnnualSummary -> AnnualSummaryContent(
                     state = state.annual,

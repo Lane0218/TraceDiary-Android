@@ -6,6 +6,14 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
+    <!-- Keystore 主密钥不会随卸载恢复；恢复这些密文偏好会导致无法读取。 -->
+    <exclude domain="sharedpref" path="tracediary_app_password_prefs.xml"/>
+    <exclude domain="sharedpref" path="tracediary_credentials_prefs.xml"/>
+    <!-- 模型可重新下载，AI 索引可仅凭应用密码从主数据重建。 -->
+    <exclude domain="file" path="ai-model/"/>
+    <exclude domain="database" path="tracediary_ai.db"/>
+    <exclude domain="database" path="tracediary_ai.db-shm"/>
+    <exclude domain="database" path="tracediary_ai.db-wal"/>
     <!--
    <include domain="sharedpref" path="."/>
    <exclude domain="sharedpref" path="device.xml"/>

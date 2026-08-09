@@ -2,6 +2,9 @@ package com.tracediary.app
 
 import android.app.Application
 import androidx.room.Room
+import com.tracediary.app.data.ai.AiModelManager
+import com.tracediary.app.data.ai.AiSearchCoordinator
+import com.tracediary.app.data.ai.DataStoreAiPreferencesRepository
 import com.tracediary.app.data.local.SqlCipherRekey
 import com.tracediary.app.data.local.TraceDiaryDatabase
 import com.tracediary.app.data.notifications.DailyReminderScheduler
@@ -80,6 +83,14 @@ class TraceDiaryApplication : Application() {
     lateinit var syncScheduler: SyncScheduler
         private set
 
+    lateinit var aiSearchCoordinator: AiSearchCoordinator
+        private set
+
+    private lateinit var aiPreferencesRepository: DataStoreAiPreferencesRepository
+
+    @Volatile
+    private var acceptedPassword: String? = null
+
     val calendarUseCase = DiaryCalendarUseCase()
     val statisticsUseCase = DiaryStatisticsUseCase()
     val searchUseCase = SearchDiaryEntriesUseCase()
@@ -117,6 +128,7 @@ class TraceDiaryApplication : Application() {
         // sqlcipher-android 4.6+ 通过 System.loadLibrary 加载原生库，且 .so 已 16 KB 对齐。
         System.loadLibrary("sqlcipher")
         userPreferencesRepository = DataStoreUserPreferencesRepository(applicationContext)
+        aiPreferencesRepository = DataStoreAiPreferencesRepository(applicationContext)
         dailyReminderScheduler = DailyReminderScheduler(applicationContext)
         secureCredentialStore = SecureCredentialStore(applicationContext)
         // 迁移旧版本的周期提醒；新版本只保留 AlarmManager 单次精确闹钟。
@@ -145,7 +157,24 @@ class TraceDiaryApplication : Application() {
         appPasswordManager = AppPasswordManager(
             context = applicationContext,
             credentialStore = secureCredentialStore,
-            onPasswordAccepted = { password -> initializeDataLayer(password) },
+            onPasswordAccepted = { password ->
+                acceptedPassword = password
+                try {
+                    initializeDataLayer(password)
+                } catch (error: Throwable) {
+                    acceptedPassword = null
+                    throw error
+                }
+                applicationScope.launch(Dispatchers.IO) {
+                    if (::aiSearchCoordinator.isInitialized) aiSearchCoordinator.unlock()
+                }
+            },
+            onLocked = {
+                acceptedPassword = null
+                applicationScope.launch(Dispatchers.IO) {
+                    if (::aiSearchCoordinator.isInitialized) aiSearchCoordinator.lock()
+                }
+            },
         )
 
         // 冷启动、设备重启或系统回收进程后，根据持久化设置恢复下一次精确闹钟。
@@ -179,7 +208,16 @@ class TraceDiaryApplication : Application() {
     fun initializeDataLayer(password: String) {
         if (::database.isInitialized) return
         val passphrase = CryptoBox.deriveDatabasePassphrase(password)
-        database = buildDatabase(passphrase)
+        val openedDatabase = buildDatabase(passphrase)
+        try {
+            // 强制执行 SQLCipher 打开与口令校验。恢复数据库后若密码错误，必须在写入
+            // 新安装的密码验证器之前失败，不能先进入 UI 再在首次 DAO 查询时崩溃。
+            openedDatabase.openHelper.writableDatabase
+        } catch (error: Throwable) {
+            openedDatabase.close()
+            throw error
+        }
+        database = openedDatabase
 
         diaryRepository = DefaultDiaryRepository(database.diaryEntryDao())
         annualSummaryRepository = DefaultAnnualSummaryRepository(database.annualSummaryDao())
@@ -195,13 +233,44 @@ class TraceDiaryApplication : Application() {
             passwordProvider = { appPasswordManager.loadActivePassword() },
             clock = Clock.systemDefaultZone(),
         )
+        aiSearchCoordinator = AiSearchCoordinator(
+            context = applicationContext,
+            diaryRepository = diaryRepository,
+            annualSummaryRepository = annualSummaryRepository,
+            userPreferencesRepository = userPreferencesRepository,
+            aiPreferencesRepository = aiPreferencesRepository,
+            credentialStore = secureCredentialStore,
+            passwordProvider = {
+                acceptedPassword ?: if (::appPasswordManager.isInitialized) {
+                    appPasswordManager.loadActivePassword()
+                } else null
+            },
+            unlockedProvider = {
+                acceptedPassword != null ||
+                    (::appPasswordManager.isInitialized && appPasswordManager.isUnlocked())
+            },
+            currentDateProvider = ::currentAppDate,
+            scope = applicationScope,
+            modelManager = AiModelManager(applicationContext),
+            statisticsUseCase = statisticsUseCase,
+        )
     }
 
     @Synchronized
     fun rekeyDatabase(newPassword: String) {
         check(::database.isInitialized) { "数据库尚未初始化" }
+        if (::aiSearchCoordinator.isInitialized) {
+            runBlocking(Dispatchers.IO) { aiSearchCoordinator.onPasswordWillChange() }
+        }
         val newPassphrase = CryptoBox.deriveDatabasePassphrase(newPassword)
         SqlCipherRekey.rekey(database.openHelper.writableDatabase, newPassphrase)
+        acceptedPassword = newPassword
+    }
+
+    fun resumeAiAfterPasswordChange() {
+        if (::aiSearchCoordinator.isInitialized) {
+            applicationScope.launch(Dispatchers.IO) { aiSearchCoordinator.unlock() }
+        }
     }
 
     fun resolveCurrentAppDate(now: LocalDateTime = LocalDateTime.now()): LocalDate {
@@ -225,10 +294,13 @@ class TraceDiaryApplication : Application() {
      */
     private fun buildDatabase(passphrase: ByteArray): TraceDiaryDatabase {
         val markerPrefs = getSharedPreferences(DB_META_PREFS, MODE_PRIVATE)
-        if (markerPrefs.getInt(KEY_DB_FORMAT_VERSION, 0) != CURRENT_DB_FORMAT_VERSION) {
+        val storedFormatVersion = markerPrefs.getInt(KEY_DB_FORMAT_VERSION, 0)
+        if (shouldDeleteDatabaseForFormat(storedFormatVersion, CURRENT_DB_FORMAT_VERSION)) {
             deleteDatabase("tracediary.db")
-            markerPrefs.edit().putInt(KEY_DB_FORMAT_VERSION, CURRENT_DB_FORMAT_VERSION).apply()
         }
+        // 标记缺失可能是重新安装后恢复了数据库文件，不能据此删库。固定口令派生
+        // 允许我们直接尝试打开；只有明确记录了不兼容旧格式时才按首版策略清理。
+        markerPrefs.edit().putInt(KEY_DB_FORMAT_VERSION, CURRENT_DB_FORMAT_VERSION).apply()
         return Room.databaseBuilder(
             this,
             TraceDiaryDatabase::class.java,
@@ -275,3 +347,6 @@ class TraceDiaryApplication : Application() {
         const val CURRENT_DB_FORMAT_VERSION = 3
     }
 }
+
+internal fun shouldDeleteDatabaseForFormat(storedVersion: Int, currentVersion: Int): Boolean =
+    storedVersion != 0 && storedVersion != currentVersion
