@@ -4,7 +4,7 @@
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
-| 2026-08-09 11:18 | search-keyword-excerpt | 正在实现搜索结果卡片围绕关键词展示前后文并突出命中内容。 |
+| 2026-08-09 11:29 | search-keyword-excerpt | 自动化验证已通过，等待 OPPO / ColorOS 真机确认搜索摘要信息密度与关键词高亮效果。 |
 
 ## TODO
 
