@@ -4,13 +4,13 @@
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
-| 2026-08-09 11:06 | exact-daily-reminder-alarm | 计划将日记提醒从周期 WorkManager 改为精确闹钟并修复业务日、后台数据库和重复通知问题。 |
+| 2026-08-09 11:18 | search-keyword-excerpt | 正在实现搜索结果卡片围绕关键词展示前后文并突出命中内容。 |
 
 ## TODO
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
-| 2026-08-09 10:21 | search-keyword-excerpt | 待优化搜索结果卡片，使摘要围绕关键词展示前后文并突出命中内容。 |
+| 2026-08-09 11:06 | exact-daily-reminder-alarm | 计划将日记提醒从周期 WorkManager 改为精确闹钟并修复业务日、后台数据库和重复通知问题。 |
 
 ## BLOCK
 
