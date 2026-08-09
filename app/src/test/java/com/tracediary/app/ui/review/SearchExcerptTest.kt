@@ -15,11 +15,11 @@ class SearchExcerptTest {
         )
 
         assertEquals(
-            "…" + "前".repeat(28) + "关键词" + "后".repeat(41) + "…",
+            "…" + "前".repeat(18) + "关键词" + "后".repeat(27) + "…",
             excerpt.text,
         )
         assertEquals(
-            listOf(SearchHighlightRange(start = 29, endExclusive = 32)),
+            listOf(SearchHighlightRange(start = 19, endExclusive = 22)),
             excerpt.highlightRanges,
         )
     }

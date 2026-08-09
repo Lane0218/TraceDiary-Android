@@ -1,7 +1,7 @@
 package com.tracediary.app.ui.review
 
-internal const val SearchExcerptMaxCodePoints: Int = 72
-internal const val SearchExcerptLeadingContextCodePoints: Int = 28
+internal const val SearchExcerptMaxCodePoints: Int = 48
+internal const val SearchExcerptLeadingContextCodePoints: Int = 18
 
 internal data class SearchHighlightRange(
     val start: Int,
