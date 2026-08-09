@@ -4,7 +4,7 @@
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
-| 2026-08-09 11:29 | search-keyword-excerpt | 自动化验证已通过，等待 OPPO / ColorOS 真机确认搜索摘要信息密度与关键词高亮效果。 |
+| 2026-08-09 11:50 | search-keyword-excerpt | 摘要已由 72 字收紧为 48 字并通过回归，等待 OPPO / ColorOS 真机确认调整后信息密度。 |
 | 2026-08-09 11:30 | ai-agent-search | 已明确端侧加密语义索引与用户自带 Key 云端只读 Agent 方案，进入实施计划阶段。 |
 
 ## TODO
