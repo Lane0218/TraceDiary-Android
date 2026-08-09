@@ -62,7 +62,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,7 +88,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val EntryDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
-private const val ContentPreviewLimit: Int = 60
 private val ReviewSearchControlsHeight = 128.dp
 
 @Composable
@@ -585,33 +583,21 @@ private fun SearchContent(
                                 if (entry.content.isNotBlank()) {
                                     Spacer(modifier = Modifier.height(4.dp))
 
-                                    val previewText = entry.content.preview()
+                                    val excerpt = remember(entry.content, state.appliedKeyword) {
+                                        buildSearchExcerpt(entry.content, state.appliedKeyword)
+                                    }
                                     val annotatedText = buildAnnotatedString {
-                                        var currentIndex = 0
-                                        var matchIndex = previewText.indexOf(
-                                            state.keyword,
-                                            startIndex = currentIndex,
-                                            ignoreCase = true,
-                                        )
-
-                                        while (matchIndex >= 0) {
-                                            append(previewText.substring(currentIndex, matchIndex))
-                                            withStyle(
+                                        append(excerpt.text)
+                                        excerpt.highlightRanges.forEach { range ->
+                                            addStyle(
                                                 style = SpanStyle(
                                                     color = MaterialTheme.colorScheme.primary,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            ) {
-                                                append(previewText.substring(matchIndex, matchIndex + state.keyword.length))
-                                            }
-                                            currentIndex = matchIndex + state.keyword.length
-                                            matchIndex = previewText.indexOf(
-                                                state.keyword,
-                                                startIndex = currentIndex,
-                                                ignoreCase = true,
+                                                    fontWeight = FontWeight.Bold,
+                                                ),
+                                                start = range.start,
+                                                end = range.endExclusive,
                                             )
                                         }
-                                        append(previewText.substring(currentIndex))
                                     }
 
                                     Text(
@@ -666,12 +652,6 @@ private fun ReviewEmptyState(
             )
         }
     }
-}
-
-private fun String.preview(): String {
-    val trimmed = trim().replace('\n', ' ')
-    return if (trimmed.length <= ContentPreviewLimit) trimmed
-    else trimmed.take(ContentPreviewLimit) + "…"
 }
 
 private fun SaveStatus.label(): String = when (this) {

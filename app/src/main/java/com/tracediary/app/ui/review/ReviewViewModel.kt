@@ -74,6 +74,7 @@ class ReviewViewModel(
                     current.copy(
                         search = current.search.copy(
                             availableYears = years,
+                            appliedKeyword = current.search.keyword.trim(),
                             results = runSearch(entries, current.search),
                         ),
                     )
@@ -121,6 +122,7 @@ class ReviewViewModel(
                         val updatedSearch = current.search.copy(keyword = keyword)
                         current.copy(
                             search = updatedSearch.copy(
+                                appliedKeyword = keyword.trim(),
                                 results = runSearch(allEntries, updatedSearch),
                             ),
                         )
@@ -223,14 +225,24 @@ class ReviewViewModel(
     fun onYearFilterChanged(year: Int?) {
         _state.update { current ->
             val updated = current.search.copy(yearFilter = year)
-            current.copy(search = updated.copy(results = runSearch(allEntries, updated)))
+            current.copy(
+                search = updated.copy(
+                    appliedKeyword = updated.keyword.trim(),
+                    results = runSearch(allEntries, updated),
+                ),
+            )
         }
     }
 
     fun onToggleRecordedOnly(value: Boolean) {
         _state.update { current ->
             val updated = current.search.copy(recordedOnly = value)
-            current.copy(search = updated.copy(results = runSearch(allEntries, updated)))
+            current.copy(
+                search = updated.copy(
+                    appliedKeyword = updated.keyword.trim(),
+                    results = runSearch(allEntries, updated),
+                ),
+            )
         }
     }
 
@@ -301,6 +313,7 @@ data class AnnualUiState(
 
 data class SearchUiState(
     val keyword: String = "",
+    val appliedKeyword: String = "",
     val yearFilter: Int? = null,
     val recordedOnly: Boolean = false,
     val results: List<DiaryEntry> = emptyList(),

@@ -145,11 +145,15 @@ class ReviewViewModelTest {
         assertEquals(listOf(2026, 2025), viewModel.state.value.search.availableYears)
 
         viewModel.onKeywordChanged("散步")
+        runCurrent()
+        assertEquals("散步", viewModel.state.value.search.keyword)
+        assertEquals("", viewModel.state.value.search.appliedKeyword)
         advanceTimeBy(ReviewViewModel.KEYWORD_DEBOUNCE_MS + 50)
         runCurrent()
         advanceUntilIdle()
 
         val afterKeyword = viewModel.state.value.search.results.map(DiaryEntry::date)
+        assertEquals("散步", viewModel.state.value.search.appliedKeyword)
         assertEquals(
             listOf(
                 LocalDate.parse("2026-05-17"),

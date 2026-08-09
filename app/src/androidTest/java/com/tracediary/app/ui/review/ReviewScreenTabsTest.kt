@@ -3,13 +3,17 @@ package com.tracediary.app.ui.review
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.tracediary.app.domain.model.AnnualSummary
 import com.tracediary.app.domain.model.DiaryEntry
+import com.tracediary.app.domain.model.SyncState
 import com.tracediary.app.domain.repository.AnnualSummaryRepository
 import com.tracediary.app.domain.repository.DiaryRepository
 import com.tracediary.app.domain.usecase.DiaryCalendarUseCase
@@ -99,9 +103,44 @@ class ReviewScreenTabsTest {
         composeTestRule.onNodeWithText("搜索日记内容、关键词...").assertIsDisplayed()
     }
 
+    @Test
+    fun searchResultShowsExcerptAroundLateKeyword() {
+        val content = "前文".repeat(40) + "关键词" + "后文".repeat(30)
+        val expectedExcerpt = buildSearchExcerpt(content, "关键词").text
+        val viewModel = ReviewViewModel(
+            diaryRepository = EmptyDiaryRepository(
+                initialEntries = listOf(entry("2026-05-17", content)),
+            ),
+            annualSummaryRepository = EmptyAnnualSummaryRepository(),
+            calendarUseCase = DiaryCalendarUseCase(),
+            searchUseCase = SearchDiaryEntriesUseCase(),
+            clock = fixedClock,
+        )
+
+        composeTestRule.setContent {
+            TraceDiaryTheme {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    ReviewScreen(viewModel = viewModel)
+                }
+            }
+        }
+
+        composeTestRule.onNode(hasSetTextAction()).performTextInput("关键词")
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithText(expectedExcerpt)
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+
+        composeTestRule.onNodeWithText(expectedExcerpt).assertIsDisplayed()
+        composeTestRule.onNodeWithText(content.take(60) + "…").assertDoesNotExist()
+    }
+
     /** 空 DiaryRepository，仅满足 ReviewViewModel 构造与初始 collect。 */
-    private class EmptyDiaryRepository : DiaryRepository {
-        private val entries = MutableStateFlow<List<DiaryEntry>>(emptyList())
+    private class EmptyDiaryRepository(
+        initialEntries: List<DiaryEntry> = emptyList(),
+    ) : DiaryRepository {
+        private val entries = MutableStateFlow(initialEntries)
 
         override fun observeEntry(date: LocalDate): Flow<DiaryEntry?> =
             entries.map { list -> list.firstOrNull { it.date == date } }
@@ -142,4 +181,12 @@ class ReviewScreenTabsTest {
 
         override suspend fun deleteSummary(year: Int) = Unit
     }
+
+    private fun entry(date: String, content: String): DiaryEntry = DiaryEntry(
+        date = LocalDate.parse(date),
+        content = content,
+        createdAt = Instant.parse("2026-01-01T00:00:00Z"),
+        updatedAt = Instant.parse("2026-05-17T00:00:00Z"),
+        syncState = SyncState.Synced,
+    )
 }
