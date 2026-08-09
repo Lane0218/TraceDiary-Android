@@ -119,6 +119,8 @@ class TraceDiaryApplication : Application() {
         userPreferencesRepository = DataStoreUserPreferencesRepository(applicationContext)
         dailyReminderScheduler = DailyReminderScheduler(applicationContext)
         secureCredentialStore = SecureCredentialStore(applicationContext)
+        // 迁移旧版本的周期提醒；新版本只保留 AlarmManager 单次精确闹钟。
+        dailyReminderScheduler.cancelLegacyPeriodicWork()
 
         runBlocking(Dispatchers.IO) {
             val prefs = userPreferencesRepository.preferences.first()
@@ -145,6 +147,29 @@ class TraceDiaryApplication : Application() {
             credentialStore = secureCredentialStore,
             onPasswordAccepted = { password -> initializeDataLayer(password) },
         )
+
+        // 冷启动、设备重启或系统回收进程后，根据持久化设置恢复下一次精确闹钟。
+        applicationScope.launch(Dispatchers.IO) {
+            val prefs = userPreferencesRepository.preferences.first()
+            if (!prefs.dailyReminderEnabled) return@launch
+            val readyForBackgroundReminder =
+                appPasswordManager.isRememberPasswordEnabled() &&
+                    dailyReminderScheduler.canScheduleExactAlarms()
+            if (!readyForBackgroundReminder) {
+                userPreferencesRepository.setReminderEnabled(false)
+                dailyReminderScheduler.cancel()
+                return@launch
+            }
+            try {
+                dailyReminderScheduler.scheduleForRecovery(
+                    timeOfDay = DailyReminderScheduler.parseTime(prefs.dailyReminderTime),
+                    boundaryTime = parseBoundaryTime(prefs.dayBoundaryTime),
+                )
+            } catch (_: Throwable) {
+                userPreferencesRepository.setReminderEnabled(false)
+                dailyReminderScheduler.cancel()
+            }
+        }
     }
 
     @Synchronized

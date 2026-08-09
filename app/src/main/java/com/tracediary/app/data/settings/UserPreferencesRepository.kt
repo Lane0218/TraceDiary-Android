@@ -21,6 +21,7 @@ data class UserPreferences(
     val dailyReminderEnabled: Boolean = false,
     val dailyReminderTime: String = "21:00",
     val dayBoundaryTime: String = "00:00",
+    val lastDailyReminderDate: String? = null,
     val savePasswordLocally: Boolean = true,
     val syncEnabled: Boolean = false,
     val syncProvider: String = "aliyun",
@@ -69,6 +70,7 @@ interface UserPreferencesRepository {
 
     suspend fun setReminderEnabled(value: Boolean)
     suspend fun setReminderTime(time: String)
+    suspend fun setLastDailyReminderDate(value: String?) {}
     suspend fun setDayBoundaryTime(time: String)
     suspend fun setSavePasswordLocally(value: Boolean)
     suspend fun setSyncEnabled(value: Boolean)
@@ -111,6 +113,7 @@ class DataStoreUserPreferencesRepository(
             dailyReminderEnabled = prefs[KEY_DAILY_REMINDER_ENABLED] ?: false,
             dailyReminderTime = prefs[KEY_DAILY_REMINDER_TIME] ?: "21:00",
             dayBoundaryTime = prefs[KEY_DAY_BOUNDARY_TIME] ?: "00:00",
+            lastDailyReminderDate = prefs[KEY_LAST_DAILY_REMINDER_DATE],
             savePasswordLocally = prefs[KEY_SAVE_PASSWORD_LOCALLY] ?: true,
             syncEnabled = prefs[KEY_SYNC_ENABLED] ?: false,
             syncProvider = prefs[KEY_SYNC_PROVIDER] ?: "aliyun",
@@ -129,6 +132,13 @@ class DataStoreUserPreferencesRepository(
 
     override suspend fun setReminderTime(time: String) {
         dataStore.edit { it[KEY_DAILY_REMINDER_TIME] = time }
+    }
+
+    override suspend fun setLastDailyReminderDate(value: String?) {
+        dataStore.edit { prefs ->
+            if (value == null) prefs.remove(KEY_LAST_DAILY_REMINDER_DATE)
+            else prefs[KEY_LAST_DAILY_REMINDER_DATE] = value
+        }
     }
 
     override suspend fun setDayBoundaryTime(time: String) {
@@ -191,6 +201,7 @@ class DataStoreUserPreferencesRepository(
         val KEY_DAILY_REMINDER_ENABLED = booleanPreferencesKey("daily_reminder_enabled")
         val KEY_DAILY_REMINDER_TIME = stringPreferencesKey("daily_reminder_time")
         val KEY_DAY_BOUNDARY_TIME = stringPreferencesKey("day_boundary_time")
+        val KEY_LAST_DAILY_REMINDER_DATE = stringPreferencesKey("last_daily_reminder_date")
         val KEY_SAVE_PASSWORD_LOCALLY = booleanPreferencesKey("save_password_locally")
         val KEY_SYNC_ENABLED = booleanPreferencesKey("sync_enabled")
         val KEY_SYNC_PROVIDER = stringPreferencesKey("sync_provider")

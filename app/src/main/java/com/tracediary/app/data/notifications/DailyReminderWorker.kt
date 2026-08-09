@@ -43,7 +43,16 @@ class DailyReminderWorker(
             return Result.success()
         }
 
-        val todayEntry = runCatching { loadTodayEntry(context) }.getOrNull()
+        val application = context as? TraceDiaryApplication
+        if (application == null || !application.isDataLayerReady()) {
+            // 旧周期任务迁移期间或应用尚未解锁时，不把“无法读取”当成“没有日记”。
+            return Result.success()
+        }
+        val todayEntry = try {
+            loadTodayEntry(context)
+        } catch (_: Throwable) {
+            return Result.retry()
+        }
         if (!shouldShowReminder(todayEntry)) {
             return Result.success()
         }
@@ -77,8 +86,9 @@ class DailyReminderWorker(
     }
 
     private suspend fun loadTodayEntry(context: Context): DiaryEntry? {
-        val application = context.applicationContext as? TraceDiaryApplication ?: return null
-        if (!application.isDataLayerReady()) return null
+        val application = context.applicationContext as? TraceDiaryApplication
+            ?: error("TraceDiaryApplication 未初始化")
+        check(application.isDataLayerReady()) { "数据层尚未初始化" }
         val reminderDate = application.resolveCurrentAppDate()
         return withContext(Dispatchers.IO) {
             application.diaryRepository.getEntry(reminderDate)

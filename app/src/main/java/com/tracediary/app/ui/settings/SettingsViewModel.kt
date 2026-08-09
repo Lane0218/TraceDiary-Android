@@ -87,6 +87,11 @@ sealed interface PasswordRotationStatus {
     data class Failed(val message: String) : PasswordRotationStatus
 }
 
+enum class ReminderBlocker {
+    RememberPassword,
+    ExactAlarmPermission,
+}
+
 /**
  * 设置页 UI 状态。包含 DataStore 持久化字段以及仅在内存中保留的敏感字段。
  */
@@ -94,6 +99,8 @@ data class SettingsUiState(
     val dailyReminderEnabled: Boolean = false,
     val dailyReminderTime: String = "21:00",
     val dayBoundaryTime: String = "00:00",
+    val reminderError: String? = null,
+    val reminderBlocker: ReminderBlocker? = null,
     val savePasswordLocally: Boolean = true,
     val syncEnabled: Boolean = false,
     val syncProvider: String = "aliyun",
@@ -210,17 +217,47 @@ class SettingsViewModel(
     }
 
     fun onToggleReminder(value: Boolean) {
+        if (value && appPasswordManager?.isRememberPasswordEnabled() == false) {
+            _uiState.update {
+                it.copy(
+                    reminderError = "开启提醒前请先开启“本机记住密码”",
+                    reminderBlocker = ReminderBlocker.RememberPassword,
+                )
+            }
+            return
+        }
+        if (value && reminderScheduler?.canScheduleExactAlarms() == false) {
+            _uiState.update {
+                it.copy(
+                    reminderError = DailyReminderScheduler.EXACT_ALARM_PERMISSION_REQUIRED,
+                    reminderBlocker = ReminderBlocker.ExactAlarmPermission,
+                )
+            }
+            return
+        }
         viewModelScope.launch {
-            repository.setReminderEnabled(value)
-            // 写完 DataStore 之后再调度，确保 UI 与后台任务一致。
             if (value) {
-                runCatching {
+                val result = runCatching {
                     val time = DailyReminderScheduler.parseTime(_uiState.value.dailyReminderTime)
-                    reminderScheduler?.schedule(time)
+                    val boundary = parseBoundaryTime(_uiState.value.dayBoundaryTime)
+                    reminderScheduler?.schedule(time, boundary)
+                }
+                if (result.isFailure) {
+                    repository.setReminderEnabled(false)
+                    _uiState.update {
+                        it.copy(
+                            dailyReminderEnabled = false,
+                            reminderError = result.exceptionOrNull()?.message ?: "提醒调度失败",
+                            reminderBlocker = null,
+                        )
+                    }
+                    return@launch
                 }
             } else {
                 reminderScheduler?.cancel()
             }
+            repository.setReminderEnabled(value)
+            _uiState.update { it.copy(reminderError = null, reminderBlocker = null) }
         }
     }
 
@@ -230,7 +267,14 @@ class SettingsViewModel(
             // 用户改时间后，如果当前是开启状态需要立即重新调度。
             if (_uiState.value.dailyReminderEnabled) {
                 runCatching {
-                    reminderScheduler?.schedule(DailyReminderScheduler.parseTime(time))
+                    reminderScheduler?.schedule(
+                        timeOfDay = DailyReminderScheduler.parseTime(time),
+                        boundaryTime = parseBoundaryTime(_uiState.value.dayBoundaryTime),
+                    )
+                }.onFailure { error ->
+                    _uiState.update {
+                        it.copy(reminderError = error.message ?: "提醒调度失败")
+                    }
                 }
             }
         }
@@ -240,6 +284,18 @@ class SettingsViewModel(
         viewModelScope.launch {
             val normalized = formatBoundaryTime(parseBoundaryTime(time))
             repository.setDayBoundaryTime(normalized)
+            if (_uiState.value.dailyReminderEnabled) {
+                runCatching {
+                    reminderScheduler?.schedule(
+                        timeOfDay = DailyReminderScheduler.parseTime(_uiState.value.dailyReminderTime),
+                        boundaryTime = parseBoundaryTime(normalized),
+                    )
+                }.onFailure { error ->
+                    _uiState.update {
+                        it.copy(reminderError = error.message ?: "提醒调度失败")
+                    }
+                }
+            }
         }
     }
 
@@ -250,10 +306,27 @@ class SettingsViewModel(
      */
     fun onNotificationPermissionGranted(granted: Boolean) {
         if (granted) return
-        if (!_uiState.value.dailyReminderEnabled) return
         viewModelScope.launch {
-            repository.setReminderEnabled(false)
-            reminderScheduler?.cancel()
+            if (_uiState.value.dailyReminderEnabled) {
+                repository.setReminderEnabled(false)
+                reminderScheduler?.cancel()
+            }
+            _uiState.update {
+                it.copy(
+                    reminderError = "请允许通知权限后才能使用日记提醒",
+                    reminderBlocker = null,
+                )
+            }
+        }
+    }
+
+    fun canScheduleExactAlarms(): Boolean = reminderScheduler?.canScheduleExactAlarms() ?: true
+
+    /** 从系统精确闹钟设置页返回后，若授权成功则继续完成开启流程。 */
+    fun onExactAlarmPermissionResumed() {
+        if (_uiState.value.reminderBlocker != ReminderBlocker.ExactAlarmPermission) return
+        if (canScheduleExactAlarms()) {
+            onToggleReminder(true)
         }
     }
 
@@ -268,8 +341,19 @@ class SettingsViewModel(
             repository.setSavePasswordLocally(value)
             appPasswordManager?.setRememberPasswordEnabled(value)
             if (!value) {
+                if (_uiState.value.dailyReminderEnabled) {
+                    repository.setReminderEnabled(false)
+                    reminderScheduler?.cancel()
+                }
                 secureCredentialStore?.saveLocalPassword(null)
-                _uiState.update { it.copy(localPassword = "") }
+                _uiState.update {
+                    it.copy(
+                        localPassword = "",
+                        dailyReminderEnabled = false,
+                        reminderError = "关闭“本机记住密码”后，日记提醒已关闭",
+                        reminderBlocker = null,
+                    )
+                }
             }
         }
     }

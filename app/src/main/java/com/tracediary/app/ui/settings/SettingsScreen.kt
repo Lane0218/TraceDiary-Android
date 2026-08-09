@@ -1,8 +1,11 @@
 package com.tracediary.app.ui.settings
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -45,6 +48,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.ui.settings.SettingsViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.settings.CalendarWeekStart
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
@@ -183,6 +189,7 @@ private fun MainSettingsList(
 @Composable
 private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var showSameDaySortPicker by remember { mutableStateOf(false) }
     var showWeekStartPicker by remember { mutableStateOf(false) }
     var showBoundaryTimePicker by remember { mutableStateOf(false) }
@@ -195,6 +202,31 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
     ) { granted ->
         viewModel.onNotificationPermissionGranted(granted)
         if (granted) viewModel.onToggleReminder(true)
+    }
+
+    LaunchedEffect(state.reminderBlocker) {
+        if (state.reminderBlocker == ReminderBlocker.ExactAlarmPermission &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+        ) {
+            runCatching {
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                        Uri.parse("package:${context.packageName}"),
+                    )
+                )
+            }
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.onExactAlarmPermissionResumed()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     LazyColumn(
@@ -279,6 +311,16 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                         onClick = { showReminderTimePicker = true }
                     )
                 }
+            }
+        }
+        if (state.reminderError != null) {
+            item {
+                Text(
+                    text = state.reminderError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
             }
         }
     }

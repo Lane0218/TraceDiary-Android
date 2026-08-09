@@ -12,12 +12,13 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 
 /**
  * 纯逻辑层单元测试：覆盖 [DailyReminderScheduler.parseTime] 与
  * [DailyReminderScheduler.computeInitialDelayMillis]。
  *
- * Worker 的真实调度依赖 WorkManager + Android 运行时，由 instrumented 测试覆盖。
+ * AlarmManager 的真实设置依赖 Android 运行时，由 instrumented 测试覆盖。
  */
 class DailyReminderSchedulerTest {
 
@@ -135,6 +136,104 @@ class DailyReminderSchedulerTest {
         assertFalse(DailyReminderWorker.shouldShowReminder(writtenEntry))
         assertTrue(DailyReminderWorker.shouldShowReminder(blankEntry))
         assertTrue(DailyReminderWorker.shouldShowReminder(null))
+    }
+
+    @Test
+    fun `精确提醒在业务日界线前固定为前一天`() {
+        val schedule = DailyReminderScheduler.computeNextSchedule(
+            now = LocalDateTime.of(2026, 5, 8, 23, 0),
+            targetTime = LocalTime.of(0, 30),
+            boundaryTime = LocalTime.of(2, 0),
+            zoneId = ZoneId.of("Asia/Shanghai"),
+        )
+
+        assertEquals(LocalDateTime.of(2026, 5, 9, 0, 30), schedule.triggerAt)
+        assertEquals(LocalDate.of(2026, 5, 8), schedule.targetBusinessDate)
+    }
+
+    @Test
+    fun `精确提醒在业务日界线后固定为当天`() {
+        val schedule = DailyReminderScheduler.computeNextSchedule(
+            now = LocalDateTime.of(2026, 5, 9, 1, 0),
+            targetTime = LocalTime.of(3, 30),
+            boundaryTime = LocalTime.of(2, 0),
+            zoneId = ZoneId.of("Asia/Shanghai"),
+        )
+
+        assertEquals(LocalDateTime.of(2026, 5, 9, 3, 30), schedule.triggerAt)
+        assertEquals(LocalDate.of(2026, 5, 9), schedule.targetBusinessDate)
+    }
+
+    @Test
+    fun `恢复调度在当前业务日提醒时间已过时先补设立即闹钟`() {
+        val schedule = DailyReminderScheduler.computeNextSchedule(
+            now = LocalDateTime.of(2026, 5, 9, 1, 0),
+            targetTime = LocalTime.of(0, 30),
+            boundaryTime = LocalTime.of(2, 0),
+            zoneId = ZoneId.of("Asia/Shanghai"),
+            recoverMissed = true,
+        )
+
+        assertEquals(LocalDate.of(2026, 5, 8), schedule.targetBusinessDate)
+        assertEquals(LocalDateTime.of(2026, 5, 9, 1, 0, 1), schedule.triggerAt)
+    }
+
+    @Test
+    fun `目标业务日已结束时不补发旧提醒`() {
+        val targetDate = LocalDate.of(2026, 5, 8)
+
+        assertFalse(
+            DailyReminderReceiver.shouldDeliverReminder(
+                currentBusinessDate = LocalDate.of(2026, 5, 9),
+                targetDate = targetDate,
+                entry = null,
+                lastReminderDate = null,
+            )
+        )
+    }
+
+    @Test
+    fun `目标业务日无记录时提醒`() {
+        val targetDate = LocalDate.of(2026, 5, 8)
+
+        assertTrue(
+            DailyReminderReceiver.shouldDeliverReminder(
+                currentBusinessDate = targetDate,
+                targetDate = targetDate,
+                entry = null,
+                lastReminderDate = null,
+            )
+        )
+        assertTrue(
+            DailyReminderReceiver.shouldDeliverReminder(
+                currentBusinessDate = targetDate,
+                targetDate = targetDate,
+                entry = diaryEntry(content = " \n\t ", date = targetDate),
+                lastReminderDate = null,
+            )
+        )
+    }
+
+    @Test
+    fun `已记录或已提醒的目标业务日不重复提醒`() {
+        val targetDate = LocalDate.of(2026, 5, 8)
+
+        assertFalse(
+            DailyReminderReceiver.shouldDeliverReminder(
+                currentBusinessDate = targetDate,
+                targetDate = targetDate,
+                entry = diaryEntry(content = "已经写过", date = targetDate),
+                lastReminderDate = null,
+            )
+        )
+        assertFalse(
+            DailyReminderReceiver.shouldDeliverReminder(
+                currentBusinessDate = targetDate,
+                targetDate = targetDate,
+                entry = null,
+                lastReminderDate = targetDate.toString(),
+            )
+        )
     }
 
     private fun diaryEntry(
