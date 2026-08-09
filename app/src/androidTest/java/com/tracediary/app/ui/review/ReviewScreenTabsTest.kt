@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -33,7 +34,7 @@ import java.time.ZoneOffset
  *
  * 数据源使用空仓储：
  * - 此时 ReviewViewModel.observeAnnualSummaries 计算出的 writableYears = 当年起向前 5 年，
- *   因此年度总结 Tab 必然展示「撰写新年度总结」。
+ *   因此年度总结 Tab 必然展示空状态与新增按钮。
  */
 @RunWith(AndroidJUnit4::class)
 class ReviewScreenTabsTest {
@@ -70,7 +71,8 @@ class ReviewScreenTabsTest {
         composeTestRule.onNodeWithText("年度总结").performClick()
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("撰写新年度总结").assertIsDisplayed()
+        composeTestRule.onNodeWithText("尚未撰写年度总结").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("新增年度总结").assertIsDisplayed()
     }
 
     @Test
@@ -94,7 +96,7 @@ class ReviewScreenTabsTest {
         composeTestRule.waitForIdle()
 
         // 默认就是搜索 Tab，placeholder 已可见。
-        composeTestRule.onNodeWithText("搜索日记内容...").assertIsDisplayed()
+        composeTestRule.onNodeWithText("搜索日记内容、关键词...").assertIsDisplayed()
     }
 
     /** 空 DiaryRepository，仅满足 ReviewViewModel 构造与初始 collect。 */
@@ -123,13 +125,6 @@ class ReviewScreenTabsTest {
 
         override suspend fun deleteEntry(date: LocalDate) = Unit
 
-        override suspend fun searchEntries(
-            query: String,
-            year: Int?,
-            recordedOnly: Boolean,
-        ): List<DiaryEntry> = emptyList()
-
-        override suspend fun getSameMonthDayEntries(date: LocalDate): List<DiaryEntry> = emptyList()
     }
 
     private class EmptyAnnualSummaryRepository : AnnualSummaryRepository {

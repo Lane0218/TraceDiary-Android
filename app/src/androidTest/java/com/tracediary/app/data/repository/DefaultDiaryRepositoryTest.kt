@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -23,8 +22,8 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
- * DefaultDiaryRepository 集成测试，对应 SPEC 6.1.4：
- * 用真实 Room（in-memory）验证日记仓储的 idempotent 落库语义、搜索过滤与往年今日逻辑。
+ * DefaultDiaryRepository 集成测试，对应 SPEC 6.1.2：
+ * 用真实 Room（in-memory）验证日记仓储的 idempotent 落库、时间戳与流式读取语义。
  */
 @RunWith(AndroidJUnit4::class)
 class DefaultDiaryRepositoryTest {
@@ -92,35 +91,6 @@ class DefaultDiaryRepositoryTest {
     }
 
     @Test
-    fun searchEntriesEmptyKeywordRecordedOnlyReturnsEmpty() = runBlocking {
-        val date = LocalDate.of(2026, 5, 17)
-        repository.saveEntry(date, "今天有内容")
-
-        val results = repository.searchEntries(query = "", year = null, recordedOnly = true)
-        assertTrue(results.isEmpty())
-    }
-
-    @Test
-    fun getSameMonthDayEntriesOnlyEarlierMatches() = runBlocking {
-        val target = LocalDate.of(2026, 5, 17)
-        // 应被命中：往年同一月日
-        repository.saveEntry(LocalDate.of(2025, 5, 17), "去年五一七")
-        repository.saveEntry(LocalDate.of(2024, 5, 17), "前年五一七")
-        // 不应命中：同月不同日
-        repository.saveEntry(LocalDate.of(2025, 5, 18), "去年五一八")
-        // 不应命中：不同月
-        repository.saveEntry(LocalDate.of(2025, 6, 17), "去年六一七")
-        // 不应命中：等于目标日期（要求严格早于）
-        repository.saveEntry(target, "今天")
-
-        val previous = repository.getSameMonthDayEntries(target)
-        assertEquals(
-            listOf(LocalDate.of(2025, 5, 17), LocalDate.of(2024, 5, 17)),
-            previous.map { it.date },
-        )
-    }
-
-    @Test
     fun observeAllEntriesEmitsAfterSave() = runBlocking {
         // 初始为空
         assertTrue(repository.observeAllEntries().first().isEmpty())
@@ -138,22 +108,6 @@ class DefaultDiaryRepositoryTest {
             listOf(LocalDate.of(2026, 5, 17), LocalDate.of(2026, 5, 18)),
             afterSecond.map { it.date },
         )
-    }
-
-    @Test
-    fun searchEntriesMatchesKeywordOrderedByEpochDayDesc() = runBlocking {
-        repository.saveEntry(LocalDate.of(2026, 5, 17), "上午散步")
-        repository.saveEntry(LocalDate.of(2026, 5, 18), "工作复盘")
-        repository.saveEntry(LocalDate.of(2026, 5, 19), "傍晚散步")
-
-        val hits = repository.searchEntries("散步", year = null, recordedOnly = false)
-        assertEquals(
-            listOf(LocalDate.of(2026, 5, 19), LocalDate.of(2026, 5, 17)),
-            hits.map { it.date },
-        )
-
-        // 限定 2025 年应不返回任何结果
-        assertFalse(repository.searchEntries("散步", year = 2025, recordedOnly = false).any())
     }
 
     @Test

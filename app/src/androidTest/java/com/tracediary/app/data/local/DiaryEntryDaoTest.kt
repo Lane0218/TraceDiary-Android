@@ -19,7 +19,7 @@ import java.time.LocalDate
 
 /**
  * DiaryEntryDao 集成测试，对应 SPEC 6.1.2：用真实 Room（in-memory）验证
- * upsert 唯一性、流式订阅、范围查询、模糊搜索、删除等关键路径。
+ * upsert 唯一性、流式订阅、范围查询和删除等关键路径。
  */
 @RunWith(AndroidJUnit4::class)
 class DiaryEntryDaoTest {
@@ -92,31 +92,6 @@ class DiaryEntryDaoTest {
         // 边界单点
         val singleDay = dao.getBetween(d2.toEpochDay(), d2.toEpochDay())
         assertEquals(listOf(d2), singleDay.map { LocalDate.ofEpochDay(it.epochDay) })
-    }
-
-    @Test
-    fun searchFuzzyMatchesContent() = runBlocking {
-        val d1 = LocalDate.of(2026, 5, 17)
-        val d2 = LocalDate.of(2026, 5, 18)
-        val d3 = LocalDate.of(2026, 5, 19)
-        dao.upsert(entity(date = d1, content = "上午散步 下午阅读"))
-        dao.upsert(entity(date = d2, content = "工作复盘"))
-        dao.upsert(entity(date = d3, content = "傍晚再次散步"))
-
-        val matched = dao.search("散步", null, null)
-        // ORDER BY epochDay DESC，所以 d3 在前
-        assertEquals(listOf(d3, d1), matched.map { LocalDate.ofEpochDay(it.epochDay) })
-
-        val noMatch = dao.search("骑行", null, null)
-        assertTrue(noMatch.isEmpty())
-
-        // 限定年份范围（2025 年），应过滤掉 2026 年数据
-        val rangeMiss = dao.search(
-            "散步",
-            LocalDate.of(2025, 1, 1).toEpochDay(),
-            LocalDate.of(2025, 12, 31).toEpochDay(),
-        )
-        assertTrue(rangeMiss.isEmpty())
     }
 
     @Test

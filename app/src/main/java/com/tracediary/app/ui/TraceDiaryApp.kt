@@ -49,6 +49,25 @@ fun TraceDiaryApp() {
         return
     }
 
+    TraceDiaryMainContent()
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun TraceDiaryMainContent(
+    todayContent: @Composable (pendingDate: LocalDate?, onPendingDateConsumed: () -> Unit) -> Unit =
+        { pendingDate, onPendingDateConsumed ->
+            TodayScreen(
+                pendingDate = pendingDate,
+                onPendingDateConsumed = onPendingDateConsumed,
+            )
+        },
+    reviewContent: @Composable (onJumpToToday: (LocalDate) -> Unit) -> Unit = { onJumpToToday ->
+        ReviewScreen(onJumpToToday = onJumpToToday)
+    },
+    statsContent: @Composable () -> Unit = { StatsScreen() },
+    settingsContent: @Composable () -> Unit = { SettingsScreen() },
+) {
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     // LocalDate 不能直接 Saveable，这里以 epochDay 形式持久化；-1 视为无值。
     var pendingTodayEpochDay by rememberSaveable { mutableStateOf(Long.MIN_VALUE) }
@@ -105,18 +124,18 @@ fun TraceDiaryApp() {
             color = MaterialTheme.colorScheme.background
         ) {
             when (selectedTabIndex) {
-                0 -> TodayScreen(
-                    pendingDate = pendingTodayDate,
-                    onPendingDateConsumed = { pendingTodayEpochDay = Long.MIN_VALUE },
+                0 -> todayContent(
+                    pendingTodayDate,
+                    { pendingTodayEpochDay = Long.MIN_VALUE },
                 )
-                1 -> ReviewScreen(
-                    onJumpToToday = { date ->
+                1 -> reviewContent(
+                    { date ->
                         pendingTodayEpochDay = date.toEpochDay()
                         selectedTabIndex = 0
                     },
                 )
-                2 -> StatsScreen()
-                else -> SettingsScreen()
+                2 -> statsContent()
+                else -> settingsContent()
             }
         }
     }

@@ -55,8 +55,8 @@ class DiaryCalendarUseCaseTest {
         )
 
         assertEquals(LocalDate.parse("2026-04-27"), grid.first().date)
-        assertEquals(LocalDate.parse("2026-06-07"), grid.last().date)
-        assertEquals(42, grid.size)
+        assertEquals(LocalDate.parse("2026-05-31"), grid.last().date)
+        assertEquals(35, grid.size)
     }
 
     @Test

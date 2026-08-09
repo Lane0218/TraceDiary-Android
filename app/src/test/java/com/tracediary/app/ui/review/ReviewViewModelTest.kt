@@ -200,7 +200,10 @@ class ReviewViewModelTest {
 
         advanceUntilIdle()
 
-        assertTrue(viewModel.state.value.annual.writableYears.first() <= 2025)
+        assertEquals(
+            listOf(2025, 2024, 2023, 2022, 2021),
+            viewModel.state.value.annual.writableYears,
+        )
         viewModelJob.cancel()
     }
 
@@ -266,16 +269,6 @@ class ReviewViewModelTest {
 
         override suspend fun deleteEntry(date: LocalDate) = Unit
 
-        override suspend fun searchEntries(
-            query: String,
-            year: Int?,
-            recordedOnly: Boolean,
-        ): List<DiaryEntry> = emptyList()
-
-        override suspend fun getSameMonthDayEntries(date: LocalDate): List<DiaryEntry> =
-            entries.value
-                .filter { it.date.month == date.month && it.date.dayOfMonth == date.dayOfMonth && it.date.isBefore(date) }
-                .sortedByDescending(DiaryEntry::date)
     }
 
     private class FakeAnnualSummaryRepository(

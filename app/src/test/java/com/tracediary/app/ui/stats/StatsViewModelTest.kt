@@ -182,9 +182,6 @@ class StatsViewModelTest {
         override suspend fun getEntriesBetween(start: LocalDate, endInclusive: LocalDate) = unsupported()
         override suspend fun saveEntry(date: LocalDate, content: String): DiaryEntry = unsupported()
         override suspend fun deleteEntry(date: LocalDate) = unsupported()
-        override suspend fun searchEntries(query: String, year: Int?, recordedOnly: Boolean) = unsupported()
-        override suspend fun getSameMonthDayEntries(date: LocalDate) = unsupported()
-
         private fun unsupported(): Nothing =
             throw UnsupportedOperationException("FakeDiaryRepository: 仅支持 observeAllEntries")
     }

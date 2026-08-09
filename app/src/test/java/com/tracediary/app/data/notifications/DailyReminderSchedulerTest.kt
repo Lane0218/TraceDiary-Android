@@ -17,7 +17,7 @@ import java.time.LocalTime
  * 纯逻辑层单元测试：覆盖 [DailyReminderScheduler.parseTime] 与
  * [DailyReminderScheduler.computeInitialDelayMillis]。
  *
- * Worker 的真实调度依赖 WorkManager + Android 运行时，放在 instrumented 测试覆盖。
+ * Worker 的真实调度依赖 WorkManager + Android 运行时，由 instrumented 测试覆盖。
  */
 class DailyReminderSchedulerTest {
 

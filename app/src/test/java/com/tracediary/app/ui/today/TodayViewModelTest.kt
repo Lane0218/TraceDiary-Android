@@ -504,17 +504,6 @@ private class FakeDiaryRepository(private val clock: Clock) : DiaryRepository {
         }
     }
 
-    override suspend fun searchEntries(
-        query: String,
-        year: Int?,
-        recordedOnly: Boolean,
-    ): List<DiaryEntry> = emptyList()
-
-    override suspend fun getSameMonthDayEntries(date: LocalDate): List<DiaryEntry> =
-        store.value.values
-            .filter { it.date.isBefore(date) }
-            .filter { it.date.month == date.month && it.date.dayOfMonth == date.dayOfMonth }
-            .sortedByDescending(DiaryEntry::date)
 }
 
 private class FakeUserPreferencesRepository(

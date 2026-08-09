@@ -3,8 +3,8 @@ package com.tracediary.app.ui.today
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -31,14 +31,9 @@ import java.time.ZoneOffset
 
 /**
  * TodayScreen Compose UI 测试，对应 SPEC 6.1.4：
- * - debounce 自动保存后状态文案变为「已保存」
+ * - 输入经 ViewModel 保存后状态文案变为「已保存」
  * - 切换周历前后按钮不会改变 selectedDate
  * - 字数随输入实时更新
- *
- * 注意：使用 [composeTestRule.mainClock.advanceTimeBy] 推进时间，
- * 因此 ViewModel 内部的 [kotlinx.coroutines.delay] 必须运行在与 mainClock 关联的
- * Main dispatcher 上；这里把 ioDispatcher 同样配置为 [Dispatchers.Main] 以保证
- * 协程在 mainClock 控制下推进。
  */
 @RunWith(AndroidJUnit4::class)
 class TodayScreenTest {
@@ -53,7 +48,7 @@ class TodayScreenTest {
     )
 
     @Test
-    fun debouncedAutoSaveTogglesStatusToSaved() {
+    fun textInputEventuallyShowsSavedStatus() {
         val repository = InMemoryDiaryRepository()
         val viewModel = TodayViewModel(
             diaryRepository = repository,
@@ -61,7 +56,8 @@ class TodayScreenTest {
             clock = fixedClock,
             // 让 IO 调度也在 mainClock 控制下，确保 mainClock.advanceTimeBy 能驱动落库。
             ioDispatcher = Dispatchers.Main,
-            autoSaveDebounceMillis = 600L,
+            // debounce 时序由 JVM ViewModel 测试覆盖；UI 测试只验证输入到状态文案的接线。
+            autoSaveDebounceMillis = 0L,
         )
 
         composeTestRule.setContent {
@@ -78,15 +74,14 @@ class TodayScreenTest {
         // 输入前应处于「未编辑」状态
         composeTestRule.onNodeWithText("未编辑").assertIsDisplayed()
 
-        // 输入正文，触发 onContentChanged → SaveStatus.Saving
+        // 输入正文，最终应经 ViewModel 落库并反映为“已保存”。
         composeTestRule.onNode(androidx.compose.ui.test.hasSetTextAction())
             .performTextInput("今天散步")
-        composeTestRule.mainClock.advanceTimeBy(50)
-        composeTestRule.onNodeWithText("保存中…").assertIsDisplayed()
-
-        // 推进 700ms 跨过 600ms debounce，应转为「已保存」
-        composeTestRule.mainClock.advanceTimeBy(700)
-        composeTestRule.waitForIdle()
+        composeTestRule.waitUntil(timeoutMillis = 5_000L) {
+            composeTestRule.onAllNodesWithText("已保存")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
         composeTestRule.onNodeWithText("已保存").assertIsDisplayed()
     }
 
@@ -158,7 +153,7 @@ class TodayScreenTest {
     }
 
     @Test
-    fun todayTitleIsClickable() {
+    fun todayTitle_returnsSelectedDateToToday() {
         val repository = InMemoryDiaryRepository()
         val viewModel = TodayViewModel(
             diaryRepository = repository,
@@ -176,8 +171,16 @@ class TodayScreenTest {
         }
 
         composeTestRule.waitForIdle()
+        composeTestRule.runOnIdle {
+            viewModel.onSelectDate(LocalDate.of(2024, 5, 15))
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("5月15日 星期三").assertIsDisplayed()
+
         composeTestRule.onNodeWithText("今天", useUnmergedTree = true)
-            .assertHasClickAction()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("5月17日 星期日").assertIsDisplayed()
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.onNodeWithContentDescriptionSafe(
@@ -229,16 +232,5 @@ class TodayScreenTest {
             store.value = store.value.toMutableMap().apply { remove(date) }
         }
 
-        override suspend fun searchEntries(
-            query: String,
-            year: Int?,
-            recordedOnly: Boolean,
-        ): List<DiaryEntry> = emptyList()
-
-        override suspend fun getSameMonthDayEntries(date: LocalDate): List<DiaryEntry> =
-            store.value.values
-                .filter { it.date.isBefore(date) }
-                .filter { it.date.month == date.month && it.date.dayOfMonth == date.dayOfMonth }
-                .sortedByDescending(DiaryEntry::date)
     }
 }

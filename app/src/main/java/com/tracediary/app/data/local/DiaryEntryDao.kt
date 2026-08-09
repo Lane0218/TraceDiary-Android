@@ -27,17 +27,6 @@ interface DiaryEntryDao {
     @Query("SELECT * FROM diary_entries ORDER BY epochDay ASC")
     fun observeAll(): Flow<List<DiaryEntryEntity>>
 
-    @Query(
-        """
-        SELECT * FROM diary_entries
-        WHERE content LIKE '%' || :query || '%'
-        AND (:startEpochDay IS NULL OR epochDay >= :startEpochDay)
-        AND (:endEpochDay IS NULL OR epochDay <= :endEpochDay)
-        ORDER BY epochDay DESC
-        """
-    )
-    suspend fun search(query: String, startEpochDay: Long?, endEpochDay: Long?): List<DiaryEntryEntity>
-
     @Query("DELETE FROM diary_entries WHERE epochDay = :epochDay")
     suspend fun deleteByDate(epochDay: Long)
 

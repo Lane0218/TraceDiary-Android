@@ -406,13 +406,6 @@ class ExportImportUseCaseTest {
             entries.value = entries.value.filterNot { it.date == date }
         }
 
-        override suspend fun searchEntries(
-            query: String,
-            year: Int?,
-            recordedOnly: Boolean,
-        ): List<DiaryEntry> = emptyList()
-
-        override suspend fun getSameMonthDayEntries(date: LocalDate): List<DiaryEntry> = emptyList()
     }
 
     private class FakeAnnualSummaryRepository(

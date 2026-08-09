@@ -32,10 +32,6 @@ interface DiaryRepository {
 
     suspend fun deleteEntry(date: LocalDate)
 
-    suspend fun searchEntries(query: String, year: Int? = null, recordedOnly: Boolean = true): List<DiaryEntry>
-
-    suspend fun getSameMonthDayEntries(date: LocalDate): List<DiaryEntry>
-
     /**
      * 更新本地条目的同步状态。条目不存在时静默忽略。
      *

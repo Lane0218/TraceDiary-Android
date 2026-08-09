@@ -1,5 +1,7 @@
 package com.tracediary.app.ui
 
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -7,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import com.tracediary.app.ui.theme.TraceDiaryTheme
 import org.junit.Rule
 import org.junit.Test
+import java.time.LocalDate
 
 class TraceDiaryAppTest {
 
@@ -17,50 +20,49 @@ class TraceDiaryAppTest {
     fun bottomNavigation_switchesBetweenPrimaryPages() {
         composeTestRule.setContent {
             TraceDiaryTheme {
-                TraceDiaryApp()
+                TraceDiaryMainContent(
+                    todayContent = { _, _ -> Text("今天页面内容") },
+                    reviewContent = { Text("回顾页面内容") },
+                    statsContent = { Text("统计页面内容") },
+                    settingsContent = { Text("设置页面内容") },
+                )
             }
         }
 
-        composeTestRule.onNodeWithText("往年今日").assertIsDisplayed()
+        composeTestRule.onNodeWithText("今天页面内容").assertIsDisplayed()
 
         composeTestRule.onNodeWithText("回顾").performClick()
-        composeTestRule.onNodeWithText("查看当天记录").assertIsDisplayed()
+        composeTestRule.onNodeWithText("回顾页面内容").assertIsDisplayed()
 
         composeTestRule.onNodeWithText("统计").performClick()
-        composeTestRule.onNodeWithText("年度热力图").assertIsDisplayed()
+        composeTestRule.onNodeWithText("统计页面内容").assertIsDisplayed()
 
         composeTestRule.onNodeWithText("设置").performClick()
-        composeTestRule.onNodeWithText("导出备份").assertIsDisplayed()
+        composeTestRule.onNodeWithText("设置页面内容").assertIsDisplayed()
     }
 
     @Test
-    fun settingsScreen_opensPreferencePage() {
+    fun reviewJump_routesDateBackToToday() {
+        val targetDate = LocalDate.of(2025, 5, 17)
         composeTestRule.setContent {
             TraceDiaryTheme {
-                TraceDiaryApp()
-            }
-        }
-
-        composeTestRule.onNodeWithText("设置").performClick()
-        composeTestRule.onNodeWithText("偏好设置").performClick()
-        composeTestRule.onNodeWithText("往年今日记录排序").assertIsDisplayed()
-        composeTestRule.onNodeWithText("按年份从晚到早显示").assertIsDisplayed()
-        composeTestRule.onNodeWithText("按年份从早到晚显示").assertIsDisplayed()
-    }
-
-    @Test
-    fun reviewScreen_switchesBetweenSecondarySections() {
-        composeTestRule.setContent {
-            TraceDiaryTheme {
-                TraceDiaryApp()
+                TraceDiaryMainContent(
+                    todayContent = { pendingDate, _ ->
+                        Text("待跳转日期：$pendingDate")
+                    },
+                    reviewContent = { onJumpToToday ->
+                        Button(onClick = { onJumpToToday(targetDate) }) {
+                            Text("查看当天记录")
+                        }
+                    },
+                    statsContent = {},
+                    settingsContent = {},
+                )
             }
         }
 
         composeTestRule.onNodeWithText("回顾").performClick()
-        composeTestRule.onNodeWithText("年度总结").performClick()
-        composeTestRule.onNodeWithText("历年总结").assertIsDisplayed()
-
-        composeTestRule.onNodeWithText("搜索").performClick()
-        composeTestRule.onNodeWithText("搜索记录内容").assertIsDisplayed()
+        composeTestRule.onNodeWithText("查看当天记录").performClick()
+        composeTestRule.onNodeWithText("待跳转日期：2025-05-17").assertIsDisplayed()
     }
 }

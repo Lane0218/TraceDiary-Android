@@ -23,8 +23,9 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class AppPasswordManager(
     context: Context,
-    private val credentialStore: SecureCredentialStore,
+    private val credentialStore: CloudCipherCredentialStore,
     private val onPasswordAccepted: (String) -> Unit = {},
+    private val preferenceFileName: String = PREF_FILE_NAME,
 ) {
 
     private val appContext = context.applicationContext
@@ -36,7 +37,7 @@ class AppPasswordManager(
     private val prefs by lazy {
         EncryptedSharedPreferences.create(
             appContext,
-            PREF_FILE_NAME,
+            preferenceFileName,
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,

@@ -941,14 +941,6 @@ private class FakeDiaryRepository(
         publish()
     }
 
-    override suspend fun searchEntries(
-        query: String,
-        year: Int?,
-        recordedOnly: Boolean,
-    ): List<DiaryEntry> = emptyList()
-
-    override suspend fun getSameMonthDayEntries(date: LocalDate): List<DiaryEntry> = emptyList()
-
     override suspend fun setSyncState(date: LocalDate, state: SyncState) {
         syncStates[date] = state
         store[date]?.let { store[date] = it.copy(syncState = state) }

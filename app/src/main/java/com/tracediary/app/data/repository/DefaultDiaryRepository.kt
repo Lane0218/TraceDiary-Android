@@ -76,25 +76,4 @@ class DefaultDiaryRepository(
         diaryEntryDao.updateSyncState(date.toEpochDay(), state)
     }
 
-    override suspend fun searchEntries(query: String, year: Int?, recordedOnly: Boolean): List<DiaryEntry> {
-        val normalizedQuery = query.trim()
-        if (recordedOnly && normalizedQuery.isEmpty()) {
-            return emptyList()
-        }
-        val start = year?.let { LocalDate.of(it, 1, 1).toEpochDay() }
-        val end = year?.let { LocalDate.of(it, 12, 31).toEpochDay() }
-        return diaryEntryDao
-            .search(normalizedQuery, start, end)
-            .map(DiaryEntryEntity::toDomain)
-    }
-
-    override suspend fun getSameMonthDayEntries(date: LocalDate): List<DiaryEntry> {
-        return diaryEntryDao.getBetween(Long.MIN_VALUE, Long.MAX_VALUE)
-            .asSequence()
-            .map(DiaryEntryEntity::toDomain)
-            .filter { it.date != date }
-            .filter { it.date.month == date.month && it.date.dayOfMonth == date.dayOfMonth }
-            .sortedByDescending { it.date }
-            .toList()
-    }
 }
