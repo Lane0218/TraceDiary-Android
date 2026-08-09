@@ -1,6 +1,6 @@
 # AI 语义搜索与云端 Agent
-状态=进行中
-更新时间=2026-08-09 15:55
+状态=待验收
+更新时间=2026-08-09 16:14
 
 ## 目标与背景
 
@@ -45,6 +45,7 @@
 - 已完成方案评估并将确定的长期约束写入 SPEC。
 - 已实现端侧 INT8 ONNX Embedding、独立 SQLCipher 加密索引、增量更新、云端只读 Agent、工具白名单、证据校验、临时会话、设置页及回顾 AI 问答页。
 - 主数据库与 AI 索引均复用唯一应用密码的固定派生结果；系统备份排除依赖 Keystore 的密码验证器/凭据、可重建模型与 AI 索引，恢复数据库时先验证密码再创建新安装验证器。
-- Windows `test assembleDebug` 与 `compileDebugAndroidTestKotlin` 通过；Pixel_9_Pro_XL 模拟器回归 40 个用例零失败、1 个既有精确闹钟环境用例跳过。
+- Windows `test assembleDebug` 与 `compileDebugAndroidTestKotlin` 通过；Pixel_9_Pro_XL 模拟器预检确认 AVD 名称和启动状态正确，完整回归记录 43 个 instrumentation 用例、0 失败、1 个既有精确闹钟环境用例跳过。
 - 本地注入固定模型资产后，Android 官方分词 ID、INT8 跨运行时参考向量、L2 归一化和相关文本排序黄金测试通过；模型为 24,010,842 字节、SHA-256 为 `15b717c382bcb518ba457b93ea6850ede7f4f1cd8937454aa06972366cd19bcc`，词表为 109,540 字节、SHA-256 为 `45bbac6b341c319adc98a532532882e91a9cefc0329aa57bac9ae761c27b291c`。
-- 已确认 ModelScope 镜像与 Hugging Face 上游文件哈希一致，用户同意采用 ModelScope 主源与 Hugging Face 备用源；待完成 App 内真实下载回归及 OPPO Find X9 Pro 的性能、网络、锁定、发热和证据跳转验收。
+- 已确认 ModelScope 镜像与 Hugging Face 上游文件哈希一致；模拟器删除预注入模型后，App 已通过 ModelScope 主源完成真实下载、校验和 ONNX 推理黄金测试，下载器的整组备用源回退与失败保留旧模型用例通过。
+- 产品代码已提交并推送为 `f666943`；待 OPPO Find X9 Pro 完成模型下载与备用源切换、索引及查询性能、网络中断恢复、锁定取消、内存与发热、回答证据和证据跳转验收，用户确认前不归档任务。
