@@ -1,6 +1,6 @@
 # AI 语义搜索与云端 Agent
-状态=阻塞
-更新时间=2026-08-09 14:58
+状态=进行中
+更新时间=2026-08-09 15:55
 
 ## 目标与背景
 
@@ -11,7 +11,7 @@
 ## 范围
 
 - 回顾页新增“AI问答”子页，顺序为“搜索 / AI问答 / 年度总结”，保留关键词搜索和默认入口。
-- 固定使用 INT8 ONNX 版 `BAAI/bge-small-zh-v1.5` 在端侧生成向量，模型通过 GitHub Release 显式下载并校验。
+- 固定使用 INT8 ONNX 版 `BAAI/bge-small-zh-v1.5` 在端侧生成向量，以 ModelScope 固定 revision 为主下载源、Hugging Face 固定 commit 为备用源，逐文件校验后原子启用。
 - 新增复用主数据库 passphrase 的独立 SQLCipher AI 索引数据库，覆盖全量首建、增量更新、删除、导入、同步、改密和损坏重建。
 - 支持用户配置 HTTPS OpenAI Chat Completions 兼容服务，提供 DeepSeek 预设，实现临时多轮问答、只读工具调用、大范围分析授权和本地证据验证。
 - AI 可读取日记、年度总结、本地统计和普通偏好；永久排除密码、密钥、Token、密文和底层同步配置。
@@ -46,5 +46,5 @@
 - 已实现端侧 INT8 ONNX Embedding、独立 SQLCipher 加密索引、增量更新、云端只读 Agent、工具白名单、证据校验、临时会话、设置页及回顾 AI 问答页。
 - 主数据库与 AI 索引均复用唯一应用密码的固定派生结果；系统备份排除依赖 Keystore 的密码验证器/凭据、可重建模型与 AI 索引，恢复数据库时先验证密码再创建新安装验证器。
 - Windows `test assembleDebug` 与 `compileDebugAndroidTestKotlin` 通过；Pixel_9_Pro_XL 模拟器回归 40 个用例零失败、1 个既有精确闹钟环境用例跳过。
-- 本地注入固定模型资产后，Android 官方分词 ID、INT8 跨运行时参考向量、L2 归一化和相关文本排序黄金测试通过；压缩资产为 16,309,042 字节，SHA-256 为 `62a7917624b8fb583e416b8c80b6541aa8927a0327b73e95467aaef682a7a1cf`。
-- 阻塞：规格中的匿名 HTTPS GitHub Release 尚不存在，当前固定下载 URL 返回 HTTP 404；创建公开模型仓库与 Release 需要用户明确授权。发布后须执行真实下载回归，再进行 OPPO Find X9 Pro 的性能、网络、锁定、发热和证据跳转验收。
+- 本地注入固定模型资产后，Android 官方分词 ID、INT8 跨运行时参考向量、L2 归一化和相关文本排序黄金测试通过；模型为 24,010,842 字节、SHA-256 为 `15b717c382bcb518ba457b93ea6850ede7f4f1cd8937454aa06972366cd19bcc`，词表为 109,540 字节、SHA-256 为 `45bbac6b341c319adc98a532532882e91a9cefc0329aa57bac9ae761c27b291c`。
+- 已确认 ModelScope 镜像与 Hugging Face 上游文件哈希一致，用户同意采用 ModelScope 主源与 Hugging Face 备用源；待完成 App 内真实下载回归及 OPPO Find X9 Pro 的性能、网络、锁定、发热和证据跳转验收。

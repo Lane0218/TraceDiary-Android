@@ -4,6 +4,7 @@
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
+| 2026-08-09 15:55 | ai-agent-search | 已确认采用 ModelScope 固定 revision 主源与 Hugging Face 固定 commit 备用源，继续实现逐文件校验和真实下载回归。 |
 | 2026-08-09 12:02 | exact-daily-reminder-alarm | 已确认精确闹钟方案，开始实现调度、后台接收、权限恢复和业务日判断。 |
 
 ## TODO
@@ -15,7 +16,6 @@
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
-| 2026-08-09 14:58 | ai-agent-search | 主体实现与模拟器验证已完成，等待授权创建公开模型 Release 后才能验证匿名下载并进入 OPPO 真机验收。 |
 
 ## ARCHIVE
 
