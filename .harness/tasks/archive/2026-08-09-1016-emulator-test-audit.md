@@ -1,6 +1,6 @@
 # 整理测试并在 Pixel 9 Pro XL 模拟器验收
-状态=待验收
-更新时间=2026-08-09 10:44
+状态=已完成
+更新时间=2026-08-09 11:15
 
 ## 目标与背景
 
@@ -37,6 +37,7 @@
 - ADB 目标确认：`emulator-5554`，AVD=`Pixel_9_Pro_XL`，model=`sdk_gphone16k_x86_64`，Android=17，`sys.boot_completed=1`。
 - `SqlCipherRekeyInstrumentedTest` 单独回归：1/1 通过。
 - `gradlew.bat connectedDebugAndroidTest --no-daemon`：36/36 通过，0 跳过、0 失败。
+- 固化到 `AGENTS.md` 的 Windows 命令已复验：真机与模拟器同时在线时，`ANDROID_SERIAL=emulator-5554` 仅启动 `Pixel_9_Pro_XL(AVD)` 的 36 个测试并全部通过。
 - 首次快照启动卡在 ADB offline；终止该模拟器进程后使用 `-no-snapshot-load -no-snapshot-save` 冷启动成功，未擦除 AVD 数据。
-- 待用户真机验收：在 OPPO 上创建一篇测试日记，修改应用密码，强制结束并重启应用；确认新密码可解锁且原日记可读，旧密码无法解锁。
+- OPPO 真机验收：用户已确认应用密码修改、强制结束并重启、新密码解锁及原日记读取、旧密码拒绝全部通过。
 - 产品与测试提交：`b5620ee test: 整理测试分层并补齐模拟器回归`，已推送至 `origin/main`。
