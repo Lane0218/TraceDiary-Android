@@ -1,23 +1,24 @@
-# TraceDiary Android 项目状态
+# Project Status
 
-- 最后更新：2026-08-08
+## ACTIVE
 
-## 当前阶段
+| 时间 | task short-slug | 一句话说明 |
+| --- | --- | --- |
 
-- 现有应用维护与增量功能开发。
+## TODO
 
-## 当前任务
+| 时间 | task short-slug | 一句话说明 |
+| --- | --- | --- |
+| 2026-08-08 23:19 | define-next-feature | 等待确认具体功能。 |
 
-- 无。
+## BLOCK
 
-## 下一步
+| 时间 | task short-slug | 一句话说明 |
+| --- | --- | --- |
 
-- 等待确认具体功能。
+## ARCHIVE
 
-## 阻塞项
-
-- 无。
-
-## 最近完成
-
-- 初始化轻量 Harness，统一项目规范、状态和任务胶囊的管理方式。
+| 时间 | task short-slug | 一句话说明 |
+| --- | --- | --- |
+| 2026-08-08 23:19 | initialize-lightweight-harness | 初始化轻量 Harness，统一项目规范、状态和任务胶囊的管理方式。 |
+| 2026-08-09 09:34 | refine-harness-rules | 压缩 Harness 规则，统一分钟级时间记录并建立独立提交约束。 |
