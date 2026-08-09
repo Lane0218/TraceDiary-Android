@@ -1,6 +1,6 @@
 # 日记提醒改为精确闹钟
 状态=进行中
-更新时间=2026-08-09 12:18
+更新时间=2026-08-09 12:43
 
 ## 目标与背景
 
@@ -40,4 +40,6 @@
 - 已完成第一轮实现，产品代码提交为 `49b44a1` 并已推送。
 - `git diff --check -- app/src/main app/src/test app/src/androidTest` 通过。
 - `./gradlew test -Psdk.dir=/mnt/c/Users/Lane0218/AppData/Local/Android/Sdk` 已解析到 Windows SDK，但 WSL 无法执行 Windows SDK 的 `build-tools/36.0.0/aapt`，构建在 Android Gradle Plugin 配置阶段阻塞。
-- 尚未完成 Windows Android Studio 构建、设备测试和 OPPO/ColorOS 真机验收；任务仍为“进行中”。
+- Windows `gradlew.bat test` 通过；Windows `gradlew.bat assembleDebug` 通过。
+- Pixel 模拟器仪器测试报告为 37 tests、0 failures、0 errors、1 skipped；精确闹钟调度测试因设备未授予精确闹钟权限而跳过。
+- OPPO 真机已连接，但本轮 Gradle connected 测试只选择了 Pixel 模拟器；OPPO/ColorOS 后台提醒和权限仍待真机验收，任务仍为“进行中”。
