@@ -254,11 +254,8 @@ class AiModelManager internal constructor(
         const val TOTAL_DOWNLOAD_SIZE_BYTES = MODEL_SIZE_BYTES + VOCABULARY_SIZE_BYTES
 
         private const val MODELSCOPE_REVISION = "08d7186b7de51be7c12444137221ad96825593d6"
-        private const val HUGGING_FACE_REVISION = "75c43b069aac4d136ba6bc1122f995fedcfd2781"
         private const val MODELSCOPE_BASE =
             "https://www.modelscope.cn/models/Xenova/bge-small-zh-v1.5/resolve/$MODELSCOPE_REVISION"
-        private const val HUGGING_FACE_BASE =
-            "https://huggingface.co/Xenova/bge-small-zh-v1.5/resolve/$HUGGING_FACE_REVISION"
         private const val MODEL_DIRECTORY = "ai-model/bge-small-zh-v1.5-int8-v1"
         private const val MODEL_FILE = "model.onnx"
         private const val VOCABULARY_FILE = "vocab.txt"
@@ -273,10 +270,6 @@ class AiModelManager internal constructor(
             AiModelDownloadSource(
                 modelUrl = "$MODELSCOPE_BASE/onnx/model_quantized.onnx",
                 vocabularyUrl = "$MODELSCOPE_BASE/vocab.txt",
-            ),
-            AiModelDownloadSource(
-                modelUrl = "$HUGGING_FACE_BASE/onnx/model_quantized.onnx?download=true",
-                vocabularyUrl = "$HUGGING_FACE_BASE/vocab.txt?download=true",
             ),
         )
     }

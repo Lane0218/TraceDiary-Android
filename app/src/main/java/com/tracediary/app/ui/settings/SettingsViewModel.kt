@@ -30,7 +30,9 @@ import com.tracediary.app.domain.usecase.ImportOptions
 import com.tracediary.app.domain.usecase.ImportResult
 import com.tracediary.app.domain.usecase.MergeStrategy
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -172,6 +174,7 @@ class SettingsViewModel(
 
     /** 暴露同步引擎进度供 UI 直接 collect，避免在 VM 中重复维护一份镜像。 */
     val syncEngineState: StateFlow<SyncEngine.SyncEngineState>? = syncEngine?.state
+    private var saveJob: Job? = null
 
     init {
         // 启动时把已持久化的 AK/SK 与本机密码缓存回填到内存 state，保证页面打开就能看到。
@@ -186,19 +189,19 @@ class SettingsViewModel(
                 )
             }
         }
-        // 收集 DataStore 偏好，与 UI state 保持同步。敏感字段、saveStatus 不被覆盖。
+        // 收集 DataStore 偏好，与 UI state 保持同步；未验证的同步字段保留在当前草稿。
         viewModelScope.launch {
             repository.preferences.collect { prefs ->
                 _uiState.update { current ->
                     val keepDraft = syncDraftsByProvider.containsKey(current.syncProvider)
-                current.copy(
+                    current.copy(
                     dailyReminderEnabled = prefs.dailyReminderEnabled,
                     dailyReminderTime = prefs.dailyReminderTime,
                     dayBoundaryTime = formatBoundaryTime(parseBoundaryTime(prefs.dayBoundaryTime)),
                     savePasswordLocally = prefs.savePasswordLocally,
                         syncEnabled = prefs.syncEnabled,
-                        syncProvider = prefs.syncProvider,
-                        syncDisplayName = prefs.syncDisplayName,
+                        syncProvider = if (keepDraft) current.syncProvider else prefs.syncProvider,
+                        syncDisplayName = if (keepDraft) current.syncDisplayName else prefs.syncDisplayName,
                         syncBucket = if (keepDraft) current.syncBucket else prefs.syncBucket,
                         syncRegion = if (keepDraft) current.syncRegion else prefs.syncRegion,
                         syncDirectory = if (keepDraft) current.syncDirectory else prefs.syncDirectory,
@@ -527,22 +530,10 @@ class SettingsViewModel(
                 saveError = null,
             )
         }
-        viewModelScope.launch {
-            repository.saveSyncConfiguration(
-                provider = provider,
-                displayName = restoredDraft.displayName,
-                bucket = restoredDraft.bucket,
-                region = restoredDraft.region,
-                directory = restoredDraft.directory,
-            )
-        }
     }
 
     fun onSyncDisplayNameChanged(value: String) {
-        val current = _uiState.value
-        syncDraftsByProvider[current.syncProvider] = current.toSyncConfigurationDraft()
-        _uiState.update { it.copy(syncDisplayName = value, saveStatus = SaveStatus.Idle, saveError = null) }
-        viewModelScope.launch { repository.setSyncDisplayName(value) }
+        updateSyncField { it.copy(syncDisplayName = value, saveStatus = SaveStatus.Idle, saveError = null) }
     }
 
     fun onSyncBucketChanged(value: String) {
@@ -567,31 +558,26 @@ class SettingsViewModel(
         viewModelScope.launch { repository.setCalendarWeekStart(value) }
     }
 
-    /**
-     * AK 输入：先更新内存 state；当 AK/SK 同时非空时，立即落到加密 prefs；
-     * 任一字段被清空时调用 [SecureCredentialStore.clearCloudCredential]，避免半截状态被保留。
-     */
+    /** AK/SK 只更新当前草稿，验证成功后才写入加密凭证存储。 */
     fun onSyncAccessKeyIdChanged(value: String) {
         updateSyncField { it.copy(syncAccessKeyId = value, saveStatus = SaveStatus.Idle, saveError = null) }
-        persistCloudCredential()
     }
 
     fun onSyncAccessKeySecretChanged(value: String) {
         updateSyncField { it.copy(syncAccessKeySecret = value, saveStatus = SaveStatus.Idle, saveError = null) }
-        persistCloudCredential()
     }
 
     private fun updateSyncField(transform: (SettingsUiState) -> SettingsUiState) {
         val current = _uiState.value
-        syncDraftsByProvider[current.syncProvider] = current.toSyncConfigurationDraft()
-        _uiState.update(transform)
+        val next = transform(current)
+        syncDraftsByProvider[next.syncProvider] = next.toSyncConfigurationDraft()
+        _uiState.value = next
     }
 
-    private fun persistCloudCredential() {
+    private fun persistCloudCredential(snapshot: SettingsUiState) {
         val store = secureCredentialStore ?: return
-        val state = _uiState.value
-        val id = state.syncAccessKeyId
-        val secret = state.syncAccessKeySecret
+        val id = snapshot.syncAccessKeyId
+        val secret = snapshot.syncAccessKeySecret
         if (id.isNotBlank() && secret.isNotBlank()) {
             store.saveCloudCredential(id, secret)
         } else {
@@ -600,35 +586,52 @@ class SettingsViewModel(
     }
 
     /**
-     * 保存非敏感云同步配置并发起一次 ping 验证连通性。
+     * 先验证当前草稿的云同步连接，成功后才一次性保存配置和凭证。
      *
-     * 流程：DataStore.saveSyncConfiguration → 持久化 AK/SK → 临时 RemoteStorage.ping。
-     * 失败时把错误消息透出到 [SettingsUiState.saveError]，以便 UI 展示。
+     * 失败时保留草稿，不改变已生效配置；错误消息透出到 [SettingsUiState.saveError]。
      */
     fun onSaveSyncConfiguration() {
+        if (saveJob?.isActive == true) return
         val snapshot = _uiState.value
-        viewModelScope.launch {
+        saveJob = viewModelScope.launch {
             _uiState.update { it.copy(saveStatus = SaveStatus.Saving, saveError = null) }
-            repository.saveSyncConfiguration(
-                provider = snapshot.syncProvider,
-                displayName = snapshot.syncDisplayName,
-                bucket = snapshot.syncBucket,
-                region = snapshot.syncRegion,
-                directory = snapshot.syncDirectory,
-            )
-            // 持久化凭证（已由输入回调覆盖，但保存按钮再兜底一次，应对从 init 直接进保存的场景）。
-            persistCloudCredential()
-
-            val pingResult = withContext(ioDispatcher) { tryConnect(snapshot) }
-            when (pingResult) {
-                is RemoteResult.Ok -> _uiState.update {
-                    it.copy(saveStatus = SaveStatus.Saved, saveError = null)
+            try {
+                val pingResult = withContext(ioDispatcher) { tryConnect(snapshot) }
+                when (pingResult) {
+                    is RemoteResult.Ok -> {
+                        repository.saveSyncConfiguration(
+                            provider = snapshot.syncProvider,
+                            displayName = snapshot.syncDisplayName,
+                            bucket = snapshot.syncBucket,
+                            region = snapshot.syncRegion,
+                            directory = snapshot.syncDirectory,
+                        )
+                        persistCloudCredential(snapshot)
+                        syncDraftsByProvider.remove(snapshot.syncProvider)
+                        _uiState.update { it.copy(saveStatus = SaveStatus.Saved, saveError = null) }
+                    }
+                    is RemoteResult.Err -> _uiState.update {
+                        it.copy(saveStatus = SaveStatus.Failed, saveError = pingResult.message)
+                    }
                 }
-                is RemoteResult.Err -> _uiState.update {
-                    it.copy(saveStatus = SaveStatus.Failed, saveError = pingResult.message)
+            } catch (_: CancellationException) {
+                _uiState.update { it.copy(saveStatus = SaveStatus.Idle, saveError = null) }
+            } catch (error: Throwable) {
+                _uiState.update {
+                    it.copy(saveStatus = SaveStatus.Failed, saveError = error.message ?: "无法验证同步连接")
                 }
             }
         }
+    }
+
+    fun cancelSaveVerification() {
+        saveJob?.cancel()
+        saveJob = null
+        _uiState.update { it.copy(saveStatus = SaveStatus.Idle, saveError = null) }
+    }
+
+    fun resetSaveStatus() {
+        _uiState.update { it.copy(saveStatus = SaveStatus.Idle, saveError = null) }
     }
 
     /** 用当前 UI 快照构造一个临时 [RemoteStorage] 并发起一次 ping。 */

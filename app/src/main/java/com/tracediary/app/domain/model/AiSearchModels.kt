@@ -24,7 +24,6 @@ data class AiConfiguration(
     val enabled: Boolean = false,
     val baseUrl: String = "https://api.deepseek.com",
     val model: String = "deepseek-chat",
-    val broadAnalysisAllowed: Boolean = false,
     val indexConsentGranted: Boolean = false,
 )
 
@@ -43,6 +42,8 @@ data class AiFeatureState(
     val configuration: AiConfiguration = AiConfiguration(),
     val availability: AiAvailability = AiAvailability.Disabled,
     val modelSizeBytes: Long = 0L,
+    val modelDownloaded: Boolean = false,
+    val indexReady: Boolean = false,
 )
 
 data class AiSearchFilter(

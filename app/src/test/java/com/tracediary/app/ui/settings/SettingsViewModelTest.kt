@@ -290,11 +290,12 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun onSyncProviderChanged_persistsProvider() = runTest(testDispatcher) {
+    fun onSyncProviderChanged_keepsProviderAsDraft() = runTest(testDispatcher) {
         advanceUntilIdle()
         viewModel.onSyncProviderChanged("tencent")
         advanceUntilIdle()
-        assertEquals("tencent", fakeRepo.current().syncProvider)
+        assertEquals("tencent", viewModel.uiState.value.syncProvider)
+        assertEquals("aliyun", fakeRepo.current().syncProvider)
     }
 
     @Test
@@ -354,7 +355,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun onSaveSyncConfiguration_persistsNonSensitiveFieldsBeforePing() = runTest(testDispatcher) {
+    fun onSaveSyncConfiguration_keepsDraftWhenValidationFails() = runTest(testDispatcher) {
         advanceUntilIdle()
         viewModel.onSyncBucketChanged("my-bucket")
         viewModel.onSyncRegionChanged("cn-hangzhou")
@@ -364,14 +365,13 @@ class SettingsViewModelTest {
         viewModel.onSaveSyncConfiguration()
         advanceUntilIdle()
 
-        // 配置在发起真实 ping 之前就已经写入 DataStore，单测不依赖网络结果。
-        assertEquals("my-bucket", fakeRepo.current().syncBucket)
-        assertEquals("cn-hangzhou", fakeRepo.current().syncRegion)
-        assertEquals("diary/", fakeRepo.current().syncDirectory)
-        assertEquals("我的日记", fakeRepo.current().syncDisplayName)
-        // ping 在 Dispatchers.IO 上跑真实 OkHttp，testDispatcher 推不动；
-        // 仅断言 saveStatus 至少离开了 Idle，进入了"保存中或已结束"的轨道。
-        assertTrue(viewModel.uiState.value.saveStatus != SaveStatus.Idle)
+        // 缺少凭证时验证失败，草稿仍留在 UI，已生效配置不被覆盖。
+        assertEquals(SaveStatus.Failed, viewModel.uiState.value.saveStatus)
+        assertEquals("my-bucket", viewModel.uiState.value.syncBucket)
+        assertEquals("", fakeRepo.current().syncBucket)
+        assertEquals("", fakeRepo.current().syncRegion)
+        assertEquals("TraceDiary/", fakeRepo.current().syncDirectory)
+        assertEquals("", fakeRepo.current().syncDisplayName)
     }
 
     @Test
@@ -398,6 +398,10 @@ class SettingsViewModelTest {
 
         assertEquals(SaveStatus.Saved, viewModel.uiState.value.saveStatus)
         assertEquals(null, viewModel.uiState.value.saveError)
+        assertEquals("my-bucket", fakeRepo.current().syncBucket)
+        assertEquals("cn-hangzhou", fakeRepo.current().syncRegion)
+        assertEquals("diary/", fakeRepo.current().syncDirectory)
+        assertEquals("我的日记", fakeRepo.current().syncDisplayName)
     }
 
     @Test
@@ -426,6 +430,10 @@ class SettingsViewModelTest {
 
         assertEquals(SaveStatus.Failed, viewModel.uiState.value.saveStatus)
         assertEquals("AK/SK 无效", viewModel.uiState.value.saveError)
+        assertEquals("", fakeRepo.current().syncBucket)
+        assertEquals("", fakeRepo.current().syncRegion)
+        assertEquals("TraceDiary/", fakeRepo.current().syncDirectory)
+        assertEquals("", fakeRepo.current().syncDisplayName)
     }
 
     @Test

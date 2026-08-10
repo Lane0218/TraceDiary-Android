@@ -158,7 +158,7 @@ fun AiQuestionScreen(
 private fun AiUnavailableContent(availability: AiAvailability) {
     val (title, description) = when (availability) {
         AiAvailability.Disabled -> "AI 搜索未开启" to "请在设置中配置并开启 AI 搜索。"
-        AiAvailability.NotConfigured -> "AI 服务未配置" to "请在设置中填写 HTTPS Base URL、模型名和 API Key。"
+        AiAvailability.NotConfigured -> "AI 服务未配置" to "请在设置中填写 Base URL、API Key 和模型名。"
         AiAvailability.ModelMissing -> "端侧模型未下载" to "请在设置中下载并校验语义模型。"
         is AiAvailability.Downloading -> "正在下载模型" to "下载进度 ${(availability.progress * 100).toInt()}%"
         AiAvailability.IndexRequired -> "本地索引尚未建立" to "请在设置中阅读隐私说明并确认建立完整索引。"

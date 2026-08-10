@@ -10,7 +10,6 @@ interface AiAdministrationService {
     fun loadApiKeyForEditing(): String
     suspend fun saveAndTestConnection(baseUrl: String, model: String, apiKey: String): AiAgentConnectionResult
     suspend fun setEnabled(enabled: Boolean)
-    suspend fun setBroadAnalysisAllowed(allowed: Boolean)
     suspend fun downloadModel(): Result<Unit>
     fun cancelCurrentWork()
     suspend fun confirmAndBuildIndex(): Result<Unit>

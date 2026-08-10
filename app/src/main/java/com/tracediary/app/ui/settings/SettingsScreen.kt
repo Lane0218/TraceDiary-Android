@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Image
 import androidx.compose.material.icons.Icons
@@ -30,18 +29,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.core.content.ContextCompat
@@ -60,6 +54,13 @@ import com.tracediary.app.domain.usecase.ExportFormat
 import com.tracediary.app.domain.usecase.ImportOptions
 import com.tracediary.app.domain.usecase.MergeStrategy
 import com.tracediary.app.ui.components.PrimaryPageHeader
+import com.tracediary.app.ui.components.SettingsRowDivider
+import com.tracediary.app.ui.components.SettingsValueField
+import com.tracediary.app.ui.components.TraceDialog
+import com.tracediary.app.ui.components.TraceDialogSurface
+import com.tracediary.app.ui.components.TraceMessageDialog
+import com.tracediary.app.ui.components.TraceProgressDialog
+import com.tracediary.app.ui.components.TraceSwitch
 import com.tracediary.app.ui.ai.AiSettingsPage
 import com.tracediary.app.ui.ai.AiSettingsViewModel
 import com.tracediary.app.ui.ai.aiAvailabilityLabel
@@ -91,7 +92,10 @@ fun SettingsScreen(
                 onNavigate = { activeSubPage = it }
             )
         } else {
-            SettingsSubPageContainer(title = page, onBack = { activeSubPage = null }) {
+            SettingsSubPageContainer(
+                title = if (page == "AI 搜索") "AI搜索设置" else page,
+                onBack = { activeSubPage = null },
+            ) {
                 when (page) {
                     "偏好设置" -> PreferenceSettingsPage(state = state, viewModel = viewModel)
                     "同步设置" -> SyncSettingsPage(state = state, viewModel = viewModel)
@@ -392,9 +396,8 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
         var selectedHour by remember { mutableStateOf(reminderHour) }
         var selectedMinute by remember { mutableStateOf(reminderMinute) }
 
-        BasicAlertDialog(
+        TraceDialogSurface(
             onDismissRequest = { showReminderTimePicker = false },
-            modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface).width(300.dp)
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -449,12 +452,8 @@ private fun <T> PreferenceChoiceDialog(
     onDismissRequest: () -> Unit,
     onOptionSelected: (T) -> Unit,
 ) {
-    BasicAlertDialog(
+    TraceDialogSurface(
         onDismissRequest = onDismissRequest,
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .width(300.dp)
     ) {
         Column(modifier = Modifier.padding(vertical = 12.dp)) {
             Text(
@@ -633,11 +632,6 @@ private fun EncryptionSettingsPage(state: SettingsUiState, viewModel: SettingsVi
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewModel) {
-    var showSaveErrorDialog by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(state.saveStatus) {
-        showSaveErrorDialog = state.saveStatus == SaveStatus.Failed && !state.saveError.isNullOrBlank()
-    }
-
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
@@ -729,12 +723,8 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
                         .fillMaxWidth()
                         .height(48.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = syncSaveButtonColors(state.saveStatus)
                 ) {
-                    Text(
-                        text = syncSaveButtonLabel(state.saveStatus),
-                        fontWeight = FontWeight.Medium
-                    )
+                    Text("保存并验证", fontWeight = FontWeight.Medium)
                 }
             }
 
@@ -750,13 +740,28 @@ private fun SyncSettingsPage(state: SettingsUiState, viewModel: SettingsViewMode
         }
     }
 
-    if (showSaveErrorDialog && state.saveStatus == SaveStatus.Failed && !state.saveError.isNullOrBlank()) {
-        TraceStatusDialog(
-            title = "连接验证失败",
-            message = state.saveError.orEmpty(),
-            confirmText = "我知道了",
-            onDismissRequest = { showSaveErrorDialog = false },
-            onConfirm = { showSaveErrorDialog = false },
+    when (state.saveStatus) {
+        SaveStatus.Idle -> Unit
+        SaveStatus.Saving -> TraceProgressDialog(
+            title = "请稍候",
+            message = "正在验证同步连接……",
+            onDismissRequest = {},
+            cancelText = "取消",
+            onCancel = viewModel::cancelSaveVerification,
+        )
+        SaveStatus.Saved -> TraceMessageDialog(
+            title = "操作完成",
+            message = "同步配置已保存，连接正常",
+            confirmText = "知道了",
+            onDismissRequest = viewModel::resetSaveStatus,
+            onConfirm = viewModel::resetSaveStatus,
+        )
+        SaveStatus.Failed -> TraceMessageDialog(
+            title = "操作失败",
+            message = state.saveError ?: "无法验证同步连接",
+            confirmText = "知道了",
+            onDismissRequest = viewModel::resetSaveStatus,
+            onConfirm = viewModel::resetSaveStatus,
         )
     }
 
@@ -812,34 +817,6 @@ private fun ManualSyncSection(state: SettingsUiState, viewModel: SettingsViewMod
 }
 
 @Composable
-private fun syncSaveButtonLabel(status: SaveStatus): String = when (status) {
-    SaveStatus.Idle -> "保存并检查"
-    SaveStatus.Saving -> "验证中…"
-    SaveStatus.Saved -> "已保存，连接正常"
-    SaveStatus.Failed -> "已保存，连接失败"
-}
-
-@Composable
-private fun syncSaveButtonColors(status: SaveStatus): ButtonColors {
-    return when (status) {
-        SaveStatus.Idle, SaveStatus.Saving -> ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
-            disabledContentColor = MaterialTheme.colorScheme.onPrimary,
-        )
-        SaveStatus.Saved -> ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF167A45),
-            contentColor = Color.White,
-        )
-        SaveStatus.Failed -> ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.error,
-            contentColor = MaterialTheme.colorScheme.onError,
-        )
-    }
-}
-
-@Composable
 private fun passwordRotationButtonLabel(status: PasswordRotationStatus): String = when (status) {
     PasswordRotationStatus.Idle -> "更新密码"
     PasswordRotationStatus.Working -> "正在更新…"
@@ -869,11 +846,7 @@ private fun passwordRotationButtonColors(status: PasswordRotationStatus): Button
 
 @Composable
 private fun SyncRowDivider() {
-    HorizontalDivider(
-        modifier = Modifier.padding(start = 20.dp),
-        thickness = 0.5.dp,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-    )
+    SettingsRowDivider()
 }
 
 @Composable
@@ -929,53 +902,13 @@ private fun SyncFieldRow(
     isPassword: Boolean = false,
     enabled: Boolean = true
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 52.dp)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(end = 12.dp)
-        )
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.weight(1f),
-            enabled = enabled,
-            singleLine = true,
-            visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Text,
-                autoCorrectEnabled = false,
-                imeAction = ImeAction.Done,
-            ),
-            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.End
-            ),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            decorationBox = { innerTextField ->
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    if (value.isEmpty()) {
-                        Text(
-                            text = "未填写",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                    }
-                    innerTextField()
-                }
-            }
-        )
-    }
+    SettingsValueField(
+        label = label,
+        value = value,
+        onValueChange = onValueChange,
+        isPassword = isPassword,
+        enabled = enabled,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1068,12 +1001,8 @@ private fun NotificationPage(state: SettingsUiState, viewModel: SettingsViewMode
         var selectedHour by remember { mutableStateOf(initialHour) }
         var selectedMinute by remember { mutableStateOf(initialMinute) }
 
-        BasicAlertDialog(
+        TraceDialogSurface(
             onDismissRequest = { showTimePicker = false },
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .width(300.dp)
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -1460,33 +1389,24 @@ private fun SettingsValueRow(
 private fun BackupStatusDialogs(state: SettingsUiState, viewModel: SettingsViewModel, isImport: Boolean) {
     when (val status = state.backupStatus) {
         BackupStatus.Idle -> Unit
-        BackupStatus.Working -> AlertDialog(
+        BackupStatus.Working -> TraceProgressDialog(
+            title = if (isImport) "正在导入数据" else "正在导出数据",
+            message = if (isImport) "正在解析备份并写入本机…" else "正在生成备份文件…",
             onDismissRequest = {},
-            title = { Text(if (isImport) "正在导入数据" else "正在导出数据") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(if (isImport) "正在解析备份并写入本机…" else "正在生成备份文件…")
-                    LinearProgressIndicator(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                            .clip(CircleShape)
-                    )
-                }
-            },
-            confirmButton = {},
         )
-        is BackupStatus.Success -> AlertDialog(
+        is BackupStatus.Success -> TraceMessageDialog(
+            title = if (isImport) "导入完成" else "导出完成",
+            message = status.message,
+            confirmText = "好的",
             onDismissRequest = viewModel::resetBackupStatus,
-            title = { Text(if (isImport) "导入完成" else "导出完成") },
-            text = { Text(status.message) },
-            confirmButton = { TextButton(onClick = viewModel::resetBackupStatus) { Text("好的") } },
+            onConfirm = viewModel::resetBackupStatus,
         )
-        is BackupStatus.Failed -> AlertDialog(
+        is BackupStatus.Failed -> TraceMessageDialog(
+            title = if (isImport) "导入失败" else "导出失败",
+            message = status.message,
+            confirmText = "我知道了",
             onDismissRequest = viewModel::resetBackupStatus,
-            title = { Text(if (isImport) "导入失败" else "导出失败") },
-            text = { Text(status.message) },
-            confirmButton = { TextButton(onClick = viewModel::resetBackupStatus) { Text("我知道了") } },
+            onConfirm = viewModel::resetBackupStatus,
         )
     }
 }
@@ -1499,55 +1419,17 @@ private fun SyncOpDialogs(state: SettingsUiState, viewModel: SettingsViewModel) 
         SyncOpStatus.Idle -> Unit
         is SyncOpStatus.Working -> {
             val engineState = viewModel.syncEngineState?.collectAsStateWithLifecycle()?.value
-            BasicAlertDialog(
+            TraceProgressDialog(
+                title = status.operation.workingTitle(),
+                message = engineState?.stage?.let { stageLabel(it) } ?: "正在准备…",
+                progress = engineState?.takeIf { it.total > 0 }?.let {
+                    it.progress.toFloat() / it.total
+                },
+                progressLabel = engineState?.takeIf { it.total > 0 }?.let {
+                    "${it.progress} / ${it.total}"
+                },
                 onDismissRequest = {},
-                modifier = Modifier
-                    .widthIn(max = 320.dp)
-                    .fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = status.operation.workingTitle(),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        val stageText = engineState?.stage?.let { stageLabel(it) } ?: "正在准备…"
-                        Text(
-                            text = stageText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        if (engineState != null && engineState.total > 0) {
-                            LinearProgressIndicator(
-                                progress = { (engineState.progress.toFloat() / engineState.total).coerceIn(0f, 1f) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(CircleShape),
-                            )
-                            Text(
-                                text = "${engineState.progress} / ${engineState.total}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            LinearProgressIndicator(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(CircleShape)
-                            )
-                        }
-                    }
-                }
-            }
+            )
         }
         is SyncOpStatus.Done -> TraceStatusDialog(
             title = if (status.summary.failed > 0) {
@@ -1579,42 +1461,13 @@ private fun TraceStatusDialog(
     onDismissRequest: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    BasicAlertDialog(
+    TraceMessageDialog(
+        title = title,
+        message = message,
+        confirmText = confirmText,
         onDismissRequest = onDismissRequest,
-        modifier = Modifier
-            .widthIn(max = 320.dp)
-            .fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .heightIn(max = 220.dp)
-                    .verticalScroll(rememberScrollState())
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = onConfirm) {
-                    Text(confirmText)
-                }
-            }
-        }
-    }
+        onConfirm = onConfirm,
+    )
 }
 
 private fun SyncOperation.title(): String = when (this) {
@@ -1706,7 +1559,7 @@ private fun AboutPage() {
     if (showPrivacyDialog) {
         TraceInfoDialog(
             onDismissRequest = { showPrivacyDialog = false },
-            title = { Text("隐私政策") },
+            title = "隐私政策",
             content = {
                 Text(
                     text = "TraceDiary 是一款单机日记应用。\n\n" +
@@ -1727,7 +1580,7 @@ private fun AboutPage() {
     if (showUpdateDialog) {
         TraceInfoDialog(
             onDismissRequest = { showUpdateDialog = false },
-            title = { Text("检查更新") },
+            title = "检查更新",
             content = {
                 Text(
                     text = "当前版本已是最新（v1.0）",
@@ -1745,33 +1598,17 @@ private fun AboutPage() {
 @Composable
 private fun TraceInfoDialog(
     onDismissRequest: () -> Unit,
-    title: @Composable () -> Unit,
+    title: String,
     content: @Composable () -> Unit,
     confirmText: String,
     onConfirm: () -> Unit
 ) {
-    BasicAlertDialog(
+    TraceDialog(
+        title = title,
         onDismissRequest = onDismissRequest,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 28.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface)
-    ) {
-        Column(
-            modifier = Modifier.padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 16.dp)
-        ) {
-            ProvideTextStyle(
-                value = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            ) {
-                title()
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
+        confirmText = confirmText,
+        onConfirm = onConfirm,
+        content = {
             Box(
                 modifier = Modifier
                     .heightIn(max = 360.dp)
@@ -1779,28 +1616,8 @@ private fun TraceInfoDialog(
             ) {
                 content()
             }
-
-            Spacer(modifier = Modifier.height(22.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(
-                    onClick = onConfirm,
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Text(
-                        text = confirmText,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-    }
+        },
+    )
 }
 
 @Composable
@@ -1845,22 +1662,6 @@ private fun ToggleItem(title: String, subtitle: String?, checked: Boolean, onChe
             onCheckedChange = onCheckedChange,
         )
     }
-}
-
-@Composable
-private fun TraceSwitch(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-) {
-    Switch(
-        checked = checked,
-        onCheckedChange = onCheckedChange,
-        enabled = enabled,
-        modifier = modifier.scale(0.86f),
-        colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary),
-    )
 }
 
 @Composable

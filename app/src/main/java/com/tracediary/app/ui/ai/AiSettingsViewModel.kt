@@ -76,10 +76,6 @@ class AiSettingsViewModel(
         viewModelScope.launch { service.setEnabled(enabled) }
     }
 
-    fun setBroadAnalysisAllowed(allowed: Boolean) {
-        viewModelScope.launch { service.setBroadAnalysisAllowed(allowed) }
-    }
-
     fun downloadModel() = launchOperation("正在下载并校验端侧模型……") {
         service.downloadModel().getOrThrow()
         "端侧模型已就绪"

@@ -15,7 +15,6 @@ interface AiPreferencesRepository {
     val configuration: Flow<AiConfiguration>
     suspend fun saveConnection(baseUrl: String, model: String)
     suspend fun setEnabled(enabled: Boolean)
-    suspend fun setBroadAnalysisAllowed(allowed: Boolean)
     suspend fun setIndexConsentGranted(granted: Boolean)
 }
 
@@ -31,7 +30,6 @@ class DataStoreAiPreferencesRepository(context: Context) : AiPreferencesReposito
             enabled = preferences[KEY_ENABLED] ?: false,
             baseUrl = preferences[KEY_BASE_URL] ?: DEFAULT_BASE_URL,
             model = preferences[KEY_MODEL] ?: DEFAULT_MODEL,
-            broadAnalysisAllowed = preferences[KEY_BROAD_ANALYSIS_ALLOWED] ?: false,
             indexConsentGranted = preferences[KEY_INDEX_CONSENT_GRANTED] ?: false,
         )
     }
@@ -47,10 +45,6 @@ class DataStoreAiPreferencesRepository(context: Context) : AiPreferencesReposito
         dataStore.edit { it[KEY_ENABLED] = enabled }
     }
 
-    override suspend fun setBroadAnalysisAllowed(allowed: Boolean) {
-        dataStore.edit { it[KEY_BROAD_ANALYSIS_ALLOWED] = allowed }
-    }
-
     override suspend fun setIndexConsentGranted(granted: Boolean) {
         dataStore.edit { it[KEY_INDEX_CONSENT_GRANTED] = granted }
     }
@@ -61,7 +55,6 @@ class DataStoreAiPreferencesRepository(context: Context) : AiPreferencesReposito
         private val KEY_ENABLED = booleanPreferencesKey("enabled")
         private val KEY_BASE_URL = stringPreferencesKey("base_url")
         private val KEY_MODEL = stringPreferencesKey("model")
-        private val KEY_BROAD_ANALYSIS_ALLOWED = booleanPreferencesKey("broad_analysis_allowed")
         private val KEY_INDEX_CONSENT_GRANTED = booleanPreferencesKey("index_consent_granted")
     }
 }

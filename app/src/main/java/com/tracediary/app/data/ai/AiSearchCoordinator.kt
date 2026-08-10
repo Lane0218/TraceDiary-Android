@@ -71,7 +71,9 @@ class AiSearchCoordinator(
     }
     private val operationMutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true }
-    private val _state = MutableStateFlow(AiFeatureState())
+    private val _state = MutableStateFlow(
+        AiFeatureState(modelSizeBytes = AiModelManager.TOTAL_DOWNLOAD_SIZE_BYTES),
+    )
     override val state: StateFlow<AiFeatureState> = _state.asStateFlow()
     private var configuration = AiConfiguration()
     private var embeddingEngine: AiEmbeddingEngine? = null
@@ -161,10 +163,6 @@ class AiSearchCoordinator(
         }
     }
 
-    override suspend fun setBroadAnalysisAllowed(allowed: Boolean) {
-        aiPreferencesRepository.setBroadAnalysisAllowed(allowed)
-    }
-
     override suspend fun downloadModel(): Result<Unit> = runOperation {
         modelManager.download().getOrThrow()
         refreshAvailability(modelManager.state.value)
@@ -245,7 +243,6 @@ class AiSearchCoordinator(
                 }
                 var transferredChars = 0
                 var toolCallCount = 0
-                val toolSession = ToolSession()
                 repeat(MAX_TOOL_ROUNDS) {
                     checkUnlocked()
                     val turn = agentClient.complete(
@@ -272,7 +269,7 @@ class AiSearchCoordinator(
                         toolCallCount += 1
                         check(toolCallCount <= MAX_TOOL_CALLS) { "AI 工具调用次数过多，请缩小问题范围" }
                         checkUnlocked()
-                        val output = executeTool(call, toolSession)
+                        val output = executeTool(call)
                         transferredChars += output.length
                         check(transferredChars <= MAX_TOTAL_TOOL_CHARS) { "本次分析读取的正文过多，请缩小时间范围" }
                         messages += AiAgentMessage(
@@ -354,26 +351,26 @@ class AiSearchCoordinator(
     }
 
     private suspend fun refreshAvailability(modelState: AiModelState) {
+        val modelDownloaded = modelState is AiModelState.Ready
+        val indexReady = modelDownloaded && unlockedProvider() && runCatching {
+            isIndexCurrent(indexStore.read { it.getMetadata() })
+        }.getOrDefault(false)
         val availability = when {
             !unlockedProvider() -> AiAvailability.Unavailable("应用已锁定")
             !configuration.enabled -> AiAvailability.Disabled
             configuration.baseUrl.isBlank() || configuration.model.isBlank() || !hasApiKey() -> AiAvailability.NotConfigured
             modelState is AiModelState.Downloading -> AiAvailability.Downloading(modelState.progress)
             modelState is AiModelState.Failed -> AiAvailability.Unavailable(modelState.message)
-            modelState !is AiModelState.Ready -> AiAvailability.ModelMissing
-            else -> {
-                val metadata = runCatching { indexStore.read { it.getMetadata() } }.getOrNull()
-                if (isIndexCurrent(metadata)) {
-                    AiAvailability.Ready
-                } else {
-                    AiAvailability.IndexRequired
-                }
-            }
+            !modelDownloaded -> AiAvailability.ModelMissing
+            indexReady -> AiAvailability.Ready
+            else -> AiAvailability.IndexRequired
         }
         _state.value = AiFeatureState(
             configuration = configuration,
             availability = availability,
             modelSizeBytes = AiModelManager.TOTAL_DOWNLOAD_SIZE_BYTES,
+            modelDownloaded = modelDownloaded,
+            indexReady = indexReady,
         )
     }
 
@@ -387,13 +384,13 @@ class AiSearchCoordinator(
         return (diaries + summaries).sortedWith(compareBy({ it.ref.type.ordinal }, { it.ref.key }))
     }
 
-    private suspend fun executeTool(call: AiAgentToolCall, toolSession: ToolSession): String {
+    private suspend fun executeTool(call: AiAgentToolCall): String {
         val arguments = runCatching { json.parseToJsonElement(call.arguments).jsonObject }
             .getOrElse { throw AiAgentException("工具参数无法解析") }
         val output = when (call.name) {
-            "semantic_search" -> semanticSearch(arguments, toolSession)
-            "list_records" -> listRecords(arguments, toolSession)
-            "read_records" -> readRecords(arguments, toolSession)
+            "semantic_search" -> semanticSearch(arguments)
+            "list_records" -> listRecords(arguments)
+            "read_records" -> readRecords(arguments)
             "get_statistics" -> getStatistics(arguments)
             "get_preferences" -> getPreferences()
             else -> throw AiAgentException("AI 请求了未授权工具")
@@ -402,7 +399,7 @@ class AiSearchCoordinator(
         return output
     }
 
-    private suspend fun semanticSearch(arguments: JsonObject, toolSession: ToolSession): String {
+    private suspend fun semanticSearch(arguments: JsonObject): String {
         val query = arguments.string("query").take(MAX_QUESTION_CHARS)
         require(query.isNotBlank()) { "语义检索问题为空" }
         val limit = (arguments["limit"]?.jsonPrimitive?.intOrNull ?: 8).coerceIn(1, MAX_SEMANTIC_RESULTS)
@@ -421,7 +418,6 @@ class AiSearchCoordinator(
                 val ref = chunk.toSourceRef()
                 val content = readSource(ref) ?: return@forEach
                 if (sha256(content) != chunk.sourceContentHash) return@forEach
-                toolSession.authorizedSources += ref
                 val quote = content.substring(
                     chunk.startOffset.coerceIn(0, content.length),
                     chunk.endOffsetExclusive.coerceIn(0, content.length),
@@ -436,8 +432,7 @@ class AiSearchCoordinator(
         }.toString()
     }
 
-    private suspend fun listRecords(arguments: JsonObject, toolSession: ToolSession): String {
-        check(configuration.broadAnalysisAllowed) { "大范围正文分析尚未授权" }
+    private suspend fun listRecords(arguments: JsonObject): String {
         val filter = sourceFilter(arguments)
         val page = (arguments["page"]?.jsonPrimitive?.intOrNull ?: 0).coerceIn(0, MAX_LIST_PAGES)
         val pageSize = (arguments["pageSize"]?.jsonPrimitive?.intOrNull ?: 20).coerceIn(1, MAX_LIST_PAGE_SIZE)
@@ -449,7 +444,6 @@ class AiSearchCoordinator(
             put("hasMore", JsonPrimitive((page + 1) * pageSize < documents.size))
             put("records", buildJsonArray {
                 documents.drop(page * pageSize).take(pageSize).forEach { document ->
-                    toolSession.authorizedSources += document.ref
                     add(buildJsonObject {
                         put("sourceType", JsonPrimitive(document.ref.type.wireName))
                         put("sourceKey", JsonPrimitive(document.ref.key))
@@ -461,7 +455,7 @@ class AiSearchCoordinator(
         }.toString()
     }
 
-    private suspend fun readRecords(arguments: JsonObject, toolSession: ToolSession): String {
+    private suspend fun readRecords(arguments: JsonObject): String {
         val refs = arguments["sources"]?.jsonArray.orEmpty().take(MAX_READ_RECORDS).map { element ->
             val item = element.jsonObject
             AiSourceRef(
@@ -472,9 +466,6 @@ class AiSearchCoordinator(
         require(refs.isNotEmpty()) { "未指定要读取的来源" }
         return buildJsonArray {
             refs.forEach { ref ->
-                check(configuration.broadAnalysisAllowed || ref in toolSession.authorizedSources) {
-                    "只能读取本次检索已返回的来源"
-                }
                 readSource(ref)?.let { content ->
                     add(buildJsonObject {
                         put("sourceType", JsonPrimitive(ref.type.wireName))
@@ -580,7 +571,7 @@ class AiSearchCoordinator(
             put("endDate", stringSchema())
             put("limit", integerSchema())
         }, listOf("query")))
-        add(tool("list_records", "分页扫描授权日期范围内的记录；仅用于所有、哪些、一共等穷举问题", buildJsonObject {
+        add(tool("list_records", "分页扫描指定日期范围内的记录；仅用于所有、哪些、一共等穷举问题", buildJsonObject {
             put("sourceTypes", arraySchema("diary", "annual_summary"))
             put("startDate", stringSchema())
             put("endDate", stringSchema())
@@ -728,8 +719,6 @@ class AiSearchCoordinator(
 
     private data class SourceDocument(val ref: AiSourceRef, val content: String, val updatedAt: Instant)
     private data class SourceFilter(val sourceTypes: Set<String>, val start: LocalDate?, val end: LocalDate?)
-    private data class ToolSession(val authorizedSources: MutableSet<AiSourceRef> = linkedSetOf())
-
     companion object {
         private const val MAX_QUESTION_CHARS = 1_000
         private const val MAX_AGENT_DURATION_MS = 120_000L
