@@ -4,7 +4,7 @@
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
-| 2026-08-09 16:14 | ai-agent-search | 产品实现及 Pixel 9 Pro XL 自动化回归已通过，进入 OPPO Find X9 Pro 性能、网络、锁定与证据交互待验收。 |
+| 2026-08-10 23:07 | ai-agent-search | AI 搜索与同步设置新版均已通过 OPPO 真机验收，产品提交已推送；按用户要求任务继续保留 active。 |
 | 2026-08-09 12:02 | exact-daily-reminder-alarm | 已确认精确闹钟方案，开始实现调度、后台接收、权限恢复和业务日判断。 |
 
 ## TODO
