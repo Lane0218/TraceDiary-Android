@@ -1,8 +1,12 @@
 package com.tracediary.app.data.ai
 
+import android.os.SystemClock
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.job
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -10,6 +14,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -30,34 +35,207 @@ class OpenAiCompatibleAgentClient(
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) {
     suspend fun complete(request: AiAgentRequest): AiAgentTurn = withContext(Dispatchers.IO) {
-        val endpoint = resolveEndpoint(request.baseUrl)
-        val payload = buildJsonObject {
-            put("model", JsonPrimitive(request.model))
-            put("stream", JsonPrimitive(false))
-            put("messages", buildJsonArray {
-                request.messages.forEach { message -> add(message.toJson()) }
-            })
-            if (request.tools.isNotEmpty()) {
-                put("tools", request.tools)
-                put("tool_choice", JsonPrimitive("auto"))
+        val startedAt = SystemClock.elapsedRealtime()
+        var headersAt: Long? = null
+        var bodyFinishedAt: Long? = null
+        var httpCode = -1
+        var responseChars = 0
+        var turn: AiAgentTurn? = null
+        var outcome = "failure"
+        var failure = "none"
+        try {
+            val httpRequest = Request.Builder()
+                .url(resolveEndpoint(request.baseUrl))
+                .header("Authorization", "Bearer ${request.apiKey}")
+                .header("Content-Type", JSON_MEDIA_TYPE.toString())
+                .post(buildRequestPayload(request, stream = false).toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+
+            client.newCall(httpRequest).await().use { response ->
+                headersAt = SystemClock.elapsedRealtime()
+                httpCode = response.code
+                val raw = response.body?.string().orEmpty()
+                bodyFinishedAt = SystemClock.elapsedRealtime()
+                responseChars = raw.length
+                if (raw.length > MAX_RESPONSE_CHARS) throw AiAgentException("AI 响应过大")
+                if (!response.isSuccessful) {
+                    throw AiAgentException(response.code.toUserMessage())
+                }
+                parseTurn(raw).also {
+                    turn = it
+                    outcome = "success"
+                }
             }
-        }.toString()
+        } catch (cancelled: CancellationException) {
+            outcome = "cancelled"
+            failure = "cancelled"
+            throw cancelled
+        } catch (error: Throwable) {
+            failure = error.performanceCategory(httpCode)
+            throw error
+        } finally {
+            val finishedAt = SystemClock.elapsedRealtime()
+            AiPerformanceLog.debug {
+                "event=cloud_complete trace=${request.traceId()} stage=${request.stage()} " +
+                    "outcome=$outcome failure=$failure totalMs=${finishedAt - startedAt} " +
+                    "headersMs=${headersAt?.minus(startedAt) ?: -1} " +
+                    "bodyMs=${headersAt?.let { bodyFinishedAt?.minus(it) } ?: -1} http=$httpCode " +
+                    "requestMessages=${request.messages.size} requestChars=${request.approximateChars()} " +
+                    "toolDefinitions=${request.tools.size} responseChars=$responseChars " +
+                    "answerChars=${turn?.message?.content?.length ?: 0} " +
+                    "toolCalls=${turn?.message?.toolCalls?.size ?: 0} finish=${turn?.finishReason.safeFinishReason()}"
+            }
+        }
+    }
+
+    suspend fun stream(
+        request: AiAgentRequest,
+        onEvent: suspend (AiAgentStreamEvent) -> Unit,
+    ): Unit = withContext(Dispatchers.IO) {
+        val endpoint = resolveEndpoint(request.baseUrl)
         val httpRequest = Request.Builder()
             .url(endpoint)
             .header("Authorization", "Bearer ${request.apiKey}")
             .header("Content-Type", JSON_MEDIA_TYPE.toString())
-            .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+            .header("Accept", "text/event-stream")
+            .post(buildRequestPayload(request, stream = true).toRequestBody(JSON_MEDIA_TYPE))
             .build()
-
-        client.newCall(httpRequest).await().use { response ->
-            val raw = response.body?.string().orEmpty()
-            if (raw.length > MAX_RESPONSE_CHARS) throw AiAgentException("AI 响应过大")
-            if (!response.isSuccessful) {
-                throw AiAgentException(response.code.toUserMessage())
+        val call = client.newCall(httpRequest)
+        val cancellationHandle = currentCoroutineContext().job.invokeOnCompletion { call.cancel() }
+        val startedAt = SystemClock.elapsedRealtime()
+        var headersAt: Long? = null
+        var httpCode = -1
+        var outcome = "failure"
+        var failure = "none"
+        var eventCount = 0
+        var contentEventCount = 0
+        var contentChars = 0
+        var reasoningEventCount = 0
+        var reasoningChars = 0
+        var toolDeltaCount = 0
+        var otherEventCount = 0
+        var firstDataAt: Long? = null
+        var firstReasoningAt: Long? = null
+        var firstContentAt: Long? = null
+        var lastContentAt: Long? = null
+        var firstToolAt: Long? = null
+        var previousDataAt: Long? = null
+        var maxDataGapMs = 0L
+        try {
+            call.execute().use { response ->
+                headersAt = SystemClock.elapsedRealtime()
+                httpCode = response.code
+                if (!response.isSuccessful) {
+                    throw AiAgentException(response.code.toUserMessage())
+                }
+                val source = response.body?.source() ?: throw AiAgentStreamException("AI 流式响应为空")
+                var sawData = false
+                var responseChars = 0
+                while (!source.exhausted()) {
+                    val line = source.readUtf8Line() ?: break
+                    if (line.isBlank() || line.startsWith(":")) continue
+                    if (!line.startsWith("data:")) {
+                        if (!sawData) throw AiAgentStreamException("AI 服务不支持流式输出")
+                        continue
+                    }
+                    sawData = true
+                    val dataAt = SystemClock.elapsedRealtime()
+                    eventCount += 1
+                    if (firstDataAt == null) firstDataAt = dataAt
+                    val gapMs = previousDataAt?.let { dataAt - it } ?: 0L
+                    maxDataGapMs = maxOf(maxDataGapMs, gapMs)
+                    previousDataAt = dataAt
+                    val data = line.removePrefix("data:").trim()
+                    if (data == "[DONE]") {
+                        onEvent(AiAgentStreamEvent(done = true))
+                        break
+                    }
+                    val event = parseStreamEvent(data)
+                    if (event.reasoningDeltaChars > 0) {
+                        if (firstReasoningAt == null) firstReasoningAt = dataAt
+                        reasoningEventCount += 1
+                        reasoningChars += event.reasoningDeltaChars
+                    }
+                    event.contentDelta?.takeIf { it.isNotEmpty() }?.let { delta ->
+                        if (firstContentAt == null) firstContentAt = dataAt
+                        lastContentAt = dataAt
+                        contentEventCount += 1
+                        contentChars += delta.length
+                        responseChars += delta.length
+                    }
+                    if (event.toolCallDeltas.isNotEmpty()) {
+                        if (firstToolAt == null) firstToolAt = dataAt
+                        toolDeltaCount += event.toolCallDeltas.size
+                    }
+                    if (
+                        event.contentDelta.isNullOrEmpty() &&
+                        event.reasoningDeltaChars == 0 &&
+                        event.toolCallDeltas.isEmpty() &&
+                        event.finishReason == null
+                    ) {
+                        otherEventCount += 1
+                    }
+                    if (responseChars > MAX_RESPONSE_CHARS) throw AiAgentException("AI 响应过大")
+                    onEvent(event)
+                }
+                if (!sawData) throw AiAgentStreamException("AI 服务未返回流式数据")
+                outcome = "success"
             }
-            parseTurn(raw)
+        } catch (cancelled: CancellationException) {
+            outcome = "cancelled"
+            failure = "cancelled"
+            throw cancelled
+        } catch (error: IOException) {
+            if (currentCoroutineContext().job.isCancelled) {
+                outcome = "cancelled"
+                failure = "cancelled"
+                throw CancellationException("AI 流式请求已取消", error)
+            }
+            failure = error.performanceCategory(httpCode)
+            throw AiAgentStreamException("AI 流式连接失败", error)
+        } catch (error: Throwable) {
+            failure = error.performanceCategory(httpCode)
+            throw error
+        } finally {
+            AiPerformanceLog.debug {
+                "event=cloud_stream trace=${request.traceId()} stage=${request.stage()} " +
+                    "outcome=$outcome failure=$failure totalMs=${SystemClock.elapsedRealtime() - startedAt} " +
+                    "headersMs=${headersAt?.minus(startedAt) ?: -1} http=$httpCode " +
+                    "firstDataMs=${firstDataAt?.minus(startedAt) ?: -1} " +
+                    "firstReasoningMs=${firstReasoningAt?.minus(startedAt) ?: -1} " +
+                    "firstContentMs=${firstContentAt?.minus(startedAt) ?: -1} " +
+                    "firstToolMs=${firstToolAt?.minus(startedAt) ?: -1} " +
+                    "contentSpanMs=${firstContentAt?.let { first -> lastContentAt?.minus(first) } ?: -1} " +
+                    "requestMessages=${request.messages.size} requestChars=${request.approximateChars()} " +
+                    "events=$eventCount reasoningEvents=$reasoningEventCount reasoningChars=$reasoningChars " +
+                    "contentEvents=$contentEventCount contentChars=$contentChars toolDeltas=$toolDeltaCount " +
+                    "otherEvents=$otherEventCount maxGapMs=$maxDataGapMs"
+            }
+            cancellationHandle.dispose()
         }
     }
+
+    internal fun buildRequestPayload(request: AiAgentRequest, stream: Boolean): String = buildJsonObject {
+        put("model", JsonPrimitive(request.model))
+        put("stream", JsonPrimitive(stream))
+        put("messages", buildJsonArray {
+            request.messages.forEach { message -> add(message.toJson()) }
+        })
+        if (request.tools.isNotEmpty()) {
+            put("tools", request.tools)
+            put("tool_choice", JsonPrimitive("auto"))
+        }
+        when (request.thinking) {
+            AiAgentThinking.Default -> Unit
+            AiAgentThinking.Low -> {
+                put("thinking", buildJsonObject { put("type", JsonPrimitive("enabled")) })
+                put("reasoning_effort", JsonPrimitive("low"))
+            }
+            AiAgentThinking.Disabled -> {
+                put("thinking", buildJsonObject { put("type", JsonPrimitive("disabled")) })
+            }
+        }
+    }.toString()
 
     suspend fun testConnection(
         baseUrl: String,
@@ -102,8 +280,33 @@ class OpenAiCompatibleAgentClient(
             message = AiAgentMessage(
                 role = "assistant",
                 content = message["content"]?.jsonPrimitive?.contentOrNull,
+                reasoningContent = message["reasoning_content"]?.jsonPrimitive?.contentOrNull,
                 toolCalls = calls,
             ),
+            finishReason = choice["finish_reason"]?.jsonPrimitive?.contentOrNull,
+        )
+    }
+
+    internal fun parseStreamEvent(raw: String): AiAgentStreamEvent {
+        val root = runCatching { json.parseToJsonElement(raw).jsonObject }
+            .getOrElse { throw AiAgentStreamException("AI 流式事件无法解析") }
+        val choice = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject
+            ?: return AiAgentStreamEvent()
+        val delta = choice["delta"]?.jsonObject
+        val toolCallDeltas = delta?.get("tool_calls")?.jsonArray.orEmpty().map { element ->
+            val call = element.jsonObject
+            val function = call["function"]?.jsonObject
+            AiAgentToolCallDelta(
+                index = call["index"]?.jsonPrimitive?.intOrNull ?: 0,
+                id = call["id"]?.jsonPrimitive?.contentOrNull,
+                name = function?.get("name")?.jsonPrimitive?.contentOrNull,
+                argumentsDelta = function?.get("arguments")?.jsonPrimitive?.contentOrNull,
+            )
+        }
+        return AiAgentStreamEvent(
+            contentDelta = delta?.get("content")?.jsonPrimitive?.contentOrNull,
+            reasoningDelta = delta?.get("reasoning_content")?.jsonPrimitive?.contentOrNull,
+            toolCallDeltas = toolCallDeltas,
             finishReason = choice["finish_reason"]?.jsonPrimitive?.contentOrNull,
         )
     }
@@ -111,6 +314,7 @@ class OpenAiCompatibleAgentClient(
     private fun AiAgentMessage.toJson(): JsonObject = buildJsonObject {
         put("role", JsonPrimitive(role))
         content?.let { put("content", JsonPrimitive(it)) }
+        reasoningContent?.let { put("reasoning_content", JsonPrimitive(it)) }
         toolCallId?.let { put("tool_call_id", JsonPrimitive(it)) }
         if (toolCalls.isNotEmpty()) {
             put("tool_calls", buildJsonArray {
@@ -162,6 +366,31 @@ class OpenAiCompatibleAgentClient(
             else -> "无法连接 AI 服务"
         }
 
+    private fun AiAgentRequest.traceId(): String = diagnostics?.traceId ?: "none"
+    private fun AiAgentRequest.stage(): String = diagnostics?.stage ?: "untracked"
+    private fun AiAgentRequest.approximateChars(): Int =
+        messages.sumOf { message ->
+            (message.content?.length ?: 0) +
+                (message.reasoningContent?.length ?: 0) +
+                message.toolCalls.sumOf { it.name.length + it.arguments.length }
+        } + tools.toString().length
+
+    private fun Throwable.performanceCategory(httpCode: Int): String = when {
+        this is CancellationException -> "cancelled"
+        httpCode >= 400 -> "http"
+        this is IOException -> "network"
+        this is AiAgentStreamException -> "stream"
+        this is AiAgentException -> "agent"
+        this is IllegalArgumentException -> "configuration"
+        else -> "unexpected"
+    }
+
+    private fun String?.safeFinishReason(): String = when (this) {
+        "stop", "length", "tool_calls", "content_filter" -> this
+        null -> "none"
+        else -> "other"
+    }
+
     companion object {
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private const val MAX_RESPONSE_CHARS = 1_000_000
@@ -176,6 +405,8 @@ class OpenAiCompatibleAgentClient(
 }
 
 class AiAgentException(message: String) : Exception(message)
+
+class AiAgentStreamException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 private fun JsonArray?.orEmpty(): JsonArray = this ?: JsonArray(emptyList())
 

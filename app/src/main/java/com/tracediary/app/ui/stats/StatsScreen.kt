@@ -29,7 +29,6 @@ import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.usecase.DiaryStatistics
 import com.tracediary.app.domain.usecase.HeatmapDay
 import com.tracediary.app.domain.usecase.MonthlyWordCount
-import com.tracediary.app.ui.components.PrimaryPageHeader
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.temporal.WeekFields
@@ -90,10 +89,6 @@ internal fun StatsContent(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item {
-            PrimaryPageHeader(title = "统计")
-        }
-
         item {
             OverviewGrid(statistics)
         }

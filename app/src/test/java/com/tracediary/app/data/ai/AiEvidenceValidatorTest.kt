@@ -2,6 +2,7 @@ package com.tracediary.app.data.ai
 
 import com.tracediary.app.domain.model.AiSourceRef
 import com.tracediary.app.domain.model.AiSourceType
+import com.tracediary.app.domain.model.AiEvidence
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -46,5 +47,73 @@ class AiEvidenceValidatorTest {
             )
         }
         assertTrue(stale.isFailure)
+    }
+
+    @Test
+    fun validate_acceptsStructuredSubmissionWithoutJsonRoundTrip() = runTest {
+        val answer = AiEvidenceValidator.validate(
+            answerText = "根据你的记录，你在三月洗过牙。",
+            insufficientEvidence = false,
+            evidence = listOf(
+                AiEvidence(
+                    AiSourceRef(AiSourceType.Diary, "2026-03-18"),
+                    "今天下午去洗牙",
+                ),
+            ),
+            sourceReader = { "今天下午去洗牙，医生说恢复不错。" },
+        )
+
+        assertEquals("根据你的记录，你在三月洗过牙。", answer.text)
+        assertEquals(1, answer.evidence.size)
+    }
+
+    @Test
+    fun validate_rejectsStructuredSubmissionWithMissingCurrentSource() = runTest {
+        val result = runCatching {
+            AiEvidenceValidator.validate(
+                answerText = "去了上海",
+                insufficientEvidence = false,
+                evidence = listOf(
+                    AiEvidence(AiSourceRef(AiSourceType.Diary, "2026-01-01"), "去了上海"),
+                ),
+                sourceReader = { null },
+            )
+        }
+
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun validate_keepsValidEvidenceAndDropsInvalidItems() = runTest {
+        val validRef = AiSourceRef(AiSourceType.Diary, "2026-03-18")
+        val answer = AiEvidenceValidator.validate(
+            answerText = "根据你的记录，三月洗过牙。",
+            insufficientEvidence = false,
+            evidence = listOf(
+                AiEvidence(validRef, "今天下午去洗牙"),
+                AiEvidence(AiSourceRef(AiSourceType.Diary, "2026-03-19"), "不存在的内容"),
+                AiEvidence(validRef, "模型改写后的内容"),
+            ),
+            sourceReader = { ref -> if (ref == validRef) "今天下午去洗牙，医生说恢复不错。" else null },
+        )
+
+        assertEquals(listOf(AiEvidence(validRef, "今天下午去洗牙")), answer.evidence)
+    }
+
+    @Test
+    fun validate_toleratesWhitespaceAndFullWidthFormattingDifferences() = runTest {
+        val answer = AiEvidenceValidator.validate(
+            answerText = "根据你的记录，完成了复诊。",
+            insufficientEvidence = false,
+            evidence = listOf(
+                AiEvidence(
+                    AiSourceRef(AiSourceType.Diary, "2026-03-18"),
+                    "复诊完成, 恢复正常",
+                ),
+            ),
+            sourceReader = { "复诊完成，\n恢复正常" },
+        )
+
+        assertEquals(1, answer.evidence.size)
     }
 }

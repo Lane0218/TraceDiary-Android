@@ -33,7 +33,7 @@ import java.time.YearMonth
 import java.time.ZoneOffset
 
 /**
- * 验证回顾页三个 Tab（搜索 / AI问答 / 年度总结）切换后内容区会随之变化，
+ * 验证回顾页三个 Tab（AI搜索 / 搜索 / 年度总结）切换后内容区会随之变化，
  * 对应 SPEC 7.1.4。
  *
  * 数据源使用空仓储：
@@ -64,7 +64,10 @@ class ReviewScreenTabsTest {
         composeTestRule.setContent {
             TraceDiaryTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
-                    ReviewScreen(viewModel = viewModel)
+                    ReviewScreen(
+                        viewModel = viewModel,
+                        aiContent = { androidx.compose.material3.Text("AI 测试内容") },
+                    )
                 }
             }
         }
@@ -80,7 +83,7 @@ class ReviewScreenTabsTest {
     }
 
     @Test
-    fun defaultTabIsSearch() {
+    fun defaultTabIsAiSearch() {
         val viewModel = ReviewViewModel(
             diaryRepository = EmptyDiaryRepository(),
             annualSummaryRepository = EmptyAnnualSummaryRepository(),
@@ -92,15 +95,17 @@ class ReviewScreenTabsTest {
         composeTestRule.setContent {
             TraceDiaryTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
-                    ReviewScreen(viewModel = viewModel)
+                    ReviewScreen(
+                        viewModel = viewModel,
+                        aiContent = { androidx.compose.material3.Text("AI 默认内容") },
+                    )
                 }
             }
         }
 
         composeTestRule.waitForIdle()
 
-        // 默认就是搜索 Tab，placeholder 已可见。
-        composeTestRule.onNodeWithText("搜索日记内容、关键词...").assertIsDisplayed()
+        composeTestRule.onNodeWithText("AI 默认内容").assertIsDisplayed()
     }
 
     @Test
@@ -124,7 +129,7 @@ class ReviewScreenTabsTest {
             }
         }
 
-        composeTestRule.onNodeWithText("AI问答").performClick()
+        composeTestRule.onNodeWithText("AI搜索").performClick()
         composeTestRule.onNodeWithText("AI 临时问答内容").assertIsDisplayed()
     }
 
@@ -145,11 +150,15 @@ class ReviewScreenTabsTest {
         composeTestRule.setContent {
             TraceDiaryTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
-                    ReviewScreen(viewModel = viewModel)
+                    ReviewScreen(
+                        viewModel = viewModel,
+                        aiContent = { androidx.compose.material3.Text("AI 测试内容") },
+                    )
                 }
             }
         }
 
+        composeTestRule.onNodeWithText("搜索").performClick()
         composeTestRule.onNode(hasSetTextAction()).performTextInput("关键词")
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             composeTestRule.onAllNodesWithText(expectedExcerpt)

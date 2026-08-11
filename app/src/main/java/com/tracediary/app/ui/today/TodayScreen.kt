@@ -76,7 +76,7 @@ import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
 
-import com.tracediary.app.ui.components.PrimaryPageHeader
+import com.tracediary.app.ui.components.TraceConfirmDialog
 import com.tracediary.app.ui.components.TraceDropdownMenu
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -110,19 +110,6 @@ fun TodayScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            PrimaryPageHeader(
-                title = "今天",
-                onTitleClick = viewModel::onJumpToToday,
-            ) {
-                TodayOverflowMenu(
-                    displayMonth = state.displayMonth,
-                    onJumpToMonth = viewModel::onJumpToMonth,
-                    onClearContent = viewModel::onDeleteCurrentEntry,
-                )
-            }
-        }
-
-        item {
             CalendarCard(
                 weekDays = state.weekDays,
                 weekHeaders = state.weekHeaders,
@@ -136,6 +123,7 @@ fun TodayScreen(
                 onPreviousMonth = viewModel::onPreviousMonth,
                 onNextMonth = viewModel::onNextMonth,
                 onToggleMonthExpand = viewModel::onToggleMonthExpand,
+                onJumpToMonth = viewModel::onJumpToMonth,
                 onSelectDate = viewModel::onSelectDate,
             )
         }
@@ -149,6 +137,7 @@ fun TodayScreen(
                 syncState = state.currentEntrySyncState,
                 deleteErrorMessage = state.deleteErrorMessage,
                 onContentChanged = viewModel::onContentChanged,
+                onClearContent = viewModel::onDeleteCurrentEntry,
             )
         }
 
@@ -203,8 +192,10 @@ private fun CalendarCard(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onToggleMonthExpand: () -> Unit,
+    onJumpToMonth: (YearMonth) -> Unit,
     onSelectDate: (LocalDate) -> Unit,
 ) {
+    var showMonthPicker by remember { mutableStateOf(false) }
     Card(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -233,6 +224,10 @@ private fun CalendarCard(
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable { showMonthPicker = true }
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
                     )
                     IconButton(onClick = onToggleMonthExpand, modifier = Modifier.size(28.dp)) {
                         Icon(
@@ -273,6 +268,17 @@ private fun CalendarCard(
                 )
             }
         }
+    }
+
+    if (showMonthPicker) {
+        YearMonthPickerDialog(
+            initialYearMonth = displayMonth,
+            onDismiss = { showMonthPicker = false },
+            onConfirm = { picked ->
+                showMonthPicker = false
+                onJumpToMonth(picked)
+            },
+        )
     }
 }
 
@@ -431,6 +437,7 @@ private fun EntryEditorCard(
     syncState: SyncState?,
     deleteErrorMessage: String?,
     onContentChanged: (String) -> Unit,
+    onClearContent: () -> Unit,
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val coroutineScope = rememberCoroutineScope()
@@ -439,7 +446,18 @@ private fun EntryEditorCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp)) {
-            Text(text = title, style = MaterialTheme.typography.titleLarge)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                TodayEntryOverflowMenu(onClearContent = onClearContent)
+            }
             Spacer(modifier = Modifier.height(12.dp))
             TextField(
                 value = content,
@@ -586,13 +604,10 @@ private fun PreviousYearEntryCard(
 }
 
 @Composable
-private fun TodayOverflowMenu(
-    displayMonth: YearMonth,
-    onJumpToMonth: (YearMonth) -> Unit,
+private fun TodayEntryOverflowMenu(
     onClearContent: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    var showMonthPicker by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
 
     Box {
@@ -604,13 +619,6 @@ private fun TodayOverflowMenu(
             onDismissRequest = { menuExpanded = false }
         ) {
             DropdownMenuItem(
-                text = { Text("跳到指定月份") },
-                onClick = {
-                    menuExpanded = false
-                    showMonthPicker = true
-                }
-            )
-            DropdownMenuItem(
                 text = { Text("清空当日内容") },
                 onClick = {
                     menuExpanded = false
@@ -620,31 +628,17 @@ private fun TodayOverflowMenu(
         }
     }
 
-    if (showMonthPicker) {
-        YearMonthPickerDialog(
-            initialYearMonth = displayMonth,
-            onDismiss = { showMonthPicker = false },
-            onConfirm = { picked ->
-                showMonthPicker = false
-                onJumpToMonth(picked)
-            }
-        )
-    }
-
     if (showClearConfirm) {
-        AlertDialog(
+        TraceConfirmDialog(
+            title = "清空当天内容？",
+            message = "清空将删除该日期的本地记录，若已启用云同步会同时尝试删除云端对象，操作不可恢复。",
+            confirmText = "清空",
+            destructive = true,
             onDismissRequest = { showClearConfirm = false },
-            title = { Text("清空当天内容？") },
-            text = { Text("清空将删除该日期的本地记录，若已启用云同步会同时尝试删除云端对象，操作不可恢复。") },
-            confirmButton = {
-                TextButton(onClick = {
-                    onClearContent()
-                    showClearConfirm = false
-                }) { Text("确定") }
+            onConfirm = {
+                showClearConfirm = false
+                onClearContent()
             },
-            dismissButton = {
-                TextButton(onClick = { showClearConfirm = false }) { Text("取消") }
-            }
         )
     }
 }

@@ -27,7 +27,7 @@ import kotlin.OptIn
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 /**
- * 回顾页（搜索 / AI问答 / 年度总结）共享的 ViewModel。
+ * 回顾页（AI搜索 / 搜索 / 年度总结）共享的 ViewModel。
  *
  * 设计要点：
  * - 单一 ViewModel，两个子 UI 状态。
@@ -327,7 +327,7 @@ data class ReviewUiState(
 ) {
     companion object {
         fun initial(): ReviewUiState = ReviewUiState(
-            selectedTab = ReviewTab.Search,
+            selectedTab = ReviewTab.Ai,
             annual = AnnualUiState(),
             search = SearchUiState(),
         )

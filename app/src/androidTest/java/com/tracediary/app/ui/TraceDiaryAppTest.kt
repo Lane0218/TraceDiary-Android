@@ -65,4 +65,24 @@ class TraceDiaryAppTest {
         composeTestRule.onNodeWithText("查看当天记录").performClick()
         composeTestRule.onNodeWithText("待跳转日期：2025-05-17").assertIsDisplayed()
     }
+
+    @Test
+    fun reselectingTodayRequestsCurrentDate() {
+        composeTestRule.setContent {
+            TraceDiaryTheme {
+                TraceDiaryMainContent(
+                    todayContent = { pendingDate, _ ->
+                        Text("重复点击日期：$pendingDate")
+                    },
+                    reviewContent = {},
+                    statsContent = {},
+                    settingsContent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("重复点击日期：null").assertIsDisplayed()
+        composeTestRule.onNodeWithText("今天").performClick()
+        composeTestRule.onNodeWithText("重复点击日期：${LocalDate.now()}").assertIsDisplayed()
+    }
 }

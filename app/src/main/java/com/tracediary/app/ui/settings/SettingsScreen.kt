@@ -53,7 +53,6 @@ import com.tracediary.app.data.sync.SyncEngine
 import com.tracediary.app.domain.usecase.ExportFormat
 import com.tracediary.app.domain.usecase.ImportOptions
 import com.tracediary.app.domain.usecase.MergeStrategy
-import com.tracediary.app.ui.components.PrimaryPageHeader
 import com.tracediary.app.ui.components.SettingsRowDivider
 import com.tracediary.app.ui.components.SettingsValueField
 import com.tracediary.app.ui.components.TraceDialog
@@ -127,10 +126,6 @@ private fun MainSettingsList(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
-            PrimaryPageHeader(title = "设置")
-        }
-
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),

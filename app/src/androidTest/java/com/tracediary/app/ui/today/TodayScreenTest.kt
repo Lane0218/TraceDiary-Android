@@ -2,6 +2,9 @@ package com.tracediary.app.ui.today
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -153,10 +156,44 @@ class TodayScreenTest {
     }
 
     @Test
-    fun todayTitle_returnsSelectedDateToToday() {
+    fun pendingTodayDate_returnsSelectedDateToToday() {
         val repository = InMemoryDiaryRepository()
         val viewModel = TodayViewModel(
             diaryRepository = repository,
+            calendarUseCase = DiaryCalendarUseCase(),
+            clock = fixedClock,
+            ioDispatcher = Dispatchers.Main,
+        )
+        var pendingDate by mutableStateOf<LocalDate?>(null)
+
+        composeTestRule.setContent {
+            TraceDiaryTheme {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    TodayScreen(
+                        pendingDate = pendingDate,
+                        onPendingDateConsumed = { pendingDate = null },
+                        viewModel = viewModel,
+                    )
+                }
+            }
+        }
+
+        composeTestRule.waitForIdle()
+        composeTestRule.runOnIdle {
+            viewModel.onSelectDate(LocalDate.of(2024, 5, 15))
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("5月15日 星期三").assertIsDisplayed()
+
+        composeTestRule.runOnIdle { pendingDate = today }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("5月17日 星期日").assertIsDisplayed()
+    }
+
+    @Test
+    fun monthLabelOpensPickerAndEditorMenuOwnsClearAction() {
+        val viewModel = TodayViewModel(
+            diaryRepository = InMemoryDiaryRepository(),
             calendarUseCase = DiaryCalendarUseCase(),
             clock = fixedClock,
             ioDispatcher = Dispatchers.Main,
@@ -170,17 +207,13 @@ class TodayScreenTest {
             }
         }
 
-        composeTestRule.waitForIdle()
-        composeTestRule.runOnIdle {
-            viewModel.onSelectDate(LocalDate.of(2024, 5, 15))
-        }
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("5月15日 星期三").assertIsDisplayed()
+        composeTestRule.onNodeWithText("2026年5月").performClick()
+        composeTestRule.onNodeWithText("2026年").assertIsDisplayed()
+        composeTestRule.onNodeWithText("取消").performClick()
 
-        composeTestRule.onNodeWithText("今天", useUnmergedTree = true)
-            .performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("5月17日 星期日").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescriptionSafe("更多操作").performClick()
+        composeTestRule.onNodeWithText("清空当日内容").assertIsDisplayed()
+        composeTestRule.onNodeWithText("跳到指定月份").assertDoesNotExist()
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.onNodeWithContentDescriptionSafe(

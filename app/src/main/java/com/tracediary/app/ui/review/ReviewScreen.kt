@@ -1,6 +1,7 @@
 package com.tracediary.app.ui.review
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,15 +17,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -70,14 +72,14 @@ import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.domain.model.AnnualSummary
 import com.tracediary.app.domain.model.AiSourceType
+import com.tracediary.app.ui.components.ReviewEmptyState
+import com.tracediary.app.ui.components.ReviewEmptyStateHeaderHeight
 import com.tracediary.app.ui.ai.AiQuestionScreen
-import com.tracediary.app.ui.components.PrimaryPageHeader
 import com.tracediary.app.ui.components.TraceDropdownMenu
 import com.tracediary.app.ui.theme.DiaryContentTextStyle
 import com.tracediary.app.ui.theme.DiaryEditorTextStyle
@@ -90,7 +92,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val EntryDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
-private val ReviewSearchControlsHeight = 128.dp
+private val ReviewSearchControlsHeight = ReviewEmptyStateHeaderHeight
 
 @Composable
 fun ReviewScreen(
@@ -110,40 +112,32 @@ fun ReviewScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            PrimaryPageHeader(
-                title = "回顾",
-                modifier = Modifier.padding(bottom = 12.dp),
-            )
-
+        Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(CircleShape)
-                    .background(SurfaceDivider),
+                    .height(48.dp)
+                    .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val tabs = listOf(
+                    ReviewTab.Ai to "AI搜索",
                     ReviewTab.Search to "搜索",
-                    ReviewTab.Ai to "AI问答",
                     ReviewTab.AnnualSummary to "年度总结",
                 )
-                tabs.forEachIndexed { index, pair ->
+                tabs.forEach { pair ->
                     val (tab, label) = pair
                     val selected = state.selectedTab == tab
-                    val itemShape = when (index) {
-                        0 -> androidx.compose.foundation.shape.RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp, topEnd = 4.dp, bottomEnd = 4.dp)
-                        tabs.lastIndex -> androidx.compose.foundation.shape.RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp, topEnd = 20.dp, bottomEnd = 20.dp)
-                        else -> androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
-                    }
+                    val interactionSource = remember(tab) { MutableInteractionSource() }
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(itemShape)
-                            .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
-                            .clickable { viewModel.onSelectTab(tab) },
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null,
+                                onClick = { viewModel.onSelectTab(tab) },
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -152,9 +146,24 @@ fun ReviewScreen(
                             color = if (selected) MaterialTheme.colorScheme.primary else Ink600,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                         )
+                        if (selected) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .width(40.dp)
+                                    .height(2.dp)
+                                    .background(MaterialTheme.colorScheme.primary),
+                            )
+                        }
                     }
                 }
             }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(SurfaceDivider),
+            )
         }
 
         Box(modifier = Modifier.weight(1f)) {
@@ -481,7 +490,11 @@ private fun SearchContent(
             TextField(
                 value = state.keyword,
                 onValueChange = onKeywordChanged,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+                    .height(56.dp)
+                    .border(1.dp, SurfaceDivider, MaterialTheme.shapes.medium),
                 placeholder = {
                     Text(
                         "搜索日记内容、关键词...",
@@ -497,7 +510,7 @@ private fun SearchContent(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     )
                 },
-                shape = CircleShape,
+                shape = MaterialTheme.shapes.medium,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -637,45 +650,6 @@ private fun SearchContent(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun ReviewEmptyState(
-    title: String,
-    description: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier.fillMaxWidth(),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Column(
-            modifier = Modifier.padding(top = 80.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Icon(
-                Icons.Outlined.AutoStories,
-                contentDescription = null,
-                modifier = Modifier.size(100.dp),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = 24.dp)
-            )
         }
     }
 }

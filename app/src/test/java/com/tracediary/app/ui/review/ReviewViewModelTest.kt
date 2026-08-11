@@ -64,12 +64,12 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `初始 Tab 默认为搜索`() = runTest(dispatcher) {
+    fun `初始 Tab 默认为 AI 搜索`() = runTest(dispatcher) {
         val repo = FakeDiaryRepository(initialEntries = listOf(entry("2026-05-17", "今天")))
         val viewModel = createViewModel(repo, FakeAnnualSummaryRepository())
         advanceUntilIdle()
 
-        assertEquals(ReviewTab.Search, viewModel.state.value.selectedTab)
+        assertEquals(ReviewTab.Ai, viewModel.state.value.selectedTab)
 
         viewModelJob.cancel()
     }

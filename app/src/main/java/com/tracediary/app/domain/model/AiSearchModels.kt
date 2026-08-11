@@ -20,6 +20,17 @@ data class AiAnswer(
     val insufficientEvidence: Boolean = false,
 )
 
+sealed interface AiAgentProgress {
+    data object Understanding : AiAgentProgress
+    data object Searching : AiAgentProgress
+    data object Browsing : AiAgentProgress
+    data class Reading(val count: Int) : AiAgentProgress
+    data object Calculating : AiAgentProgress
+    data object ReadingPreferences : AiAgentProgress
+    data object Generating : AiAgentProgress
+    data object Validating : AiAgentProgress
+}
+
 data class AiConfiguration(
     val enabled: Boolean = false,
     val baseUrl: String = "https://api.deepseek.com",

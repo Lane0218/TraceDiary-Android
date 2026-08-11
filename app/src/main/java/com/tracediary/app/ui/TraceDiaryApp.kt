@@ -88,7 +88,13 @@ internal fun TraceDiaryMainContent(
                     tabs.forEachIndexed { index, item ->
                         NavigationBarItem(
                             selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
+                            onClick = {
+                                if (index == 0 && selectedTabIndex == 0) {
+                                    pendingTodayEpochDay = LocalDate.now().toEpochDay()
+                                } else {
+                                    selectedTabIndex = index
+                                }
+                            },
                             icon = {
                                 Icon(
                                     imageVector = item.icon,

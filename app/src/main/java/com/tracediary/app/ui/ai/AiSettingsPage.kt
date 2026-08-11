@@ -201,7 +201,7 @@ fun AiSettingsPage(
     if (showClearIndexConfirm) {
         TraceConfirmDialog(
             title = "清理本地索引？",
-            message = "只清理可重建的加密索引，不删除日记、端侧模型或云端配置。再次使用 AI 问答前需要重新建立索引。",
+            message = "只清理可重建的加密索引，不删除日记、端侧模型或云端配置。再次使用 AI 搜索前需要重新建立索引。",
             confirmText = "清理",
             onDismissRequest = { showClearIndexConfirm = false },
             onConfirm = {
