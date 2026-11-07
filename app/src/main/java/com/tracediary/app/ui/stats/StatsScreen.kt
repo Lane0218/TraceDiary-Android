@@ -20,6 +20,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -179,6 +181,8 @@ private fun MonthlyTrendCard(
     data: List<MonthlyWordCount>,
     onSelectYear: (Int) -> Unit,
 ) {
+    var selectedMonth by remember(year) { mutableStateOf<YearMonth?>(null) }
+    val selectedEntry = data.firstOrNull { it.yearMonth == selectedMonth }
     Card(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -193,6 +197,11 @@ private fun MonthlyTrendCard(
                     onSelect = onSelectYear,
                 )
             }
+            Text(
+                text = formatMonthlyTrendSelection(selectedEntry),
+                style = MaterialTheme.typography.labelMedium,
+                color = if (selectedEntry == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+            )
             val maxVal = data.maxOfOrNull(MonthlyWordCount::wordCount)?.coerceAtLeast(1) ?: 1
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -204,13 +213,26 @@ private fun MonthlyTrendCard(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.BottomCenter) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp)
+                                .semantics { contentDescription = "${entry.yearMonth.year}年${entry.yearMonth.monthValue}月，${entry.wordCount}字" }
+                                .clickable { selectedMonth = entry.yearMonth },
+                            contentAlignment = Alignment.BottomCenter,
+                        ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height((100 * ratio).dp.coerceAtLeast(4.dp))
                                     .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                                    .background(MaterialTheme.colorScheme.primary),
+                                    .background(
+                                        if (selectedEntry == null || selectedMonth == entry.yearMonth) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                                        },
+                                    ),
                             )
                         }
                         Spacer(modifier = Modifier.height(12.dp))
@@ -343,6 +365,11 @@ private fun HeatmapDay?.toCellColor(): Color {
 }
 
 private data class StatsData(val label: String, val value: String, val unit: String, val icon: ImageVector)
+
+internal fun formatMonthlyTrendSelection(entry: MonthlyWordCount?): String =
+    entry?.let {
+        "${it.yearMonth.year}年${it.yearMonth.monthValue}月 · ${String.format(Locale.CHINA, "%,d", it.wordCount)} 字"
+    } ?: "点击柱子查看月份字数"
 
 /**
  * 字数格式化：>=1000 时按 "12.8" / "k" 表示（保留 1 位小数，整数则去掉小数位），
