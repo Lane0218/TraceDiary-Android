@@ -25,3 +25,4 @@
 | 2026-08-09 12:01 | search-keyword-excerpt | 搜索摘要围绕关键词展示并高亮，48 字版本已通过自动化与 OPPO / ColorOS 真机验收。 |
 | 2026-08-11 18:51 | ai-agent-search | AI 搜索真实 SSE、只读 Agent、推理隔离、证据核对与 UI 优化已通过自动化及 OPPO / ColorOS 最终验收。 |
 | 2026-11-07 20:14 | today-business-date-navigation | “今天”导航按当前业务日定位；194 项单元测试、调试包编译通过，用户已确认验收。 |
+| 2026-11-07 20:26 | monthly-trend-axis-alignment | 字数趋势月份标签与柱子共享槽位；单元测试、构建通过，用户已确认真机验收。 |
