@@ -89,7 +89,8 @@ class TodayViewModel(
     private val syncEngine: SyncEngine? = null,
     private val appPasswordManager: AppPasswordManager? = null,
     private val clock: Clock = Clock.systemDefaultZone(),
-    private val initialDate: LocalDate = LocalDate.now(clock),
+    private val currentAppDate: () -> LocalDate = { LocalDate.now(clock) },
+    private val initialDate: LocalDate = currentAppDate(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val autoSaveDebounceMillis: Long = DEFAULT_AUTO_SAVE_DEBOUNCE_MILLIS,
     private val autoSyncDebounceMillis: Long = DEFAULT_AUTO_SYNC_DEBOUNCE_MILLIS,
@@ -194,7 +195,7 @@ class TodayViewModel(
     }
 
     fun onJumpToToday() {
-        onSelectDate(initialDate)
+        onSelectDate(currentAppDate())
     }
 
     fun onJumpToMonth(target: YearMonth) {
@@ -553,7 +554,7 @@ class TodayViewModel(
                         secureCredentialStore = application.secureCredentialStore,
                         syncEngine = application.syncEngine,
                         appPasswordManager = application.appPasswordManager,
-                        initialDate = application.currentAppDate(),
+                        currentAppDate = application::currentAppDate,
                     )
                 }
             }

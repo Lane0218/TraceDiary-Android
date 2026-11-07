@@ -118,9 +118,6 @@ class TraceDiaryApplication : Application() {
     @Volatile
     private var latestPreferences: UserPreferences? = null
 
-    @Volatile
-    private var cachedAppDate: LocalDate? = null
-
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
@@ -137,10 +134,6 @@ class TraceDiaryApplication : Application() {
         runBlocking(Dispatchers.IO) {
             val prefs = userPreferencesRepository.preferences.first()
             latestPreferences = prefs
-            cachedAppDate = resolveAppDate(
-                LocalDateTime.now(),
-                parseBoundaryTime(prefs.dayBoundaryTime),
-            )
         }
 
         // 持续缓存 preferences 最新值，供 storageProvider 同步读取。
@@ -283,7 +276,7 @@ class TraceDiaryApplication : Application() {
     }
 
     fun currentAppDate(): LocalDate {
-        return cachedAppDate ?: resolveCurrentAppDate()
+        return resolveCurrentAppDate()
     }
 
     /**

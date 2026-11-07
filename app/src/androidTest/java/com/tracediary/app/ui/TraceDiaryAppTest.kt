@@ -6,10 +6,13 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.tracediary.app.data.settings.resolveAppDate
 import com.tracediary.app.ui.theme.TraceDiaryTheme
 import org.junit.Rule
 import org.junit.Test
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 
 class TraceDiaryAppTest {
 
@@ -21,6 +24,7 @@ class TraceDiaryAppTest {
         composeTestRule.setContent {
             TraceDiaryTheme {
                 TraceDiaryMainContent(
+                    currentAppDate = { LocalDate.of(2026, 5, 17) },
                     todayContent = { _, _ -> Text("今天页面内容") },
                     reviewContent = { Text("回顾页面内容") },
                     statsContent = { Text("统计页面内容") },
@@ -47,6 +51,7 @@ class TraceDiaryAppTest {
         composeTestRule.setContent {
             TraceDiaryTheme {
                 TraceDiaryMainContent(
+                    currentAppDate = { LocalDate.of(2026, 5, 17) },
                     todayContent = { pendingDate, _ ->
                         Text("待跳转日期：$pendingDate")
                     },
@@ -67,10 +72,13 @@ class TraceDiaryAppTest {
     }
 
     @Test
-    fun reselectingTodayRequestsCurrentDate() {
+    fun reselectingTodayRequestsCurrentBusinessDate() {
+        var now = LocalDateTime.of(2026, 5, 8, 0, 20)
+        var boundary = LocalTime.of(1, 0)
         composeTestRule.setContent {
             TraceDiaryTheme {
                 TraceDiaryMainContent(
+                    currentAppDate = { resolveAppDate(now, boundary) },
                     todayContent = { pendingDate, _ ->
                         Text("重复点击日期：$pendingDate")
                     },
@@ -83,6 +91,35 @@ class TraceDiaryAppTest {
 
         composeTestRule.onNodeWithText("重复点击日期：null").assertIsDisplayed()
         composeTestRule.onNodeWithText("今天").performClick()
-        composeTestRule.onNodeWithText("重复点击日期：${LocalDate.now()}").assertIsDisplayed()
+        composeTestRule.onNodeWithText("重复点击日期：2026-05-07").assertIsDisplayed()
+
+        composeTestRule.runOnIdle { now = LocalDateTime.of(2026, 5, 8, 1, 0) }
+        composeTestRule.onNodeWithText("今天").performClick()
+        composeTestRule.onNodeWithText("重复点击日期：2026-05-08").assertIsDisplayed()
+
+        composeTestRule.runOnIdle { boundary = LocalTime.of(2, 0) }
+        composeTestRule.onNodeWithText("今天").performClick()
+        composeTestRule.onNodeWithText("重复点击日期：2026-05-07").assertIsDisplayed()
+    }
+
+    @Test
+    fun returningFromAnotherTabRequestsCurrentBusinessDate() {
+        val businessDate = LocalDate.of(2026, 5, 7)
+        composeTestRule.setContent {
+            TraceDiaryTheme {
+                TraceDiaryMainContent(
+                    currentAppDate = { businessDate },
+                    todayContent = { pendingDate, _ -> Text("待跳转日期：$pendingDate") },
+                    reviewContent = { Text("回顾页面内容") },
+                    statsContent = {},
+                    settingsContent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("回顾").performClick()
+        composeTestRule.onNodeWithText("回顾页面内容").assertIsDisplayed()
+        composeTestRule.onNodeWithText("今天").performClick()
+        composeTestRule.onNodeWithText("待跳转日期：2026-05-07").assertIsDisplayed()
     }
 }

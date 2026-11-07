@@ -285,8 +285,9 @@ class TodayViewModelTest {
     }
 
     @Test
-    fun `onJumpToToday returns to initial date`() = runTest(dispatcher) {
-        val viewModel = createViewModel()
+    fun `onJumpToToday resolves current business date on each click`() = runTest(dispatcher) {
+        var currentAppDate = fixedToday
+        val viewModel = createViewModel(currentAppDate = { currentAppDate })
         advanceUntilIdle()
 
         viewModel.onSelectDate(LocalDate.of(2024, 5, 15))
@@ -296,6 +297,12 @@ class TodayViewModelTest {
         advanceUntilIdle()
 
         assertEquals(fixedToday, viewModel.uiState.value.selectedDate)
+
+        currentAppDate = fixedToday.plusDays(1)
+        viewModel.onJumpToToday()
+        advanceUntilIdle()
+
+        assertEquals(fixedToday.plusDays(1), viewModel.uiState.value.selectedDate)
     }
 
     @Test
@@ -406,6 +413,7 @@ class TodayViewModelTest {
         remoteStorage: FakeRemoteStorage = FakeRemoteStorage(),
         userPreferencesRepository: FakeUserPreferencesRepository = FakeUserPreferencesRepository(syncEnabled),
         initialDate: LocalDate = fixedToday,
+        currentAppDate: () -> LocalDate = { initialDate },
     ): TodayViewModel {
         val credentialStore = FakeCredentialStore(localPassword)
         val syncEngine = SyncEngine(
@@ -423,6 +431,7 @@ class TodayViewModelTest {
             secureCredentialStore = credentialStore,
             syncEngine = syncEngine,
             clock = fixedClock,
+            currentAppDate = currentAppDate,
             initialDate = initialDate,
             ioDispatcher = dispatcher,
         )

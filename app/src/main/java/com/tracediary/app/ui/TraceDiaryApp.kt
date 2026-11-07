@@ -49,12 +49,13 @@ fun TraceDiaryApp() {
         return
     }
 
-    TraceDiaryMainContent()
+    TraceDiaryMainContent(currentAppDate = application::currentAppDate)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TraceDiaryMainContent(
+    currentAppDate: () -> LocalDate,
     todayContent: @Composable (pendingDate: LocalDate?, onPendingDateConsumed: () -> Unit) -> Unit =
         { pendingDate, onPendingDateConsumed ->
             TodayScreen(
@@ -89,11 +90,10 @@ internal fun TraceDiaryMainContent(
                         NavigationBarItem(
                             selected = selectedTabIndex == index,
                             onClick = {
-                                if (index == 0 && selectedTabIndex == 0) {
-                                    pendingTodayEpochDay = LocalDate.now().toEpochDay()
-                                } else {
-                                    selectedTabIndex = index
+                                if (index == 0) {
+                                    pendingTodayEpochDay = currentAppDate().toEpochDay()
                                 }
+                                selectedTabIndex = index
                             },
                             icon = {
                                 Icon(
