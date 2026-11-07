@@ -2,6 +2,7 @@ package com.tracediary.app.ui.stats
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -182,7 +183,6 @@ private fun MonthlyTrendCard(
     onSelectYear: (Int) -> Unit,
 ) {
     var selectedMonth by remember(year) { mutableStateOf<YearMonth?>(null) }
-    val selectedEntry = data.firstOrNull { it.yearMonth == selectedMonth }
     Card(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -197,11 +197,6 @@ private fun MonthlyTrendCard(
                     onSelect = onSelectYear,
                 )
             }
-            Text(
-                text = formatMonthlyTrendSelection(selectedEntry),
-                style = MaterialTheme.typography.labelMedium,
-                color = if (selectedEntry == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
-            )
             val maxVal = data.maxOfOrNull(MonthlyWordCount::wordCount)?.coerceAtLeast(1) ?: 1
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -216,24 +211,40 @@ private fun MonthlyTrendCard(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(100.dp)
+                                .height(128.dp)
                                 .semantics { contentDescription = "${entry.yearMonth.year}年${entry.yearMonth.monthValue}月，${entry.wordCount}字" }
-                                .clickable { selectedMonth = entry.yearMonth },
+                                .clickable(
+                                    interactionSource = remember(entry.yearMonth) { MutableInteractionSource() },
+                                    indication = null,
+                                ) { selectedMonth = entry.yearMonth },
                             contentAlignment = Alignment.BottomCenter,
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height((100 * ratio).dp.coerceAtLeast(4.dp))
-                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                                    .background(
-                                        if (selectedEntry == null || selectedMonth == entry.yearMonth) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
-                                        },
-                                    ),
-                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                if (selectedMonth == entry.yearMonth) {
+                                    Text(
+                                        text = formatMonthlyTrendWordCount(entry.wordCount),
+                                        modifier = Modifier.wrapContentWidth(unbounded = true),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height((100 * ratio).dp.coerceAtLeast(4.dp))
+                                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                        .background(
+                                            if (selectedMonth == null || selectedMonth == entry.yearMonth) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                                            },
+                                        ),
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         if (index % 2 == 0) {
@@ -366,10 +377,9 @@ private fun HeatmapDay?.toCellColor(): Color {
 
 private data class StatsData(val label: String, val value: String, val unit: String, val icon: ImageVector)
 
-internal fun formatMonthlyTrendSelection(entry: MonthlyWordCount?): String =
-    entry?.let {
-        "${it.yearMonth.year}年${it.yearMonth.monthValue}月 · ${String.format(Locale.CHINA, "%,d", it.wordCount)} 字"
-    } ?: "点击柱子查看月份字数"
+internal fun formatMonthlyTrendWordCount(wordCount: Int): String =
+    if (wordCount < 1000) wordCount.toString()
+    else String.format(Locale.CHINA, "%.1fk", wordCount / 1000.0)
 
 /**
  * 字数格式化：>=1000 时按 "12.8" / "k" 表示（保留 1 位小数，整数则去掉小数位），
