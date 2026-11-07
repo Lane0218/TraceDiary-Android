@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -194,29 +195,37 @@ private fun MonthlyTrendCard(
             }
             val maxVal = data.maxOfOrNull(MonthlyWordCount::wordCount)?.coerceAtLeast(1) ?: 1
             Row(
-                modifier = Modifier.fillMaxWidth().height(100.dp),
-                verticalAlignment = Alignment.Bottom,
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                data.forEach { entry ->
+                data.forEachIndexed { index, entry ->
                     val ratio = entry.wordCount.toFloat() / maxVal
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height((100 * ratio).dp.coerceAtLeast(4.dp))
-                            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                            .background(MaterialTheme.colorScheme.primary),
-                    )
-                }
-            }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                data.forEachIndexed { index, monthly ->
-                    if (index % 2 == 0) {
-                        Text(
-                            text = "${monthly.yearMonth.monthValue}月",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.BottomCenter) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height((100 * ratio).dp.coerceAtLeast(4.dp))
+                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                    .background(MaterialTheme.colorScheme.primary),
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        if (index % 2 == 0) {
+                            Text(
+                                text = "${entry.yearMonth.monthValue}月",
+                                modifier = Modifier
+                                    .wrapContentWidth(unbounded = true),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Visible,
+                            )
+                        }
                     }
                 }
             }
