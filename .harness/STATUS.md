@@ -5,7 +5,6 @@
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
 | 2026-08-09 12:02 | exact-daily-reminder-alarm | 已确认精确闹钟方案，开始实现调度、后台接收、权限恢复和业务日判断。 |
-| 2026-11-07 20:09 | today-business-date-navigation | 已统一当前业务日入口，194 项单元测试、调试包编译和 UI 测试代码编译通过；按用户要求跳过设备验收，状态待验收。 |
 
 ## TODO
 
@@ -25,3 +24,4 @@
 | 2026-08-09 11:06 | emulator-test-audit | Pixel 9 Pro XL 自动化测试及 OPPO 真机密码修改、重启、新旧密码验证全部通过。 |
 | 2026-08-09 12:01 | search-keyword-excerpt | 搜索摘要围绕关键词展示并高亮，48 字版本已通过自动化与 OPPO / ColorOS 真机验收。 |
 | 2026-08-11 18:51 | ai-agent-search | AI 搜索真实 SSE、只读 Agent、推理隔离、证据核对与 UI 优化已通过自动化及 OPPO / ColorOS 最终验收。 |
+| 2026-11-07 20:14 | today-business-date-navigation | “今天”导航按当前业务日定位；194 项单元测试、调试包编译通过，用户已确认验收。 |
