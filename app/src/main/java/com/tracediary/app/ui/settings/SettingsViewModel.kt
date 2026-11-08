@@ -10,6 +10,7 @@ import com.tracediary.app.data.notifications.DailyReminderScheduler
 import com.tracediary.app.data.security.AppPasswordManager
 import com.tracediary.app.data.security.SecureCredentialStore
 import com.tracediary.app.data.settings.CalendarWeekStart
+import com.tracediary.app.data.settings.ThemeColor
 import com.tracediary.app.data.settings.formatBoundaryTime
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
 import com.tracediary.app.data.settings.parseBoundaryTime
@@ -112,6 +113,7 @@ data class SettingsUiState(
     val syncDirectory: String = "TraceDiary/",
     val sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.LatestFirst,
     val calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Sunday,
+    val themeColor: ThemeColor = ThemeColor.Forest,
     // AK/SK 与“记住密码”缓存：通过 SecureCredentialStore（EncryptedSharedPreferences）持久化。
     val syncAccessKeyId: String = "",
     val syncAccessKeySecret: String = "",
@@ -207,6 +209,7 @@ class SettingsViewModel(
                         syncDirectory = if (keepDraft) current.syncDirectory else prefs.syncDirectory,
                         sameDayEntrySortOrder = prefs.sameDayEntrySortOrder,
                         calendarWeekStart = prefs.calendarWeekStart,
+                        themeColor = prefs.themeColor,
                     )
                 }
             }
@@ -556,6 +559,12 @@ class SettingsViewModel(
     fun onCalendarWeekStartChanged(value: CalendarWeekStart) {
         _uiState.update { it.copy(calendarWeekStart = value) }
         viewModelScope.launch { repository.setCalendarWeekStart(value) }
+    }
+
+    fun onThemeColorChanged(value: ThemeColor) {
+        if (_uiState.value.themeColor == value) return
+        _uiState.update { it.copy(themeColor = value) }
+        viewModelScope.launch { repository.setThemeColor(value) }
     }
 
     /** AK/SK 只更新当前草稿，验证成功后才写入加密凭证存储。 */

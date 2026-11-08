@@ -84,8 +84,6 @@ import com.tracediary.app.ui.components.TraceDropdownMenu
 import com.tracediary.app.ui.theme.DiaryContentTextStyle
 import com.tracediary.app.ui.theme.DiaryEditorTextStyle
 import com.tracediary.app.ui.theme.DiaryExcerptTextStyle
-import com.tracediary.app.ui.theme.Ink600
-import com.tracediary.app.ui.theme.SurfaceDivider
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
@@ -143,7 +141,7 @@ fun ReviewScreen(
                         Text(
                             text = label,
                             style = MaterialTheme.typography.labelMedium,
-                            color = if (selected) MaterialTheme.colorScheme.primary else Ink600,
+                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                         )
                         if (selected) {
@@ -162,7 +160,7 @@ fun ReviewScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(SurfaceDivider),
+                    .background(MaterialTheme.colorScheme.outlineVariant),
             )
         }
 
@@ -494,7 +492,7 @@ private fun SearchContent(
                     .fillMaxWidth()
                     .padding(top = 12.dp)
                     .height(56.dp)
-                    .border(1.dp, SurfaceDivider, MaterialTheme.shapes.medium),
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium),
                 placeholder = {
                     Text(
                         "搜索日记内容、关键词...",

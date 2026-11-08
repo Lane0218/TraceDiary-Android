@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -31,6 +32,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -63,6 +68,8 @@ import com.tracediary.app.ui.components.TraceSwitch
 import com.tracediary.app.ui.ai.AiSettingsPage
 import com.tracediary.app.ui.ai.AiSettingsViewModel
 import com.tracediary.app.ui.ai.aiAvailabilityLabel
+import com.tracediary.app.data.settings.ThemeColor
+import com.tracediary.app.ui.theme.colorSchemeFor
 import java.time.LocalTime
 
 @Composable
@@ -211,6 +218,7 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var showSameDaySortPicker by remember { mutableStateOf(false) }
+    var showThemeColorPicker by remember { mutableStateOf(false) }
     var showWeekStartPicker by remember { mutableStateOf(false) }
     var showBoundaryTimePicker by remember { mutableStateOf(false) }
     var showReminderTimePicker by remember { mutableStateOf(false) }
@@ -254,6 +262,21 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
         contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        item { SettingsSectionHeader("外观") }
+
+        item {
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                ThemeColorSettingsRow(
+                    selected = state.themeColor,
+                    onClick = { showThemeColorPicker = true },
+                )
+            }
+        }
+
         item {
             SettingsSectionHeader("日记偏好")
         }
@@ -343,6 +366,17 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
                 )
             }
         }
+    }
+
+    if (showThemeColorPicker) {
+        ThemeColorPickerDialog(
+            selected = state.themeColor,
+            onDismissRequest = { showThemeColorPicker = false },
+            onOptionSelected = { option ->
+                viewModel.onThemeColorChanged(option)
+                showThemeColorPicker = false
+            }
+        )
     }
 
     if (showSameDaySortPicker) {
@@ -435,6 +469,78 @@ private fun PreferenceSettingsPage(state: SettingsUiState, viewModel: SettingsVi
             }
         }
     }
+}
+
+@Composable
+private fun ThemeColorSettingsRow(selected: ThemeColor, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable(onClick = onClick)
+            .semantics { contentDescription = "主题颜色，当前${selected.label}" }
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("主题颜色", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        ThemeColorSwatch(selected, size = 24.dp)
+    }
+}
+
+@Composable
+private fun ThemeColorPickerDialog(
+    selected: ThemeColor,
+    onDismissRequest: () -> Unit,
+    onOptionSelected: (ThemeColor) -> Unit,
+) {
+    TraceDialogSurface(onDismissRequest = onDismissRequest) {
+        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 20.dp)) {
+            Text("主题颜色", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(20.dp))
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ThemeColor.entries.chunked(3).forEach { rowOptions ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                        ) {
+                            rowOptions.forEach { option ->
+                                val palette = colorSchemeFor(option)
+                                val isSelected = selected == option
+                                Box(
+                                    modifier = Modifier.size(48.dp)
+                                        .semantics {
+                                            contentDescription = option.label
+                                            this.selected = isSelected
+                                        }
+                                        .clickable(role = Role.RadioButton) { onOptionSelected(option) }
+                                        .border(
+                                            width = 2.dp,
+                                            color = if (isSelected) palette.primary else Color.Transparent,
+                                            shape = CircleShape,
+                                        )
+                                        .padding(5.dp)
+                                        .clip(CircleShape)
+                                        .background(palette.primary),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    if (isSelected) {
+                                        Icon(
+                                            Icons.Outlined.Check,
+                                            contentDescription = null,
+                                            tint = palette.onPrimary,
+                                            modifier = Modifier.size(22.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThemeColorSwatch(option: ThemeColor, size: androidx.compose.ui.unit.Dp) {
+    val palette = colorSchemeFor(option)
+    Box(modifier = Modifier.size(size).clip(CircleShape).background(palette.primary))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -829,8 +935,8 @@ private fun passwordRotationButtonColors(status: PasswordRotationStatus): Button
             disabledContentColor = MaterialTheme.colorScheme.onPrimary,
         )
         is PasswordRotationStatus.Success -> ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF167A45),
-            contentColor = Color.White,
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
         )
         is PasswordRotationStatus.Failed -> ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.error,

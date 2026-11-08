@@ -31,7 +31,22 @@ data class UserPreferences(
     val syncDirectory: String = "TraceDiary/",
     val sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.LatestFirst,
     val calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Sunday,
+    val themeColor: ThemeColor = ThemeColor.Forest,
 )
+
+enum class ThemeColor(val storageValue: String, val label: String) {
+    Forest("forest", "墨绿"),
+    MistBlue("mist_blue", "海蓝"),
+    DuskPurple("dusk_purple", "鸢尾紫"),
+    RoseBerry("rose_berry", "玫瑰莓"),
+    Terracotta("terracotta", "琥珀棕"),
+    Graphite("graphite", "石墨");
+
+    companion object {
+        fun fromStorageValue(value: String?): ThemeColor =
+            entries.firstOrNull { it.storageValue == value } ?: Forest
+    }
+}
 
 enum class SameDayEntrySortOrder(val storageValue: String) {
     LatestFirst("latest_first"),
@@ -82,6 +97,7 @@ interface UserPreferencesRepository {
 
     suspend fun setSameDayEntrySortOrder(value: SameDayEntrySortOrder)
     suspend fun setCalendarWeekStart(value: CalendarWeekStart)
+    suspend fun setThemeColor(value: ThemeColor)
 
     /**
      * 一次性写入云同步相关的非敏感配置。
@@ -123,6 +139,7 @@ class DataStoreUserPreferencesRepository(
             syncDirectory = prefs[KEY_SYNC_DIRECTORY] ?: "TraceDiary/",
             sameDayEntrySortOrder = SameDayEntrySortOrder.fromStorageValue(prefs[KEY_SAME_DAY_ENTRY_SORT_ORDER]),
             calendarWeekStart = CalendarWeekStart.fromStorageValue(prefs[KEY_CALENDAR_WEEK_START]),
+            themeColor = ThemeColor.fromStorageValue(prefs[KEY_THEME_COLOR]),
         )
     }
 
@@ -181,6 +198,10 @@ class DataStoreUserPreferencesRepository(
         dataStore.edit { it[KEY_CALENDAR_WEEK_START] = value.storageValue }
     }
 
+    override suspend fun setThemeColor(value: ThemeColor) {
+        dataStore.edit { it[KEY_THEME_COLOR] = value.storageValue }
+    }
+
     override suspend fun saveSyncConfiguration(
         provider: String,
         bucket: String,
@@ -211,5 +232,6 @@ class DataStoreUserPreferencesRepository(
         val KEY_SYNC_DIRECTORY = stringPreferencesKey("sync_directory")
         val KEY_SAME_DAY_ENTRY_SORT_ORDER = stringPreferencesKey("same_day_entry_sort_order")
         val KEY_CALENDAR_WEEK_START = stringPreferencesKey("calendar_week_start")
+        val KEY_THEME_COLOR = stringPreferencesKey("theme_color")
     }
 }

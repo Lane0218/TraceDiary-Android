@@ -74,9 +74,7 @@ import com.tracediary.app.domain.model.AiSourceType
 import com.tracediary.app.ui.components.ReviewEmptyState
 import com.tracediary.app.ui.components.ReviewEmptyStateHeaderHeight
 import com.tracediary.app.ui.components.TraceConfirmDialog
-import com.tracediary.app.ui.theme.BrandGreenSoft
 import com.tracediary.app.ui.theme.DiaryContentTextStyle
-import com.tracediary.app.ui.theme.SurfaceDivider
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -208,8 +206,8 @@ private fun AiConversationTurnContent(
             Surface(
                 modifier = Modifier.widthIn(max = AiBubbleMaxWidth),
                 shape = AiBubbleShape,
-                color = BrandGreenSoft,
-                border = BorderStroke(1.dp, SurfaceDivider),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 tonalElevation = 0.dp,
                 shadowElevation = 0.dp,
             ) {
@@ -283,7 +281,7 @@ private fun AiAnswerBubble(content: @Composable () -> Unit) {
         modifier = Modifier.widthIn(max = AiBubbleMaxWidth),
         shape = AiBubbleShape,
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, SurfaceDivider),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
@@ -423,7 +421,7 @@ private fun AiEvidenceSheet(
                     if (index < evidence.lastIndex) {
                         HorizontalDivider(
                             modifier = Modifier.padding(start = 20.dp),
-                            color = SurfaceDivider,
+                            color = MaterialTheme.colorScheme.outlineVariant,
                         )
                     }
                 }
@@ -495,7 +493,7 @@ private fun AiQuestionComposer(
             .heightIn(min = 56.dp),
         shape = AiBubbleShape,
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, SurfaceDivider),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
@@ -511,7 +509,7 @@ private fun AiQuestionComposer(
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                    disabledContainerColor = BrandGreenSoft,
+                    disabledContainerColor = MaterialTheme.colorScheme.primaryContainer,
                     disabledContentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
                 ),
             ) {
@@ -566,7 +564,7 @@ private fun AiQuestionComposer(
                     } else {
                         MaterialTheme.colorScheme.onPrimary
                     },
-                    disabledContainerColor = BrandGreenSoft,
+                    disabledContainerColor = MaterialTheme.colorScheme.primaryContainer,
                     disabledContentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
                 ),
             ) {

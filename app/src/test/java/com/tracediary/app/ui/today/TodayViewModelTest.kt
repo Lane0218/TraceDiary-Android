@@ -3,6 +3,7 @@ package com.tracediary.app.ui.today
 import com.tracediary.app.data.security.CloudCipherCredentialStore
 import com.tracediary.app.data.settings.CalendarWeekStart
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
+import com.tracediary.app.data.settings.ThemeColor
 import com.tracediary.app.data.settings.UserPreferences
 import com.tracediary.app.data.settings.UserPreferencesRepository
 import com.tracediary.app.data.sync.ErrorCode
@@ -571,6 +572,10 @@ private class FakeUserPreferencesRepository(
 
     override suspend fun setCalendarWeekStart(value: CalendarWeekStart) {
         prefs.update { it.copy(calendarWeekStart = value) }
+    }
+
+    override suspend fun setThemeColor(value: ThemeColor) {
+        prefs.update { it.copy(themeColor = value) }
     }
 
     override suspend fun setSyncDisplayName(value: String) {

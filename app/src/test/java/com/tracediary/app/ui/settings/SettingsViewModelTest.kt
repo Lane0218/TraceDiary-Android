@@ -3,6 +3,7 @@ package com.tracediary.app.ui.settings
 import com.tracediary.app.data.settings.UserPreferences
 import com.tracediary.app.data.settings.CalendarWeekStart
 import com.tracediary.app.data.settings.SameDayEntrySortOrder
+import com.tracediary.app.data.settings.ThemeColor
 import com.tracediary.app.data.settings.UserPreferencesRepository
 import com.tracediary.app.data.security.CloudCipherCredentialStore
 import com.tracediary.app.data.security.CryptoBox
@@ -89,6 +90,16 @@ class SettingsViewModelTest {
         assertEquals("暂无同步记录", state.lastSyncText)
         assertEquals(MergeStrategy.KeepNewer, state.manualSyncStrategy)
         assertEquals(CalendarWeekStart.Sunday, state.calendarWeekStart)
+        assertEquals(ThemeColor.Forest, state.themeColor)
+    }
+
+    @Test
+    fun themeColorSelection_persistsAndUpdatesState() = runTest(testDispatcher) {
+        advanceUntilIdle()
+        viewModel.onThemeColorChanged(ThemeColor.DuskPurple)
+        advanceUntilIdle()
+        assertEquals(ThemeColor.DuskPurple, fakeRepo.current().themeColor)
+        assertEquals(ThemeColor.DuskPurple, viewModel.uiState.value.themeColor)
     }
 
     @Test
@@ -555,6 +566,10 @@ class SettingsViewModelTest {
 
         override suspend fun setCalendarWeekStart(value: CalendarWeekStart) {
             _prefs.update { it.copy(calendarWeekStart = value) }
+        }
+
+        override suspend fun setThemeColor(value: ThemeColor) {
+            _prefs.update { it.copy(themeColor = value) }
         }
 
         override suspend fun setSyncDisplayName(value: String) {
