@@ -224,6 +224,23 @@ class DailyReminderSchedulerTest {
     }
 
     @Test
+    fun `清空已提醒日记允许再次到点提醒`() {
+        val today = LocalDate.of(2026, 5, 9)
+        assertTrue(ReminderNotification.shouldResetAfterClear(today.toString(), today))
+        assertEquals("already_reminded", DailyReminderReceiver.reminderSkipReason(true, today, today, null, today.toString()))
+        assertEquals(null, DailyReminderReceiver.reminderSkipReason(true, today, today, null, null))
+        assertFalse(ReminderNotification.shouldResetAfterClear(today.minusDays(1).toString(), today))
+        assertFalse(ReminderNotification.shouldResetAfterClear(null, today))
+        assertTrue(
+            DailyReminderReceiver.shouldDeliverReminder(
+                currentBusinessDate = today,
+                targetDate = today,
+                entry = null,
+                lastReminderDate = null,
+            )
+        )
+    }
+    @Test
     fun `目标业务日无记录时提醒`() {
         val targetDate = LocalDate.of(2026, 5, 8)
 

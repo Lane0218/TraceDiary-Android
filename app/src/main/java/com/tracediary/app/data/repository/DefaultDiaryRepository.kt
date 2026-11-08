@@ -68,21 +68,33 @@ class DefaultDiaryRepository(
         )
         diaryEntryDao.upsert(DiaryEntryEntity.fromDomain(entry))
         dismissReminderIfRecorded(entry)
+        if (entry.content.isBlank()) resetReminderIfCleared(entry.date)
         return entry
     }
 
     override suspend fun upsertImportedEntry(entry: DiaryEntry): DiaryEntry {
         diaryEntryDao.upsert(DiaryEntryEntity.fromDomain(entry))
         dismissReminderIfRecorded(entry)
+        if (entry.content.isBlank()) resetReminderIfCleared(entry.date)
         return entry
     }
 
     override suspend fun deleteEntry(date: LocalDate) {
         diaryEntryDao.deleteByDate(date.toEpochDay())
+        resetReminderIfCleared(date)
     }
 
     override suspend fun setSyncState(date: LocalDate, state: SyncState) {
         diaryEntryDao.updateSyncState(date.toEpochDay(), state)
+    }
+
+    private suspend fun resetReminderIfCleared(date: LocalDate) {
+        val preferences = reminderPreferences ?: return
+        try {
+            ReminderNotification.resetIfContentCleared(preferences, date)
+        } catch (error: Exception) {
+            Log.w(DailyReminderScheduler.TAG, "reminder marker reset failed date=$date error=${error.javaClass.simpleName}")
+        }
     }
 
     private suspend fun dismissReminderIfRecorded(entry: DiaryEntry) {

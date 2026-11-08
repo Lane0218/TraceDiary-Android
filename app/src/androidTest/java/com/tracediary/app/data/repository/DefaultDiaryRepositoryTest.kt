@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.tracediary.app.data.local.TraceDiaryDatabase
+import com.tracediary.app.data.settings.DataStoreUserPreferencesRepository
 import com.tracediary.app.domain.model.SyncState
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -113,6 +114,35 @@ class DefaultDiaryRepositoryTest {
     @Test
     fun getEntryReturnsNullWhenAbsent() = runBlocking {
         assertNull(repository.getEntry(LocalDate.of(2026, 1, 1)))
+    }
+
+    @Test
+    fun clearingRemindedEntryResetsDuplicateMarker() = runBlocking {
+        val testContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val preferences = DataStoreUserPreferencesRepository(testContext)
+        val previousReminderDate = preferences.preferences.first().lastDailyReminderDate
+        val date = LocalDate.of(2026, 5, 17)
+        val repositoryWithReminder = DefaultDiaryRepository(
+            database.diaryEntryDao(),
+            clock,
+            reminderPreferences = preferences,
+        )
+        try {
+            preferences.setLastDailyReminderDate(date.toString())
+            repositoryWithReminder.saveEntry(date, "已写日记")
+            repositoryWithReminder.deleteEntry(date)
+            assertNull(preferences.preferences.first().lastDailyReminderDate)
+
+            preferences.setLastDailyReminderDate(date.toString())
+            repositoryWithReminder.saveEntry(date, "   ")
+            assertNull(preferences.preferences.first().lastDailyReminderDate)
+
+            preferences.setLastDailyReminderDate(date.minusDays(1).toString())
+            repositoryWithReminder.deleteEntry(date)
+            assertEquals(date.minusDays(1).toString(), preferences.preferences.first().lastDailyReminderDate)
+        } finally {
+            preferences.setLastDailyReminderDate(previousReminderDate)
+        }
     }
 
     /** 可推进时间的 Clock，便于验证 idempotent 与 updatedAt 行为。 */

@@ -84,14 +84,15 @@ class DailyReminderReceiver : BroadcastReceiver() {
         DailyReminderWorker.ensureChannel(application)
         val notificationsEnabled = manager.areNotificationsEnabled()
         Log.i(DailyReminderScheduler.TAG, "checking target=$targetDate current=$currentBusinessDate entry=${when { entry == null -> "missing"; entry.isRecorded -> "recorded"; else -> "blank" }} last=${prefs.lastDailyReminderDate} notificationsEnabled=$notificationsEnabled")
-        if (!notificationsEnabled || !shouldDeliverReminder(
-                currentBusinessDate = currentBusinessDate,
-                targetDate = targetDate,
-                entry = entry,
-                lastReminderDate = prefs.lastDailyReminderDate,
-            )
-        ) {
-            Log.i(DailyReminderScheduler.TAG, "skipped alarm target=$targetDate reason=permission_date_record_or_duplicate")
+        val skipReason = reminderSkipReason(
+            notificationsEnabled = notificationsEnabled,
+            currentBusinessDate = currentBusinessDate,
+            targetDate = targetDate,
+            entry = entry,
+            lastReminderDate = prefs.lastDailyReminderDate,
+        )
+        if (skipReason != null) {
+            Log.i(DailyReminderScheduler.TAG, "skipped alarm target=$targetDate reason=$skipReason")
             rescheduleFromPreferences(application)
             return
         }
@@ -129,6 +130,20 @@ class DailyReminderReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        internal fun reminderSkipReason(
+            notificationsEnabled: Boolean,
+            currentBusinessDate: LocalDate,
+            targetDate: LocalDate,
+            entry: DiaryEntry?,
+            lastReminderDate: String?,
+        ): String? = when {
+            !notificationsEnabled -> "notification_permission_denied"
+            currentBusinessDate != targetDate -> "target_business_date_mismatch"
+            entry?.isRecorded == true -> "entry_recorded"
+            lastReminderDate == targetDate.toString() -> "already_reminded"
+            else -> null
+        }
+
         internal fun shouldDeliverReminder(
             currentBusinessDate: LocalDate,
             targetDate: LocalDate,
