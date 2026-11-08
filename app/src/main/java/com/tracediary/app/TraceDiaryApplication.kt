@@ -1,6 +1,7 @@
 package com.tracediary.app
 
 import android.app.Application
+import android.util.Log
 import androidx.room.Room
 import com.tracediary.app.data.ai.AiModelManager
 import com.tracediary.app.data.ai.AiSearchCoordinator
@@ -170,7 +171,10 @@ class TraceDiaryApplication : Application() {
             },
         )
 
-        // 冷启动、设备重启或系统回收进程后，根据持久化设置恢复下一次精确闹钟。
+    }
+
+    /** 仅在用户打开界面时恢复可能因强制停止丢失的闹钟；广播冷启动由 Receiver 自己重排。 */
+    fun restoreReminderOnUserLaunch() {
         applicationScope.launch(Dispatchers.IO) {
             val prefs = userPreferencesRepository.preferences.first()
             if (!prefs.dailyReminderEnabled) return@launch
@@ -178,16 +182,19 @@ class TraceDiaryApplication : Application() {
                 appPasswordManager.isRememberPasswordEnabled() &&
                     dailyReminderScheduler.canScheduleExactAlarms()
             if (!readyForBackgroundReminder) {
+                Log.w(DailyReminderScheduler.TAG, "startup recovery disabled: rememberPassword=${appPasswordManager.isRememberPasswordEnabled()} exactAlarm=${dailyReminderScheduler.canScheduleExactAlarms()}")
                 userPreferencesRepository.setReminderEnabled(false)
                 dailyReminderScheduler.cancel()
                 return@launch
             }
             try {
-                dailyReminderScheduler.scheduleForRecovery(
+                val schedule = dailyReminderScheduler.scheduleForRecovery(
                     timeOfDay = DailyReminderScheduler.parseTime(prefs.dailyReminderTime),
                     boundaryTime = parseBoundaryTime(prefs.dayBoundaryTime),
                 )
-            } catch (_: Throwable) {
+                Log.i(DailyReminderScheduler.TAG, "user-launch recovery scheduled at=${schedule.triggerAt} target=${schedule.targetBusinessDate}")
+            } catch (error: Throwable) {
+                Log.e(DailyReminderScheduler.TAG, "user-launch recovery failed error=${error.javaClass.simpleName}")
                 userPreferencesRepository.setReminderEnabled(false)
                 dailyReminderScheduler.cancel()
             }
@@ -211,8 +218,13 @@ class TraceDiaryApplication : Application() {
             throw error
         }
         database = openedDatabase
+        Log.i(DailyReminderScheduler.TAG, "encrypted diary database ready")
 
-        diaryRepository = DefaultDiaryRepository(database.diaryEntryDao())
+        diaryRepository = DefaultDiaryRepository(
+            database.diaryEntryDao(),
+            reminderContext = applicationContext,
+            reminderPreferences = userPreferencesRepository,
+        )
         annualSummaryRepository = DefaultAnnualSummaryRepository(database.annualSummaryDao())
         syncMetadataRepository = DefaultSyncMetadataRepository(database.syncMetadataDao())
         pendingSyncDeletionRepository =

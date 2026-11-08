@@ -1,14 +1,17 @@
 package com.tracediary.app.data.notifications
 
+import android.os.SystemClock
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.tracediary.app.MainActivity
 import com.tracediary.app.R
 import com.tracediary.app.TraceDiaryApplication
 import com.tracediary.app.data.settings.parseBoundaryTime
+import com.tracediary.app.data.settings.resolveAppDate
 import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.model.isRecorded
 import kotlinx.coroutines.CoroutineScope
@@ -17,10 +20,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 /** 接收精确闹钟、设备重启和系统时间变化广播。 */
 class DailyReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val startedAt = SystemClock.elapsedRealtime()
+        Log.i(DailyReminderScheduler.TAG, "received action=${intent.action} wallTime=${LocalDateTime.now()}")
         val pendingResult = goAsync()
         val appContext = context.applicationContext
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
@@ -29,9 +35,16 @@ class DailyReminderReceiver : BroadcastReceiver() {
                 if (intent.action == DailyReminderScheduler.ACTION_FIRE) {
                     handleReminder(application, intent)
                 } else {
-                    rescheduleFromPreferences(application, recoverMissed = true)
+                    rescheduleFromPreferences(application)
                 }
+            } catch (error: Throwable) {
+                Log.e(DailyReminderScheduler.TAG, "receiver failed action=${intent.action} error=${error.javaClass.simpleName}")
+                runCatching { (appContext as? TraceDiaryApplication)?.let { rescheduleFromPreferences(it) } }
+                    .onFailure { recoveryError ->
+                        Log.e(DailyReminderScheduler.TAG, "receiver recovery failed error=${recoveryError.javaClass.simpleName}")
+                    }
             } finally {
+                Log.i(DailyReminderScheduler.TAG, "receiver finished action=${intent.action} durationMs=${SystemClock.elapsedRealtime() - startedAt}")
                 pendingResult.finish()
             }
         }
@@ -44,35 +57,41 @@ class DailyReminderReceiver : BroadcastReceiver() {
         val targetDate = intent.getStringExtra(DailyReminderScheduler.EXTRA_TARGET_BUSINESS_DATE)
             ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
             ?: run {
-                rescheduleFromPreferences(application, recoverMissed = true)
+                Log.w(DailyReminderScheduler.TAG, "skipped alarm: missing or invalid target date")
+                rescheduleFromPreferences(application)
                 return
             }
         val prefs = application.userPreferencesRepository.preferences.first()
         if (!prefs.dailyReminderEnabled || !application.appPasswordManager.isRememberPasswordEnabled()) {
+            Log.i(DailyReminderScheduler.TAG, "skipped alarm target=$targetDate reason=disabled_or_password_not_remembered")
             application.dailyReminderScheduler.cancel()
             return
         }
-        val currentBusinessDate = application.resolveCurrentAppDate()
+        val currentBusinessDate = resolveAppDate(LocalDateTime.now(), parseBoundaryTime(prefs.dayBoundaryTime))
         if (!application.isDataLayerReady()) {
-            // 后台无法打开加密数据库时不应把“未知”当成“没有日记”。
+            Log.w(DailyReminderScheduler.TAG, "skipped alarm target=$targetDate current=$currentBusinessDate reason=database_unavailable")
             rescheduleFromPreferences(application)
             return
         }
         val entry = try {
             application.diaryRepository.getEntry(targetDate)
-        } catch (_: Throwable) {
+        } catch (error: Throwable) {
+            Log.e(DailyReminderScheduler.TAG, "skipped alarm target=$targetDate reason=diary_query_failed error=${error.javaClass.simpleName}")
             rescheduleFromPreferences(application)
             return
         }
         val manager = NotificationManagerCompat.from(application)
         DailyReminderWorker.ensureChannel(application)
-        if (!manager.areNotificationsEnabled() || !shouldDeliverReminder(
+        val notificationsEnabled = manager.areNotificationsEnabled()
+        Log.i(DailyReminderScheduler.TAG, "checking target=$targetDate current=$currentBusinessDate entry=${when { entry == null -> "missing"; entry.isRecorded -> "recorded"; else -> "blank" }} last=${prefs.lastDailyReminderDate} notificationsEnabled=$notificationsEnabled")
+        if (!notificationsEnabled || !shouldDeliverReminder(
                 currentBusinessDate = currentBusinessDate,
                 targetDate = targetDate,
                 entry = entry,
                 lastReminderDate = prefs.lastDailyReminderDate,
             )
         ) {
+            Log.i(DailyReminderScheduler.TAG, "skipped alarm target=$targetDate reason=permission_date_record_or_duplicate")
             rescheduleFromPreferences(application)
             return
         }
@@ -97,8 +116,14 @@ class DailyReminderReceiver : BroadcastReceiver() {
         try {
             manager.notify(DailyReminderWorker.NOTIFICATION_ID, notification)
             application.userPreferencesRepository.setLastDailyReminderDate(targetDate.toString())
-        } catch (_: SecurityException) {
-            // 权限刚被系统撤销时不记录成功状态，等待用户重新授权后再尝试。
+            Log.i(DailyReminderScheduler.TAG, "posted reminder target=$targetDate")
+            val entryAfterPost = application.diaryRepository.getEntry(targetDate)
+            if (entryAfterPost?.isRecorded == true) {
+                manager.cancel(DailyReminderWorker.NOTIFICATION_ID)
+                Log.i(DailyReminderScheduler.TAG, "dismissed reminder posted during diary save target=$targetDate")
+            }
+        } catch (error: SecurityException) {
+            Log.w(DailyReminderScheduler.TAG, "notification denied target=$targetDate error=${error.javaClass.simpleName}")
         }
         rescheduleFromPreferences(application)
     }
@@ -110,33 +135,26 @@ class DailyReminderReceiver : BroadcastReceiver() {
             entry: DiaryEntry?,
             lastReminderDate: String?,
         ): Boolean =
-            !currentBusinessDate.isAfter(targetDate) &&
+            currentBusinessDate == targetDate &&
                 lastReminderDate != targetDate.toString() &&
                 entry?.isRecorded != true
     }
 
     private suspend fun rescheduleFromPreferences(
         application: TraceDiaryApplication,
-        recoverMissed: Boolean = false,
     ) {
         val prefs = application.userPreferencesRepository.preferences.first()
         if (!prefs.dailyReminderEnabled ||
             !application.appPasswordManager.isRememberPasswordEnabled() ||
             !application.dailyReminderScheduler.canScheduleExactAlarms()
         ) {
+            Log.i(DailyReminderScheduler.TAG, "recovery cancelled: reminder disabled, password unavailable, or exact alarm denied")
             application.dailyReminderScheduler.cancel()
             return
         }
-        if (recoverMissed) {
-            application.dailyReminderScheduler.scheduleForRecovery(
-                timeOfDay = DailyReminderScheduler.parseTime(prefs.dailyReminderTime),
-                boundaryTime = parseBoundaryTime(prefs.dayBoundaryTime),
-            )
-        } else {
-            application.dailyReminderScheduler.schedule(
-                timeOfDay = DailyReminderScheduler.parseTime(prefs.dailyReminderTime),
-                boundaryTime = parseBoundaryTime(prefs.dayBoundaryTime),
-            )
-        }
+        application.dailyReminderScheduler.scheduleForRecovery(
+            timeOfDay = DailyReminderScheduler.parseTime(prefs.dailyReminderTime),
+            boundaryTime = parseBoundaryTime(prefs.dayBoundaryTime),
+        )
     }
 }

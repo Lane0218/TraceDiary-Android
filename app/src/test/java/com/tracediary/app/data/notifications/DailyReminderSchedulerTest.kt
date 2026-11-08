@@ -165,17 +165,28 @@ class DailyReminderSchedulerTest {
     }
 
     @Test
-    fun `恢复调度在当前业务日提醒时间已过时先补设立即闹钟`() {
+    fun `恢复调度在提醒时间已过时只安排下一天`() {
         val schedule = DailyReminderScheduler.computeNextSchedule(
             now = LocalDateTime.of(2026, 5, 9, 1, 0),
             targetTime = LocalTime.of(0, 30),
             boundaryTime = LocalTime.of(2, 0),
             zoneId = ZoneId.of("Asia/Shanghai"),
-            recoverMissed = true,
         )
 
-        assertEquals(LocalDate.of(2026, 5, 8), schedule.targetBusinessDate)
-        assertEquals(LocalDateTime.of(2026, 5, 9, 1, 0, 1), schedule.triggerAt)
+        assertEquals(LocalDate.of(2026, 5, 9), schedule.targetBusinessDate)
+        assertEquals(LocalDateTime.of(2026, 5, 10, 0, 30), schedule.triggerAt)
+    }
+
+    @Test
+    fun `业务日界线前已经错过提醒也不因启动补发`() {
+        val schedule = DailyReminderScheduler.computeNextSchedule(
+            now = LocalDateTime.of(2026, 5, 9, 1, 0),
+            targetTime = LocalTime.of(0, 30),
+            boundaryTime = LocalTime.of(2, 0),
+            zoneId = ZoneId.of("Asia/Shanghai"),
+        )
+        assertEquals(LocalDate.of(2026, 5, 9), schedule.targetBusinessDate)
+        assertEquals(LocalDateTime.of(2026, 5, 10, 0, 30), schedule.triggerAt)
     }
 
     @Test
@@ -190,6 +201,26 @@ class DailyReminderSchedulerTest {
                 lastReminderDate = null,
             )
         )
+    }
+
+    @Test
+    fun `未来业务日的旧闹钟不会提前提醒`() {
+        assertFalse(
+            DailyReminderReceiver.shouldDeliverReminder(
+                currentBusinessDate = LocalDate.of(2026, 5, 8),
+                targetDate = LocalDate.of(2026, 5, 9),
+                entry = null,
+                lastReminderDate = null,
+            )
+        )
+    }
+
+    @Test
+    fun `只撤销刚保存的业务日对应的已发通知`() {
+        val today = LocalDate.of(2026, 5, 9)
+        assertTrue(ReminderNotification.shouldDismiss(today.toString(), today))
+        assertFalse(ReminderNotification.shouldDismiss(today.minusDays(1).toString(), today))
+        assertFalse(ReminderNotification.shouldDismiss(null, today))
     }
 
     @Test

@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.work.WorkManager
 import com.tracediary.app.data.settings.resolveAppDate
 import java.time.Clock
@@ -34,33 +35,30 @@ class DailyReminderScheduler(
         timeOfDay: LocalTime,
         boundaryTime: LocalTime = LocalTime.MIDNIGHT,
         now: LocalDateTime = LocalDateTime.now(clock),
-    ): ReminderSchedule = scheduleInternal(timeOfDay, boundaryTime, now, recoverMissed = false)
+    ): ReminderSchedule = scheduleInternal(timeOfDay, boundaryTime, now)
 
-    /**
-     * 进程启动、重启或系统时间变化后的恢复调度：如果本业务日的提醒时间已过，先补设一次
-     * 立即闹钟；Receiver 会再次查询日记并通过 lastDailyReminderDate 防止重复通知。
-     */
+    /** 恢复闹钟时只安排下一个未来时点，绝不因打开应用而补发过去的提醒。 */
     fun scheduleForRecovery(
         timeOfDay: LocalTime,
         boundaryTime: LocalTime = LocalTime.MIDNIGHT,
         now: LocalDateTime = LocalDateTime.now(clock),
-    ): ReminderSchedule = scheduleInternal(timeOfDay, boundaryTime, now, recoverMissed = true)
+    ): ReminderSchedule = schedule(timeOfDay, boundaryTime, now)
 
     @SuppressLint("ScheduleExactAlarm")
     private fun scheduleInternal(
         timeOfDay: LocalTime,
         boundaryTime: LocalTime,
         now: LocalDateTime,
-        recoverMissed: Boolean,
     ): ReminderSchedule {
         check(canScheduleExactAlarms()) { EXACT_ALARM_PERMISSION_REQUIRED }
-        val schedule = computeNextSchedule(now, timeOfDay, boundaryTime, clock.zone, recoverMissed)
+        val schedule = computeNextSchedule(now, timeOfDay, boundaryTime, clock.zone)
         val pendingIntent = pendingIntent(schedule.targetBusinessDate)
         alarmManager.setExactAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,
             schedule.triggerAtMillis,
             pendingIntent,
         )
+        Log.i(TAG, "scheduled at=${schedule.triggerAt} zone=${clock.zone} target=${schedule.targetBusinessDate} now=$now")
         return schedule
     }
 
@@ -69,6 +67,7 @@ class DailyReminderScheduler(
         alarmManager.cancel(pendingIntent)
         pendingIntent.cancel()
         cancelLegacyPeriodicWork()
+        Log.i(TAG, "cancelled pending reminder alarm")
     }
 
     /** 取消旧版本遗留的周期 WorkManager，防止升级后出现两套提醒。 */
@@ -97,6 +96,7 @@ class DailyReminderScheduler(
         const val LEGACY_WORK_NAME = "daily_reminder"
         const val UNIQUE_WORK_NAME = LEGACY_WORK_NAME
         const val EXACT_ALARM_PERMISSION_REQUIRED = "需要授予精确闹钟权限"
+        const val TAG = "DiaryReminder"
 
         fun parseTime(text: String): LocalTime = LocalTime.parse(text)
 
@@ -105,24 +105,7 @@ class DailyReminderScheduler(
             targetTime: LocalTime,
             boundaryTime: LocalTime,
             zoneId: java.time.ZoneId,
-            recoverMissed: Boolean = false,
         ): ReminderSchedule {
-            if (recoverMissed) {
-                val currentBusinessDate = resolveAppDate(now, boundaryTime)
-                val missedTarget = sequenceOf(now.toLocalDate(), now.toLocalDate().minusDays(1))
-                    .map { LocalDateTime.of(it, targetTime) }
-                    .filter { !it.isAfter(now) }
-                    .filter { resolveAppDate(it, boundaryTime) == currentBusinessDate }
-                    .maxOrNull()
-                if (missedTarget != null) {
-                    val immediateRun = now.plusSeconds(1)
-                    return ReminderSchedule(
-                        triggerAtMillis = immediateRun.atZone(zoneId).toInstant().toEpochMilli(),
-                        targetBusinessDate = currentBusinessDate,
-                        triggerAt = immediateRun,
-                    )
-                }
-            }
             val todayTarget = LocalDateTime.of(now.toLocalDate(), targetTime)
             val nextRun = if (todayTarget.isAfter(now)) {
                 todayTarget

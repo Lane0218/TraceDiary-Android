@@ -1,7 +1,12 @@
 package com.tracediary.app.data.repository
 
+import android.content.Context
+import android.util.Log
 import com.tracediary.app.data.local.DiaryEntryDao
 import com.tracediary.app.data.local.DiaryEntryEntity
+import com.tracediary.app.data.notifications.ReminderNotification
+import com.tracediary.app.data.notifications.DailyReminderScheduler
+import com.tracediary.app.data.settings.UserPreferencesRepository
 import com.tracediary.app.domain.model.DiaryEntry
 import com.tracediary.app.domain.model.SyncState
 import com.tracediary.app.domain.repository.DiaryRepository
@@ -14,7 +19,9 @@ import java.time.YearMonth
 
 class DefaultDiaryRepository(
     private val diaryEntryDao: DiaryEntryDao,
-    private val clock: Clock = Clock.systemDefaultZone()
+    private val clock: Clock = Clock.systemDefaultZone(),
+    private val reminderContext: Context? = null,
+    private val reminderPreferences: UserPreferencesRepository? = null,
 ) : DiaryRepository {
     override fun observeEntry(date: LocalDate): Flow<DiaryEntry?> {
         return diaryEntryDao.observeByDate(date.toEpochDay()).map { it?.toDomain() }
@@ -60,11 +67,13 @@ class DefaultDiaryRepository(
             syncState = if (existing?.content == content) existing.syncState else SyncState.Pending
         )
         diaryEntryDao.upsert(DiaryEntryEntity.fromDomain(entry))
+        dismissReminderIfRecorded(entry)
         return entry
     }
 
     override suspend fun upsertImportedEntry(entry: DiaryEntry): DiaryEntry {
         diaryEntryDao.upsert(DiaryEntryEntity.fromDomain(entry))
+        dismissReminderIfRecorded(entry)
         return entry
     }
 
@@ -76,4 +85,15 @@ class DefaultDiaryRepository(
         diaryEntryDao.updateSyncState(date.toEpochDay(), state)
     }
 
+    private suspend fun dismissReminderIfRecorded(entry: DiaryEntry) {
+        if (entry.content.isBlank()) return
+        val context = reminderContext ?: return
+        val preferences = reminderPreferences ?: return
+        try {
+            ReminderNotification.dismissIfRecorded(context, preferences, entry.date)
+        } catch (error: Exception) {
+            // 通知清理失败不能把已经提交到数据库的日记误报为保存失败。
+            Log.w(DailyReminderScheduler.TAG, "reminder dismissal failed date=${entry.date} error=${error.javaClass.simpleName}")
+        }
+    }
 }

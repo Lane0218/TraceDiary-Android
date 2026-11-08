@@ -6,6 +6,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.tracediary.app.data.notifications.DailyReminderScheduler
+import com.tracediary.app.TraceDiaryApplication
+import com.tracediary.app.data.settings.parseBoundaryTime
 import com.tracediary.app.data.sync.SyncScheduler
 import org.junit.Assume.assumeTrue
 import org.junit.After
@@ -15,6 +17,9 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.LocalTime
+import java.time.LocalDateTime
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import java.util.concurrent.TimeUnit
 
 /** 在真实 Android 环境中验证精确提醒闹钟能够设置和取消。 */
@@ -34,6 +39,14 @@ class WorkSchedulerInstrumentedTest {
     @After
     fun tearDown() {
         cancelAllTestWork()
+        val application = context.applicationContext as TraceDiaryApplication
+        val prefs = runBlocking { application.userPreferencesRepository.preferences.first() }
+        if (prefs.dailyReminderEnabled && application.dailyReminderScheduler.canScheduleExactAlarms()) {
+            application.dailyReminderScheduler.scheduleForRecovery(
+                DailyReminderScheduler.parseTime(prefs.dailyReminderTime),
+                parseBoundaryTime(prefs.dayBoundaryTime),
+            )
+        }
     }
 
     @Test
@@ -45,6 +58,19 @@ class WorkSchedulerInstrumentedTest {
         )
         scheduler.cancel()
         assertTrue(scheduler.canScheduleExactAlarms())
+    }
+
+    @Test
+    fun dailyReminder_recoveryNeverSchedulesMissedTime() {
+        val scheduler = DailyReminderScheduler(context)
+        assumeTrue("设备未授予精确闹钟权限", scheduler.canScheduleExactAlarms())
+        val now = LocalDateTime.now().withHour(23).withMinute(0).withSecond(0).withNano(0)
+        val schedule = scheduler.scheduleForRecovery(
+            timeOfDay = LocalTime.of(21, 0),
+            now = now,
+        )
+        assertTrue(schedule.triggerAt.isAfter(now))
+        assertEquals(now.toLocalDate().plusDays(1), schedule.triggerAt.toLocalDate())
     }
 
     @Test
