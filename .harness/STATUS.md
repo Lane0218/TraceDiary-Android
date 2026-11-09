@@ -19,6 +19,7 @@
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
+| 2026-11-09 09:38 | bilingual-readme-mit | 按双语 README 结构更新项目介绍、添加仓库 Logo 和 MIT 许可证，双语链接及许可文本检查通过。 |
 | 2026-11-09 09:30 | project-readme | 已阅读五个同类开源 README 并完成根目录说明；README 格式检查通过，文档低风险未运行构建。 |
 | 2026-11-08 23:21 | selectable-accent-themes | 六款主题色及色块选择器已通过 203 项单测、调试包构建和 OPPO 真机用户验收。 |
 | 2026-11-08 10:06 | exact-daily-reminder-alarm | OPPO 锁屏无日记提醒、有日记跳过、清空后再次提醒均通过；用户确认通知可见并接受本次约 3 分钟延迟。 |
