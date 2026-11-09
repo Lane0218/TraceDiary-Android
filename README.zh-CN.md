@@ -7,17 +7,35 @@
   <br>
   <a href="README.md">English</a>
 </p>
+<p align="center">
+  <a href="https://github.com/Lane0218/TraceDiary-Android/releases"><img src="https://img.shields.io/badge/下载-GitHub%20Releases-181717?style=flat-square&logo=github&logoColor=white" alt="从 GitHub Releases 下载"></a>
+  <a href="#环境要求"><img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white" alt="支持 Android 8.0 及以上"></a>
+  <a href="#环境要求"><img src="https://img.shields.io/badge/API-26%2B-4CAF50?style=flat-square&logo=android&logoColor=white" alt="最低 API 26"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/许可证-MIT-356859?style=flat-square" alt="MIT 许可证"></a>
+</p>
 
-TraceDiary 是一款原生 Android 日记应用，帮助你快速记录每天的生活并回顾过往。日记默认保存在本地；你也可以自行配置加密云同步和基于记录证据的 AI 搜索服务。
+TraceDiary 是一款原生 Android 日记应用，帮助你记录每天的生活并重新发现过往。名称中的 “Trace” 指时间留下的痕迹；核心功能 **往年今日** 会带你回看历年同一天写下的日记。
+
+日记默认保存在本地；你也可以自行配置加密云同步和基于记录证据的 AI 搜索服务。
 
 ## 功能
 
 - **记录日常：** 编辑今天或其他日期的纯文本日记。设置每天的切换时间，使用周历或月历浏览日期，并通过自动保存和可选提醒持续记录。
-- **回顾过往：** 按关键词、年份或有记录的日期搜索；查看往年今日记录并撰写年度总结。
+- **往年今日：** 回看历年同一天写下的记录，这是 TraceDiary 回顾过往的核心体验。你也可以按关键词、年份或有记录的日期搜索，并撰写年度总结。
 - **AI 搜索：** 使用端侧语义索引查找日记，并向自行配置的只读 AI 服务提问。回答附带日期和原文片段，便于核对。
 - **记录统计：** 查看连续记录天数、月度字数趋势和年度记录热力图。
 - **保护和迁移数据：** 使用应用密码加密本地数据库，将加密后的日记内容同步到已配置的对象存储服务，并导入或导出 JSON、TXT ZIP、Markdown ZIP 备份。
 - **个性化设置：** 选择每周起始日和主题强调色，并设置日记提醒。
+
+## Quick Start
+
+TraceDiary 支持 Android 8.0（API 26）及以上的手机。发布 APK 后，你可以直接下载并安装：
+
+1. 打开 [GitHub Releases](https://github.com/Lane0218/TraceDiary-Android/releases)，下载最新版本的 TraceDiary APK。
+2. 在手机上打开下载的 APK。如果 Android 提示授权，请允许当前浏览器或文件管理器安装应用，然后点击“安装”。
+3. 启动 TraceDiary 并设置应用密码。
+
+首个 APK 版本尚未发布，后续可在 Releases 页面获取。
 
 ## 隐私
 
