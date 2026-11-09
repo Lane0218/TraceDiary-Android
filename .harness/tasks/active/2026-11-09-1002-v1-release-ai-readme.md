@@ -1,6 +1,6 @@
 # 准备首个 Android Release 并更新双语 README
-状态=待验收
-更新时间=2026-11-09 11:34
+状态=阻塞
+更新时间=2026-11-09 15:12
 
 ## 目标与背景
 用户要求发布 Android APK，并完善 README 中的安装入口、次日切换时间和端侧 AI 搜索说明。
@@ -33,3 +33,4 @@
 - 签名 APK 在已核验的 Pixel_9_Pro_XL 上安装和启动成功，MainActivity 处于前台。
 - GitHub `v1.0` Release 已发布 `TraceDiary-v1.0.apk` 与 `SHA256SUMS.txt`；远端 APK SHA-256 与本地一致：`5c574ef03fc00a2651977e647cdfeb2ad62f7caec025a3a3a4657dd930b0daf6`。
 - 尚需用户在 Android 真机上下载安装、首次设置密码、记录和往年今日入口进行验收。签名密钥和密码必须分别安全备份，后续更新继续使用同一密钥。
+- 2026-11-09 15:12 OPPO PLG110 设备上已安装 `com.tracediary.app` 1.0（2026-11-08 更新），证书 SHA-256 为 `1343c29a644f2565e60ce00369df6da75bd69a5382eb0bd60bc70486aa3b3b04`，属于 Android Debug 证书；Release 证书不同。未安装、卸载或清除应用数据。需先在旧版设置中的“备份与恢复”导出并验证完整备份，再决定迁移到正式签名版本。

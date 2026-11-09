@@ -4,7 +4,6 @@
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
-| 2026-11-09 11:34 | v1-release-ai-readme | v1.0 签名 APK 已发布并核对哈希，模拟器安装启动通过；待用户在 Android 真机验收。 |
 
 ## TODO
 
@@ -15,6 +14,7 @@
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
+| 2026-11-09 15:12 | v1-release-ai-readme | OPPO 已装 Debug 签名版与 v1.0 Release 证书不同；必须先验证数据备份，不能直接覆盖安装。 |
 
 ## ARCHIVE
 
