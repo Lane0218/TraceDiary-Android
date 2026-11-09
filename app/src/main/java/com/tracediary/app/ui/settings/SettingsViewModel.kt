@@ -111,8 +111,8 @@ data class SettingsUiState(
     val syncBucket: String = "",
     val syncRegion: String = "",
     val syncDirectory: String = "TraceDiary/",
-    val sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.LatestFirst,
-    val calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Sunday,
+    val sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.EarliestFirst,
+    val calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Monday,
     val themeColor: ThemeColor = ThemeColor.Forest,
     // AK/SK 与“记住密码”缓存：通过 SecureCredentialStore（EncryptedSharedPreferences）持久化。
     val syncAccessKeyId: String = "",

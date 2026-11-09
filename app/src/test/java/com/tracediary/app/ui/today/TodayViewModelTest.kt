@@ -89,7 +89,7 @@ class TodayViewModelTest {
         assertTrue(state.weekDates.contains(fixedToday))
         assertEquals("2026年5月", state.displayMonthLabel)
         assertEquals(SyncState.Pending, state.currentEntrySyncState)
-        assertEquals(listOf("日", "一", "二", "三", "四", "五", "六"), state.weekHeaders)
+        assertEquals(listOf("一", "二", "三", "四", "五", "六", "日"), state.weekHeaders)
     }
 
     @Test
@@ -238,7 +238,7 @@ class TodayViewModelTest {
 
         val previous = viewModel.uiState.value.previousYearsOnThisDay
         assertEquals(2, previous.size)
-        assertEquals(listOf(LocalDate.of(2025, 5, 15), LocalDate.of(2024, 5, 15)), previous.map(DiaryEntry::date))
+        assertEquals(listOf(LocalDate.of(2024, 5, 15), LocalDate.of(2025, 5, 15)), previous.map(DiaryEntry::date))
     }
 
     @Test
@@ -252,15 +252,15 @@ class TodayViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            listOf(LocalDate.of(2025, 5, 15), LocalDate.of(2024, 5, 15)),
+            listOf(LocalDate.of(2024, 5, 15), LocalDate.of(2025, 5, 15)),
             viewModel.uiState.value.previousYearsOnThisDay.map(DiaryEntry::date),
         )
 
-        preferences.setSameDayEntrySortOrder(SameDayEntrySortOrder.EarliestFirst)
+        preferences.setSameDayEntrySortOrder(SameDayEntrySortOrder.LatestFirst)
         advanceUntilIdle()
 
         assertEquals(
-            listOf(LocalDate.of(2024, 5, 15), LocalDate.of(2025, 5, 15)),
+            listOf(LocalDate.of(2025, 5, 15), LocalDate.of(2024, 5, 15)),
             viewModel.uiState.value.previousYearsOnThisDay.map(DiaryEntry::date),
         )
         assertFalse(viewModel.uiState.value.previousYearsOnThisDay.any { it.date == fixedToday })
@@ -272,17 +272,17 @@ class TodayViewModelTest {
         val viewModel = createViewModel(userPreferencesRepository = preferences)
         advanceUntilIdle()
 
-        assertEquals(LocalDate.of(2026, 5, 10), viewModel.uiState.value.weekDates.first())
-        assertEquals(LocalDate.of(2026, 4, 26), viewModel.uiState.value.monthGrid.first().date)
+        assertEquals(LocalDate.of(2026, 5, 11), viewModel.uiState.value.weekDates.first())
+        assertEquals(LocalDate.of(2026, 4, 27), viewModel.uiState.value.monthGrid.first().date)
 
-        preferences.setCalendarWeekStart(CalendarWeekStart.Monday)
+        preferences.setCalendarWeekStart(CalendarWeekStart.Sunday)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals(LocalDate.of(2026, 5, 11), state.weekDates.first())
-        assertEquals(LocalDate.of(2026, 5, 17), state.weekDates.last())
-        assertEquals(listOf("一", "二", "三", "四", "五", "六", "日"), state.weekHeaders)
-        assertEquals(LocalDate.of(2026, 4, 27), state.monthGrid.first().date)
+        assertEquals(LocalDate.of(2026, 5, 10), state.weekDates.first())
+        assertEquals(LocalDate.of(2026, 5, 16), state.weekDates.last())
+        assertEquals(listOf("日", "一", "二", "三", "四", "五", "六"), state.weekHeaders)
+        assertEquals(LocalDate.of(2026, 4, 26), state.monthGrid.first().date)
     }
 
     @Test
@@ -373,8 +373,8 @@ class TodayViewModelTest {
         assertEquals(initialDate, state.selectedDate)
         assertEquals(LocalDate.of(2026, 4, 23), state.calendarAnchorDate)
         assertEquals("2026年4月", state.displayMonthLabel)
-        assertEquals(LocalDate.of(2026, 4, 19), state.weekDates.first())
-        assertEquals(LocalDate.of(2026, 4, 25), state.weekDates.last())
+        assertEquals(LocalDate.of(2026, 4, 20), state.weekDates.first())
+        assertEquals(LocalDate.of(2026, 4, 26), state.weekDates.last())
 
         viewModel.onToggleMonthExpand()
         advanceUntilIdle()
@@ -384,8 +384,8 @@ class TodayViewModelTest {
         assertEquals(initialDate, state.selectedDate)
         assertEquals(LocalDate.of(2026, 4, 23), state.calendarAnchorDate)
         assertEquals("2026年4月", state.displayMonthLabel)
-        assertEquals(LocalDate.of(2026, 4, 19), state.weekDates.first())
-        assertEquals(LocalDate.of(2026, 4, 25), state.weekDates.last())
+        assertEquals(LocalDate.of(2026, 4, 20), state.weekDates.first())
+        assertEquals(LocalDate.of(2026, 4, 26), state.weekDates.last())
     }
 
     @Test
@@ -519,7 +519,7 @@ private class FakeDiaryRepository(private val clock: Clock) : DiaryRepository {
 private class FakeUserPreferencesRepository(
     syncEnabled: Boolean,
     dayBoundaryTime: String = "00:00",
-    calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Sunday,
+    calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Monday,
 ) : UserPreferencesRepository {
     private val prefs = MutableStateFlow(
         UserPreferences(

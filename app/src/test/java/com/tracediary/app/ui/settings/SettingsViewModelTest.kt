@@ -89,7 +89,14 @@ class SettingsViewModelTest {
         assertEquals(SaveStatus.Idle, state.saveStatus)
         assertEquals("暂无同步记录", state.lastSyncText)
         assertEquals(MergeStrategy.KeepNewer, state.manualSyncStrategy)
-        assertEquals(CalendarWeekStart.Sunday, state.calendarWeekStart)
+        assertEquals(SameDayEntrySortOrder.EarliestFirst, state.sameDayEntrySortOrder)
+        assertEquals(CalendarWeekStart.Monday, state.calendarWeekStart)
+        assertEquals(SameDayEntrySortOrder.EarliestFirst, SameDayEntrySortOrder.entries.first())
+        assertEquals(CalendarWeekStart.Monday, CalendarWeekStart.entries.first())
+        assertEquals(SameDayEntrySortOrder.EarliestFirst, SameDayEntrySortOrder.fromStorageValue(null))
+        assertEquals(CalendarWeekStart.Monday, CalendarWeekStart.fromStorageValue(null))
+        assertEquals(SameDayEntrySortOrder.LatestFirst, SameDayEntrySortOrder.fromStorageValue("latest_first"))
+        assertEquals(CalendarWeekStart.Sunday, CalendarWeekStart.fromStorageValue("sunday"))
         assertEquals(ThemeColor.Forest, state.themeColor)
     }
 

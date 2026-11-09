@@ -29,8 +29,8 @@ data class UserPreferences(
     val syncBucket: String = "",
     val syncRegion: String = "",
     val syncDirectory: String = "TraceDiary/",
-    val sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.LatestFirst,
-    val calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Sunday,
+    val sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.EarliestFirst,
+    val calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Monday,
     val themeColor: ThemeColor = ThemeColor.Forest,
 )
 
@@ -49,14 +49,14 @@ enum class ThemeColor(val storageValue: String, val label: String) {
 }
 
 enum class SameDayEntrySortOrder(val storageValue: String) {
-    LatestFirst("latest_first"),
-    EarliestFirst("earliest_first");
+    EarliestFirst("earliest_first"),
+    LatestFirst("latest_first");
 
     companion object {
         fun fromStorageValue(value: String?): SameDayEntrySortOrder = when (value) {
             EarliestFirst.storageValue -> EarliestFirst
             LatestFirst.storageValue -> LatestFirst
-            else -> LatestFirst
+            else -> EarliestFirst
         }
     }
 }
@@ -65,14 +65,14 @@ enum class CalendarWeekStart(
     val storageValue: String,
     val dayOfWeek: DayOfWeek,
 ) {
-    Sunday("sunday", DayOfWeek.SUNDAY),
-    Monday("monday", DayOfWeek.MONDAY);
+    Monday("monday", DayOfWeek.MONDAY),
+    Sunday("sunday", DayOfWeek.SUNDAY);
 
     companion object {
         fun fromStorageValue(value: String?): CalendarWeekStart = when (value) {
             Monday.storageValue -> Monday
             Sunday.storageValue -> Sunday
-            else -> Sunday
+            else -> Monday
         }
     }
 }

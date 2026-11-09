@@ -34,7 +34,7 @@ sealed interface AiAgentProgress {
 data class AiConfiguration(
     val enabled: Boolean = false,
     val baseUrl: String = "https://api.deepseek.com",
-    val model: String = "deepseek-chat",
+    val model: String = "deepseek-flash",
     val indexConsentGranted: Boolean = false,
 )
 

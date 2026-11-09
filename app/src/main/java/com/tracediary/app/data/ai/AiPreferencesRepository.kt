@@ -51,7 +51,7 @@ class DataStoreAiPreferencesRepository(context: Context) : AiPreferencesReposito
 
     companion object {
         const val DEFAULT_BASE_URL = "https://api.deepseek.com"
-        const val DEFAULT_MODEL = "deepseek-chat"
+        const val DEFAULT_MODEL = "deepseek-flash"
         private val KEY_ENABLED = booleanPreferencesKey("enabled")
         private val KEY_BASE_URL = stringPreferencesKey("base_url")
         private val KEY_MODEL = stringPreferencesKey("model")

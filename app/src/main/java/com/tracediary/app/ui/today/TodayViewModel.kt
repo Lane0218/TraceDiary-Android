@@ -100,9 +100,9 @@ class TodayViewModel(
         TodayUiState(
             selectedDate = initialDate,
             calendarAnchorDate = initialDate,
-            weekDates = calendarUseCase.weekDates(initialDate),
-            weekHeaders = CalendarWeekStart.Sunday.weekHeaders(),
-            weekDays = buildWeekDays(calendarUseCase.weekDates(initialDate), emptySet()),
+            weekDates = calendarUseCase.weekDates(initialDate, CalendarWeekStart.Monday.dayOfWeek),
+            weekHeaders = CalendarWeekStart.Monday.weekHeaders(),
+            weekDays = buildWeekDays(calendarUseCase.weekDates(initialDate, CalendarWeekStart.Monday.dayOfWeek), emptySet()),
             displayMonth = YearMonth.from(initialDate),
             monthGrid = emptyList(),
             isMonthExpanded = false,
@@ -121,8 +121,8 @@ class TodayViewModel(
         MutableStateFlow(YearMonth.from(initialDate))
     private var recordedDates: Set<LocalDate> = emptySet()
     private var allEntriesSnapshot: List<DiaryEntry> = emptyList()
-    private var sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.LatestFirst
-    private var calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Sunday
+    private var sameDayEntrySortOrder: SameDayEntrySortOrder = SameDayEntrySortOrder.EarliestFirst
+    private var calendarWeekStart: CalendarWeekStart = CalendarWeekStart.Monday
     private var monthEntriesSnapshot: List<DiaryEntry> = emptyList()
 
     /** 当前正文最后一次入库时的快照，用来判断是否需要 flush。 */
