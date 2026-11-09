@@ -10,7 +10,6 @@
 <p align="center">
   <a href="https://github.com/Lane0218/TraceDiary-Android/releases"><img src="https://img.shields.io/badge/Download-GitHub%20Releases-181717?style=flat-square&logo=github&logoColor=white" alt="Download from GitHub Releases"></a>
   <a href="#requirements"><img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android 8.0 or later"></a>
-  <a href="#requirements"><img src="https://img.shields.io/badge/API-26%2B-4CAF50?style=flat-square&logo=android&logoColor=white" alt="Minimum API 26"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-356859?style=flat-square" alt="MIT License"></a>
 </p>
 
@@ -20,28 +19,26 @@ Your diary is stored locally, with optional encrypted cloud sync and evidence-ba
 
 ## Features
 
-- **Write:** Edit a plain-text diary for today or another date. Choose when a new diary day begins, browse a weekly or monthly calendar, and rely on automatic saving and optional reminders.
+- **Write:** Edit a plain-text diary for today or another date. Choose when a new diary day begins, browse a weekly or monthly calendar, and rely on automatic saving and optional reminders. The configurable day boundary is useful if you write after midnight: for example, with a 4 a.m. boundary, a 1 a.m. entry still belongs to the previous diary day.
 - **On This Day:** Revisit entries written on this calendar date in previous years. This is the heart of TraceDiary's look-back experience. You can also search by words, year, or dates with entries, and write an annual summary.
-- **AI search:** Search diary entries with an on-device semantic index and ask a read-only, user-configured AI service. Answers include dates and matching source text so you can verify them.
+- **AI search:** Download the on-device embedding model and build an encrypted semantic index, then connect a compatible LLM such as DeepSeek. Ask questions like “How have I been doing lately?” or “What work have I focused on recently?” Answers cite dates and diary excerpts, helping you spot patterns and gather material for a personal review.
 - **Statistics:** Review writing streaks, monthly word counts, and a yearly activity heatmap.
 - **Protect and move your data:** Encrypt the local database with your app password, sync encrypted diary content to a configured object-storage service, and import or export JSON, TXT ZIP, or Markdown ZIP backups.
 - **Make it yours:** Set a weekly calendar start day, choose an accent color, and configure diary reminders.
 
 ## Quick Start
 
-TraceDiary supports Android phones running Android 8.0 (API 26) or later. Once an APK release is published, you can install it directly:
+TraceDiary supports Android phones running Android 8.0 (API 26) or later. Install the APK from GitHub Releases:
 
 1. Open [GitHub Releases](https://github.com/Lane0218/TraceDiary-Android/releases) and download the latest TraceDiary APK.
 2. Open the downloaded APK on your phone. If Android asks, allow your browser or file manager to install apps, then tap **Install**.
 3. Open TraceDiary and set your app password.
 
-The first APK release has not been published yet. Check the Releases page for availability.
-
 ## Privacy
 
 Diary entries are stored in an SQLCipher-encrypted local database. The app password is used to derive the database and cloud-content encryption keys. When cloud sync is enabled, diary content is encrypted before it is uploaded to the object-storage service you configure.
 
-AI search is optional. Semantic search runs on your device. If you ask a question, the app sends the relevant diary excerpts and other data needed for that request to the cloud AI service you configured. Review that provider's privacy policy before connecting it. Keyword search remains available without AI.
+AI search is optional. After you download the embedding model and build the index, semantic search runs on your device and the index is encrypted locally. To generate an answer, the app sends relevant diary excerpts and other data needed for that request to the cloud AI service you configure, such as DeepSeek. Review that provider's privacy policy before connecting it. Keyword search remains available without AI.
 
 Exported backup files are plaintext JSON, TXT ZIP, or Markdown ZIP files. Keep exported files somewhere you trust.
 
