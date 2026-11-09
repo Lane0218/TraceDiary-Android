@@ -1,6 +1,6 @@
 # 准备首个 Android Release 并更新双语 README
-状态=阻塞
-更新时间=2026-11-09 10:16
+状态=待验收
+更新时间=2026-11-09 11:34
 
 ## 目标与背景
 用户要求发布 Android APK，并完善 README 中的安装入口、次日切换时间和端侧 AI 搜索说明。
@@ -28,6 +28,8 @@
 ## 验证结果
 - `test assembleDebug assembleRelease --no-daemon` 构建成功；单元测试通过，Release APK 生成。
 - Pixel_9_Pro_XL / Android 17 仪器测试 55 项、0 失败、2 跳过。
-- Release APK 元数据为 `com.tracediary.app`、versionName `1.0`、versionCode `1`、minSdk `26`、targetSdk `36`；Release manifest 未声明 debuggable。当前产物未签名。
-- 仓库无已有 GitHub Release、Actions workflow 或签名 secrets；本机仅有 Android Debug keystore，不能用于正式发布。
-- 等待用户选择提供现有正式签名 keystore，或授权生成并长期备份新的发布密钥；收到选择后继续签名、验证、发布和归档。
+- Release APK 元数据为 `com.tracediary.app`、versionName `1.0`、versionCode `1`、minSdk `26`、targetSdk `36`；Release manifest 未声明 debuggable。
+- 用户授权后在仓库外生成长期发布密钥与独立密码文件。APK 通过 zipalign 和 Android v2/v3 签名验证；证书 SHA-256 为 `a8a4713fa2d4ec37cb1a25e518f0da18aee2c26bd7bdc67dbd372e33c1364676`。
+- 签名 APK 在已核验的 Pixel_9_Pro_XL 上安装和启动成功，MainActivity 处于前台。
+- GitHub `v1.0` Release 已发布 `TraceDiary-v1.0.apk` 与 `SHA256SUMS.txt`；远端 APK SHA-256 与本地一致：`5c574ef03fc00a2651977e647cdfeb2ad62f7caec025a3a3a4657dd930b0daf6`。
+- 尚需用户在 Android 真机上下载安装、首次设置密码、记录和往年今日入口进行验收。签名密钥和密码必须分别安全备份，后续更新继续使用同一密钥。

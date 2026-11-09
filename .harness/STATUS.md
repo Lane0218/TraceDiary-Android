@@ -4,6 +4,7 @@
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
+| 2026-11-09 11:34 | v1-release-ai-readme | v1.0 签名 APK 已发布并核对哈希，模拟器安装启动通过；待用户在 Android 真机验收。 |
 
 ## TODO
 
@@ -14,7 +15,6 @@
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
-| 2026-11-09 10:16 | v1-release-ai-readme | 测试和 Release 构建已通过，待用户提供现有签名密钥或确认生成长期发布密钥。 |
 
 ## ARCHIVE
 
