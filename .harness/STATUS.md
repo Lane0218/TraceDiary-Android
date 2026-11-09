@@ -14,12 +14,13 @@
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
-| 2026-11-09 15:12 | v1-release-ai-readme | OPPO 已装 Debug 签名版与 v1.0 Release 证书不同；必须先验证数据备份，不能直接覆盖安装。 |
 
 ## ARCHIVE
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
+| 2026-11-09 15:55 | v1-release-ai-readme | v1.0 Release 与双语 README 已完成并经用户验收；OPPO 签名迁移未执行，原数据保留。 |
+| 2026-11-09 15:55 | - | AI 默认模型改为 deepseek-flash，往年今日与每周首日默认改为从早到晚和周一；204 项单测及 55 项仪器测试通过，用户已验收。 |
 | 2026-11-09 09:44 | readme-quickstart-badges-origin | 双语 README 已补 Releases 手机安装步骤、Android/API/MIT 徽标及名称来源，并突出往年今日核心功能。 |
 | 2026-11-09 09:38 | bilingual-readme-mit | 按双语 README 结构更新项目介绍、添加仓库 Logo 和 MIT 许可证，双语链接及许可文本检查通过。 |
 | 2026-11-09 09:30 | project-readme | 已阅读五个同类开源 README 并完成根目录说明；README 格式检查通过，文档低风险未运行构建。 |
