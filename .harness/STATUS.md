@@ -14,6 +14,7 @@
 
 | 时间 | task short-slug | 一句话说明 |
 | --- | --- | --- |
+| 2026-11-09 10:16 | v1-release-ai-readme | 测试和 Release 构建已通过，待用户提供现有签名密钥或确认生成长期发布密钥。 |
 
 ## ARCHIVE
 
